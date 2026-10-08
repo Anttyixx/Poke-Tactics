@@ -51,6 +51,11 @@
     "ability": { "name": "Restore", "kind": "heal", "target": "lowest", "amount": 280 }
   },
 
+  "vespiquen": {
+    "name": "Vespiquen", "sprite": "assets/sprites/vespiquen.png", "fx": "#ffc23d", "type": "ranger", "cost": 2,
+    "hp": 600, "atk": 62, "armor": 15, "range": 2, "attackCd": 9, "moveCd": 4, "mana": 60,
+    "ability": { "name": "Attack Order", "kind": "strike", "damage": 240 }
+  },
   "toxtricity": {
     "name": "Toxtricity", "sprite": "assets/sprites/toxtricity.png", "type": "ranger", "cost": 2, "fx": "#ffe14d",
     "hp": 520, "atk": 60, "armor": 10, "range": 5, "attackCd": 10, "moveCd": 5, "mana": 70,
