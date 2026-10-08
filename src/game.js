@@ -6,67 +6,70 @@
 //   - the host runs applyIntent, which validates everything (guest input is untrusted)
 //   - the host then broadcasts the resulting state to both clients
 //
+// Flow: each player builds a team (1 leader + TEAM_SIZE troops). Every troop puts
+// COPIES_PER_TROOP copies into that player's own pool. The shop shows SHOP_SIZE
+// copies drawn from the pool; buying one places it straight onto the board and
+// removes that copy from the pool. Placing a copy on the same troop combines them:
+// 1 copy = 0★, 2 = 1★, 3 = 2★, 4 = 3★. There is no bench.
+//
 // Intents:
-//   { type: 'chooseLeader', leader }          pick a leader before round 1
-//   { type: 'buy', slot }                     buy shop slot 0..SHOP_SIZE-1
-//   { type: 'sell', uid }                     sell an owned unit
+//   { type: 'chooseTeam', leader, troops }    before round 1; troops = TEAM_SIZE distinct troop ids
+//   { type: 'buy', slot, x, y }               buy shop slot onto own square (x, y); same troop = combine
+//   { type: 'sell', uid }                     sell a troop; its copies go back to the pool
 //   { type: 'reroll' }                        new shop for REROLL_COST gold
-//   { type: 'move', uid, to }                 to = { area: 'board', x, y } | { area: 'bench', index }
+//   { type: 'move', uid, x, y }               move on the board; same troop = combine, other = swap
 //   { type: 'ready' }                         lock in planning; combat starts when all are ready
 //   { type: 'continue' }                      done watching combat; next round starts when all continue
 
 import { randInt } from './rng.js';
 import { simulate, COLS, HALF } from './combat.js';
 
-export const SHOP_SIZE = 5;
-export const BENCH_SIZE = 8;
+export const TEAM_SIZE = 5;
+export const COPIES_PER_TROOP = 4;
+export const SHOP_SIZE = 3;
 export const START_HP = 100;
 export const REROLL_COST = 2;
 export const BASE_INCOME = 5;
 export const WIN_BONUS = 1;
 export const MAX_INTEREST = 5;
-export const MAX_STAR = 3;
-
-// [first round, shop odds (%) for cost 1, 2, 3]
-const TIER_ODDS = [
-  [11, [25, 45, 30]],
-  [8, [40, 40, 20]],
-  [5, [55, 35, 10]],
-  [3, [75, 25, 0]],
-  [1, [100, 0, 0]],
-];
+export const MAX_STAR = COPIES_PER_TROOP - 1; // stars = copies - 1
 
 export const boardCap = (round) => Math.min(8, 3 + Math.floor((round - 1) / 2));
 export const interest = (gold) => Math.min(MAX_INTEREST, Math.floor(gold / 10));
-export const sellValue = (catalog, inst) => catalog[inst.unitId].cost * 3 ** (inst.star - 1);
-export const tierOdds = (round) => TIER_ODDS.find(([from]) => round >= from)[1];
+export const copiesOf = (inst) => inst.star + 1;
+export const sellValue = (catalog, inst) => catalog[inst.unitId].cost * copiesOf(inst);
 export const leaderIds = (catalog) => Object.keys(catalog).filter((id) => catalog[id].leader).sort();
+export const troopIds = (catalog) => Object.keys(catalog).filter((id) => !catalog[id].leader).sort();
+// How many troops a team needs (fewer only if the catalog doesn't have enough).
+export const teamSize = (catalog) => Math.min(TEAM_SIZE, troopIds(catalog).length);
 // Units counting toward the board cap. The leader is always on the field for free.
 export const fieldCount = (player) => player.board.filter((u) => !u.leader).length;
+export const poolSize = (player) => Object.values(player.pool).reduce((a, b) => a + b, 0);
 
 const OK = Object.freeze({ ok: true });
 const fail = (error) => ({ ok: false, error });
 const isIndex = (v, n) => Number.isInteger(v) && v >= 0 && v < n;
 
-// `featured` (optional, for testing): a buyable unit id that is put in the first
-// slot of every shop roll for every player, from round 1. Invalid ids are ignored.
+// `featured` (optional, for testing): a troop id that is put in the first shop
+// slot whenever the player's pool still has a copy of it. Invalid ids are ignored.
 export function createGame({ seed, catalog, names, featured = null }) {
-  const state = {
-    version: 1,
+  return {
+    version: 2,
     seed: seed >>> 0,
-    featured: Object.hasOwn(catalog, featured ?? '') && !catalog[featured].leader ? featured : null,
+    featured: troopIds(catalog).includes(featured) ? featured : null,
     round: 0,
-    phase: 'leader', // leader -> planning -> combat -> planning ... -> gameover
+    phase: 'team', // team -> planning -> combat -> planning ... -> gameover
     nextUid: 1,
     players: names.map((name, i) => ({
       name,
       hp: START_HP,
       gold: 0,
+      leader: null, // unitId of the chosen leader
+      team: [], // chosen troop ids
+      pool: {}, // troop id -> copies left to buy
       shop: [],
-      bench: Array(BENCH_SIZE).fill(null),
       board: [],
       ready: false,
-      leader: null, // unitId of the chosen leader
       // Per-player RNG so one player's rerolls never change the other's shops,
       // regardless of the order the host receives intents in.
       rng: (seed ^ Math.imul(i + 1, 0x9e3779b9)) >>> 0,
@@ -74,7 +77,6 @@ export function createGame({ seed, catalog, names, featured = null }) {
     combat: null, // { round, result, damage: [p0, p1] } while phase === 'combat'
     winner: null, // player index, or null for a draw, once phase === 'gameover'
   };
-  return state;
 }
 
 export function applyIntent(state, catalog, playerIndex, intent) {
@@ -85,50 +87,58 @@ export function applyIntent(state, catalog, playerIndex, intent) {
 }
 
 const HANDLERS = {
-  chooseLeader(state, catalog, player, { leader }) {
-    if (state.phase !== 'leader') return fail('Leaders have already been chosen');
-    if (player.ready) return fail('You already chose a leader');
-    if (typeof leader !== 'string' || !Object.hasOwn(catalog, leader) || !catalog[leader].leader) return fail('Unknown leader');
+  chooseTeam(state, catalog, player, { leader, troops }) {
+    if (state.phase !== 'team') return fail('Teams have already been chosen');
+    if (player.ready) return fail('You already chose your team');
+    if (!leaderIds(catalog).includes(leader)) return fail('Pick a leader');
+    const available = troopIds(catalog);
+    const need = teamSize(catalog);
+    if (!Array.isArray(troops) || troops.length !== need || new Set(troops).size !== need
+      || !troops.every((t) => available.includes(t))) return fail(`Pick ${need} different troops`);
+
     player.leader = leader;
+    player.team = [...troops].sort();
+    player.pool = Object.fromEntries(player.team.map((t) => [t, COPIES_PER_TROOP]));
     // Melee leaders start on the front line, ranged ones at the back, both centred.
-    player.board = [{ uid: state.nextUid++, unitId: leader, star: 1, leader: true, x: Math.floor((COLS - 1) / 2), y: catalog[leader].range > 1 ? HALF - 1 : 0 }];
+    player.board = [{ uid: state.nextUid++, unitId: leader, star: 0, leader: true, x: Math.floor((COLS - 1) / 2), y: catalog[leader].range > 1 ? HALF - 1 : 0 }];
     player.ready = true;
     if (state.players.every((p) => p.ready)) startRound(state, catalog);
     return OK;
   },
 
-  buy(state, catalog, player, { slot }) {
+  buy(state, catalog, player, { slot, x, y }) {
     const blocked = planningGuard(state, player);
     if (blocked) return blocked;
     if (!isIndex(slot, SHOP_SIZE) || !player.shop[slot]) return fail('Nothing to buy there');
     const unitId = player.shop[slot];
-    const cost = catalog[unitId].cost;
+    const { cost } = catalog[unitId];
     if (player.gold < cost) return fail('Not enough gold');
-    const free = player.bench.indexOf(null);
-    const copies = ownedUnits(player).filter((u) => u.unitId === unitId && u.star === 1);
-    if (free === -1 && copies.length < 2) return fail('Bench is full');
+    if (!(player.pool[unitId] > 0)) return fail('No copies left in your pool');
+    if (!isIndex(x, COLS) || !isIndex(y, HALF)) return fail('Place troops on your half of the board');
 
-    player.gold -= cost;
-    player.shop[slot] = null;
-    const inst = { uid: state.nextUid++, unitId, star: 1 };
-    if (free !== -1) {
-      player.bench[free] = inst;
-      tryMerge(player, inst);
+    const occupant = unitAt(player, x, y);
+    if (occupant) {
+      if (occupant.leader || occupant.unitId !== unitId) return fail(`That square is taken. Place it on an empty square or on a ${catalog[unitId].name}`);
+      occupant.star++; // can't pass MAX_STAR: only COPIES_PER_TROOP copies exist
     } else {
-      // Bench full but this copy completes a 3-of-a-kind: merge without placing it.
-      combine(player, [inst, copies[0], copies[1]]);
+      if (fieldCount(player) >= boardCap(state.round)) return fail(`Board is full (${boardCap(state.round)} troops this round)`);
+      player.board.push({ uid: state.nextUid++, unitId, star: 0, x, y });
     }
+    player.gold -= cost;
+    player.pool[unitId]--;
+    player.shop[slot] = null;
     return OK;
   },
 
   sell(state, catalog, player, { uid }) {
     const blocked = planningGuard(state, player);
     if (blocked) return blocked;
-    const inst = ownedUnits(player).find((u) => u.uid === uid);
+    const inst = player.board.find((u) => u.uid === uid);
     if (!inst) return fail('You do not own that unit');
     if (inst.leader) return fail('Your leader cannot be sold');
-    removeUnit(player, inst);
+    player.board.splice(player.board.indexOf(inst), 1);
     player.gold += sellValue(catalog, inst);
+    player.pool[inst.unitId] += copiesOf(inst);
     return OK;
   },
 
@@ -137,65 +147,28 @@ const HANDLERS = {
     if (blocked) return blocked;
     if (player.gold < REROLL_COST) return fail('Not enough gold');
     player.gold -= REROLL_COST;
-    rollShop(player, catalog, state.round, state.featured);
+    rollShop(player, state.featured);
     return OK;
   },
 
-  move(state, catalog, player, { uid, to }) {
+  move(state, catalog, player, { uid, x, y }) {
     const blocked = planningGuard(state, player);
     if (blocked) return blocked;
-    const inst = ownedUnits(player).find((u) => u.uid === uid);
+    const inst = player.board.find((u) => u.uid === uid);
     if (!inst) return fail('You do not own that unit');
-    if (!to || typeof to !== 'object') return fail('Malformed move');
-    const fromBoard = player.board.includes(inst);
-
-    if (to.area === 'board') {
-      const { x, y } = to;
-      if (!isIndex(x, COLS) || !isIndex(y, HALF)) return fail('You can only place units on your half');
-      const occupant = player.board.find((u) => u.x === x && u.y === y);
-      if (occupant === inst) return OK;
-      if (fromBoard) {
-        if (occupant) { occupant.x = inst.x; occupant.y = inst.y; }
-      } else {
-        const benchIndex = player.bench.indexOf(inst);
-        if (occupant?.leader) return fail('Your leader must stay on the field');
-        if (occupant) {
-          removeUnit(player, occupant);
-          player.bench[benchIndex] = toBench(occupant);
-        } else {
-          if (fieldCount(player) >= boardCap(state.round)) return fail(`Board is full (${boardCap(state.round)} units this round)`);
-          player.bench[benchIndex] = null;
-        }
-        player.board.push(inst);
-      }
-      inst.x = x;
-      inst.y = y;
+    if (!isIndex(x, COLS) || !isIndex(y, HALF)) return fail('You can only place units on your half');
+    const occupant = unitAt(player, x, y);
+    if (occupant === inst) return OK;
+    if (occupant && !occupant.leader && !inst.leader && occupant.unitId === inst.unitId) {
+      // Combine: all copies end up on the target square.
+      occupant.star += copiesOf(inst);
+      player.board.splice(player.board.indexOf(inst), 1);
       return OK;
     }
-
-    if (to.area === 'bench') {
-      const { index } = to;
-      if (!isIndex(index, BENCH_SIZE)) return fail('Invalid bench slot');
-      const occupant = player.bench[index];
-      if (occupant === inst) return OK;
-      if (inst.leader) return fail('Your leader must stay on the field');
-      if (fromBoard) {
-        removeUnit(player, inst);
-        if (occupant) {
-          occupant.x = inst.x;
-          occupant.y = inst.y;
-          player.bench[index] = null;
-          player.board.push(occupant);
-        }
-        player.bench[index] = toBench(inst);
-      } else {
-        player.bench[player.bench.indexOf(inst)] = occupant;
-        player.bench[index] = inst;
-      }
-      return OK;
-    }
-
-    return fail('Malformed move');
+    if (occupant) { occupant.x = inst.x; occupant.y = inst.y; }
+    inst.x = x;
+    inst.y = y;
+    return OK;
   },
 
   ready(state, catalog, player) {
@@ -221,50 +194,17 @@ function planningGuard(state, player) {
   return null;
 }
 
-export function ownedUnits(player) {
-  return [...player.board, ...player.bench.filter(Boolean)];
-}
+const unitAt = (player, x, y) => player.board.find((u) => u.x === x && u.y === y);
 
-function toBench(inst) {
-  delete inst.x;
-  delete inst.y;
-  return inst;
-}
-
-function removeUnit(player, inst) {
-  const b = player.board.indexOf(inst);
-  if (b !== -1) player.board.splice(b, 1);
-  const s = player.bench.indexOf(inst);
-  if (s !== -1) player.bench[s] = null;
-}
-
-// Three copies of the same unit at the same star level combine into one of the
-// next star level. The upgraded unit stays on the board if any copy was there.
-function tryMerge(player, inst) {
-  if (inst.star >= MAX_STAR) return;
-  const copies = ownedUnits(player).filter((u) => u !== inst && u.unitId === inst.unitId && u.star === inst.star);
-  if (copies.length >= 2) combine(player, [inst, copies[0], copies[1]]);
-}
-
-function combine(player, group) {
-  const keeper = group.find((u) => player.board.includes(u)) ?? group.find((u) => player.bench.includes(u));
-  for (const u of group) if (u !== keeper) removeUnit(player, u);
-  keeper.star++;
-  tryMerge(player, keeper);
-}
-
-function rollShop(player, catalog, round, featured) {
-  const odds = tierOdds(round);
-  const total = odds.reduce((a, b) => a + b, 0);
-  const ids = Object.keys(catalog).filter((id) => !catalog[id].leader).sort();
-  player.shop = Array.from({ length: SHOP_SIZE }, () => {
-    let roll = randInt(player, total);
-    let tier = 0;
-    while (roll >= odds[tier]) roll -= odds[tier++];
-    const pool = ids.filter((id) => catalog[id].cost === tier + 1);
-    return pool[randInt(player, pool.length)];
-  });
-  if (featured) player.shop[0] = featured;
+// Draw SHOP_SIZE different copies from the pool (without replacement), so the
+// shop never offers more copies of a troop than the pool holds.
+function rollShop(player, featured) {
+  const bag = Object.keys(player.pool).sort().flatMap((id) => Array(player.pool[id]).fill(id));
+  const shop = [];
+  if (featured && bag.includes(featured)) shop.push(...bag.splice(bag.indexOf(featured), 1));
+  while (shop.length < SHOP_SIZE && bag.length) shop.push(...bag.splice(randInt(player, bag.length), 1));
+  while (shop.length < SHOP_SIZE) shop.push(null);
+  player.shop = shop;
 }
 
 function startRound(state, catalog) {
@@ -274,20 +214,21 @@ function startRound(state, catalog) {
   for (const p of state.players) {
     p.gold += BASE_INCOME + interest(p.gold);
     p.ready = false;
-    rollShop(p, catalog, state.round, state.featured);
+    rollShop(p, state.featured);
   }
 }
 
 export function roundDamage(result, round) {
   if (result.winner === null) return [Math.ceil(round / 2), Math.ceil(round / 2)];
   const damage = [0, 0];
-  const stars = result.survivors.reduce((sum, u) => sum + u.star, 0);
-  damage[1 - result.winner] = round + 2 * stars;
+  const copies = result.survivors.reduce((sum, u) => sum + u.star + 1, 0);
+  damage[1 - result.winner] = round + 2 * copies;
   return damage;
 }
 
 function beginCombat(state, catalog) {
-  const result = simulate(catalog, state.players.map((p) => p.board));
+  // Per-round combat seed derived from the match seed, so fights replay exactly.
+  const result = simulate(catalog, state.players.map((p) => p.board), (state.seed + Math.imul(state.round, 0x9e3779b9)) >>> 0);
   state.combat = { round: state.round, result, damage: roundDamage(result, state.round) };
   state.phase = 'combat';
   for (const p of state.players) p.ready = false;

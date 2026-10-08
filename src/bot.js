@@ -1,63 +1,46 @@
 // Dummy opponent. It plays through the exact same intent API as a human, so
 // in Phase 3 a remote guest can take its seat without touching the rules.
 
-import { REROLL_COST, boardCap, leaderIds, ownedUnits, sellValue } from './game.js';
+import { MAX_STAR, REROLL_COST, boardCap, fieldCount, leaderIds, teamSize, troopIds } from './game.js';
 import { COLS, HALF } from './combat.js';
 
 // Columns ordered from the centre outwards, e.g. [2, 1, 3, 0, 4] for 5 columns.
 const CENTER_OUT = [...Array(COLS).keys()].sort((a, b) => Math.abs(2 * a - (COLS - 1)) - Math.abs(2 * b - (COLS - 1)) || a - b);
 
 export function botTurn(state, catalog, p, send) {
-  if (state.phase === 'leader') {
+  if (state.phase === 'team') {
     // Deterministic per seed and seat, so seeded matches replay identically.
-    const ids = leaderIds(catalog);
-    send({ type: 'chooseLeader', leader: ids[(state.seed + p) % ids.length] });
+    const leaders = leaderIds(catalog);
+    const troops = troopIds(catalog);
+    const start = (state.seed + p) % troops.length;
+    const picks = [...troops.slice(start), ...troops.slice(0, start)].slice(0, teamSize(catalog));
+    send({ type: 'chooseTeam', leader: leaders[(state.seed + p) % leaders.length], troops: picks });
     return;
   }
   shop(state, catalog, p, send);
-  if (state.round >= 3 && state.players[p].gold >= REROLL_COST + 4) {
+  if (state.round >= 3 && state.players[p].gold >= REROLL_COST + 3) {
     send({ type: 'reroll' });
     shop(state, catalog, p, send);
   }
-  arrange(state, catalog, p, send);
   send({ type: 'ready' });
 }
 
+// Buy until nothing useful is affordable: stacking a copy onto a troop already
+// on the board comes first (it powers it up without using a board slot), then
+// the most expensive troop that fits on a free square.
 function shop(state, catalog, p, send) {
   const me = state.players[p];
-  const cap = boardCap(state.round);
   for (;;) {
-    const owned = ownedUnits(me).filter((u) => !u.leader);
-    let best = -1;
-    let bestScore = -Infinity;
+    let best = null;
     me.shop.forEach((id, slot) => {
-      if (!id) return;
-      const { cost } = catalog[id];
-      if (cost > me.gold) return;
-      const copies = owned.filter((u) => u.unitId === id && u.star === 1).length;
-      if (!me.bench.includes(null) && copies < 2) return;
-      if (owned.length >= cap + 3 && copies === 0) return;
-      const score = cost * 10 + copies * 25;
-      if (score > bestScore) { bestScore = score; best = slot; }
+      if (!id || catalog[id].cost > me.gold) return;
+      const stack = me.board.find((u) => !u.leader && u.unitId === id && u.star < MAX_STAR);
+      const cell = stack ?? (fieldCount(me) < boardCap(state.round) ? freeCell(me, catalog[id].range <= 1) : null);
+      if (!cell) return;
+      const score = (stack ? 100 : 0) + catalog[id].cost;
+      if (!best || score > best.score) best = { score, intent: { type: 'buy', slot, x: cell.x, y: cell.y } };
     });
-    if (best === -1 || !send({ type: 'buy', slot: best }).ok) return;
-  }
-}
-
-function arrange(state, catalog, p, send) {
-  const me = state.players[p];
-  const all = ownedUnits(me).filter((u) => !u.leader).sort((a, b) => sellValue(catalog, b) - sellValue(catalog, a) || a.uid - b.uid);
-  const keep = new Set(all.slice(0, boardCap(state.round)));
-
-  for (const u of [...me.board]) {
-    if (u.leader || keep.has(u)) continue;
-    const free = me.bench.indexOf(null);
-    send(free === -1 ? { type: 'sell', uid: u.uid } : { type: 'move', uid: u.uid, to: { area: 'bench', index: free } });
-  }
-  for (const u of keep) {
-    if (me.board.includes(u)) continue;
-    const cell = freeCell(me, catalog[u.unitId].range <= 1);
-    if (cell) send({ type: 'move', uid: u.uid, to: { area: 'board', ...cell } });
+    if (!best || !send(best.intent).ok) return;
   }
 }
 

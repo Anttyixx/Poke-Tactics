@@ -51,7 +51,7 @@ function dispatch(player, intent) {
 function runBot() {
   if (state.players[BOT].ready) return;
   const send = (intent) => applyIntent(state, catalog, BOT, intent);
-  if (state.phase === 'planning' || state.phase === 'leader') botTurn(state, catalog, BOT, send);
+  if (state.phase === 'planning' || state.phase === 'team') botTurn(state, catalog, BOT, send);
   else if (state.phase === 'combat') send({ type: 'continue' });
 }
 

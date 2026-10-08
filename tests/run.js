@@ -1,22 +1,27 @@
 // Zero-dependency test runner: `node tests/run.js` (or `npm test`).
 // Focuses on the properties Phase 3 depends on: determinism, JSON-serializable
-// state, and applyIntent rejecting anything invalid.
+// state, and applyIntent rejecting anything invalid. Plus the team/pool rules.
 
 import { existsSync, readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { createGame, applyIntent, boardCap, fieldCount, leaderIds, BENCH_SIZE } from '../src/game.js';
-import { simulate, MAX_TICKS } from '../src/combat.js';
+import {
+  createGame, applyIntent, boardCap, fieldCount, leaderIds, troopIds, teamSize, poolSize,
+  COPIES_PER_TROOP, MAX_STAR, SHOP_SIZE,
+} from '../src/game.js';
+import { simulate, MAX_TICKS, COLS, HALF } from '../src/combat.js';
 import { botTurn } from '../src/bot.js';
 
 const catalog = JSON.parse(readFileSync(new URL('../data/units.json', import.meta.url), 'utf8'));
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
 const clone = (v) => JSON.parse(JSON.stringify(v));
+const TROOPS = troopIds(catalog);
+const team = (leader = 'decidueye', troops = TROOPS.slice(0, teamSize(catalog))) => ({ type: 'chooseTeam', leader, troops });
 
-// A game that is past leader selection and in round 1 planning.
-function startedGame(seed = 7, leaders = ['decidueye', 'decidueye']) {
-  const s = createGame({ seed, catalog, names: ['A', 'B'] });
-  leaders.forEach((leader, p) => assert.ok(applyIntent(s, catalog, p, { type: 'chooseLeader', leader }).ok));
+// A game past team building, in round 1 planning.
+function startedGame(seed = 7, leaders = ['decidueye', 'decidueye'], opts = {}) {
+  const s = createGame({ seed, catalog, names: ['A', 'B'], ...opts });
+  leaders.forEach((leader, p) => assert.ok(applyIntent(s, catalog, p, team(leader)).ok));
   return s;
 }
 
@@ -28,39 +33,37 @@ function playMatch(seed, { roundTrip = false, maxRounds = 60 } = {}) {
   while (state.phase !== 'gameover' && state.round <= maxRounds) {
     for (const p of [0, 1]) {
       if (state.phase === 'combat') send(p)({ type: 'continue' });
-      else botTurn(state, catalog, p, send(p));
+      else if (state.phase !== 'gameover') botTurn(state, catalog, p, send(p));
       if (roundTrip) state = clone(state);
     }
   }
   return state;
 }
 
-test('unit catalog is well formed', () => {
+// Every team troop always has exactly COPIES_PER_TROOP copies between board and pool.
+function assertCopiesConserved(player) {
+  for (const t of player.team) {
+    const onBoard = player.board.filter((u) => u.unitId === t).reduce((n, u) => n + u.star + 1, 0);
+    assert.equal(onBoard + player.pool[t], COPIES_PER_TROOP, `${t}: ${onBoard} on board + ${player.pool[t]} in pool`);
+  }
+}
+
+// ---- catalog --------------------------------------------------------------
+
+test('unit catalog is well formed, and every unit has a sprite that exists', () => {
   const kinds = new Set(['strike', 'stun', 'blast', 'heal', 'shield']);
   for (const [id, u] of Object.entries(catalog)) {
     for (const k of ['hp', 'atk', 'armor', 'range', 'attackCd', 'moveCd', 'mana', 'cost']) {
       assert.ok(Number.isInteger(u[k]) && u[k] >= 0, `${id}.${k} must be a non-negative integer`);
     }
-    assert.ok(u.leader ? u.cost === 0 && u.sprite : [1, 2, 3].includes(u.cost), `${id} cost`);
+    assert.ok(u.leader ? u.cost === 0 : [1, 2, 3].includes(u.cost), `${id} cost`);
     assert.ok(kinds.has(u.ability.kind), `${id} ability kind`);
+    assert.ok(u.sprite && existsSync(new URL(`../${u.sprite}`, import.meta.url)), `${id}: missing sprite ${u.sprite}`);
   }
+  assert.ok(TROOPS.length >= teamSize(catalog) && teamSize(catalog) > 0);
 });
 
-test('every unit has art, and sprite files exist', () => {
-  for (const [id, u] of Object.entries(catalog)) {
-    assert.ok(u.emoji || u.sprite, `${id} needs an emoji or a sprite`);
-    if (u.sprite) assert.ok(existsSync(new URL(`../${u.sprite}`, import.meta.url)), `${id}: missing ${u.sprite}`);
-  }
-});
-
-test('sprite troops (non-leaders) can be bought', () => {
-  const s = startedGame();
-  const p = s.players[0];
-  p.gold = 99;
-  p.shop[0] = 'beheeyem';
-  assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 0 }).ok);
-  assert.equal(p.bench.find(Boolean).unitId, 'beheeyem');
-});
+// ---- whole matches ----------------------------------------------------------
 
 test('full bot-vs-bot match is deterministic for a seed', () => {
   assert.deepEqual(playMatch(1234), playMatch(1234));
@@ -70,86 +73,186 @@ test('state survives a JSON round trip between turns', () => {
   assert.deepEqual(playMatch(99, { roundTrip: true }), playMatch(99));
 });
 
-test('matches actually finish', () => {
-  for (const seed of [1, 2, 3, 4, 5]) assert.equal(playMatch(seed).phase, 'gameover', `seed ${seed}`);
+test('matches finish, and copies are conserved throughout', () => {
+  for (const seed of [1, 2, 3, 4, 5]) {
+    const s = playMatch(seed);
+    assert.equal(s.phase, 'gameover', `seed ${seed}`);
+    s.players.forEach(assertCopiesConserved);
+  }
 });
 
-test('simulate does not mutate its inputs and is repeatable', () => {
-  const boards = [
-    [{ uid: 1, unitId: 'squire', star: 1, x: 3, y: 0 }, { uid: 2, unitId: 'scout', star: 2, x: 4, y: 3 }],
-    [{ uid: 3, unitId: 'knight', star: 1, x: 3, y: 0 }, { uid: 4, unitId: 'acolyte', star: 1, x: 2, y: 3 }],
+// ---- team building ----------------------------------------------------------
+
+test('team phase: only valid teams; round 1 starts with leaders placed and pools filled', () => {
+  const s = createGame({ seed: 7, catalog, names: ['A', 'B'] });
+  assert.equal(s.phase, 'team');
+  const need = teamSize(catalog);
+  const bad = [
+    { type: 'buy', slot: 0, x: 0, y: 0 }, { type: 'ready' },
+    team('mawile'), team('toString'), team(null),
+    team('decidueye', TROOPS.slice(0, need - 1)), // too few
+    team('decidueye', [...TROOPS.slice(0, need - 1), TROOPS[0]]), // duplicate
+    team('decidueye', [...TROOPS.slice(0, need - 1), 'greninja']), // a leader as a troop
+    team('decidueye', 'mawile'),
   ];
-  const before = clone(boards);
-  const a = simulate(catalog, boards);
-  assert.deepEqual(boards, before);
-  assert.deepEqual(a, simulate(catalog, clone(boards)));
-  assert.ok(a.ticks <= MAX_TICKS);
-  assert.equal(a.events.at(-1).type, 'end');
+  for (const intent of bad) {
+    const before = clone(s);
+    assert.equal(applyIntent(s, catalog, 0, intent).ok, false, JSON.stringify(intent));
+    assert.deepEqual(s, before);
+  }
+  assert.ok(applyIntent(s, catalog, 0, team('infernape')).ok);
+  assert.equal(applyIntent(s, catalog, 0, team('greninja')).ok, false, 'cannot choose twice');
+  assert.equal(s.phase, 'team');
+  assert.ok(applyIntent(s, catalog, 1, team('decidueye')).ok);
+  assert.equal(s.phase, 'planning');
+  assert.equal(s.round, 1);
+  assert.deepEqual(s.players.map((p) => p.board.map((u) => [u.unitId, u.leader, u.y, u.star])),
+    [[['infernape', true, 0, 0]], [['decidueye', true, 3, 0]]], 'melee leaders in front, ranged at the back');
+  for (const p of s.players) {
+    assert.equal(poolSize(p), need * COPIES_PER_TROOP);
+    assert.ok(p.team.every((t) => p.pool[t] === COPIES_PER_TROOP));
+    assert.equal(p.shop.length, SHOP_SIZE);
+  }
 });
 
-test('empty boards resolve immediately', () => {
-  const unit = [{ uid: 1, unitId: 'squire', star: 1, x: 0, y: 0 }];
-  assert.equal(simulate(catalog, [[], []]).winner, null);
-  assert.equal(simulate(catalog, [unit, []]).winner, 0);
-  assert.equal(simulate(catalog, [[], unit]).winner, 1);
+// ---- shop and pool ----------------------------------------------------------
+
+test('shop only offers troops from your own pool, never more copies than it holds', () => {
+  const s = startedGame();
+  const p = s.players[0];
+  for (let i = 0; i < 300; i++) {
+    p.gold = 99;
+    assert.ok(applyIntent(s, catalog, 0, { type: 'reroll' }).ok);
+    const counts = {};
+    for (const id of p.shop.filter(Boolean)) counts[id] = (counts[id] ?? 0) + 1;
+    for (const [id, n] of Object.entries(counts)) {
+      assert.ok(p.team.includes(id) && !catalog[id].leader, id);
+      assert.ok(n <= p.pool[id], `${id} offered ${n}x with ${p.pool[id]} in pool`);
+    }
+  }
+  // Nearly empty pool: shop shows only what's left.
+  p.pool = Object.fromEntries(p.team.map((t) => [t, 0]));
+  p.pool[p.team[0]] = 1;
+  p.gold = 99;
+  applyIntent(s, catalog, 0, { type: 'reroll' });
+  assert.deepEqual(p.shop, [p.team[0], null, null]);
 });
 
-test('mirrored boards are fair-ish (no first-mover blowout)', () => {
-  const side = (uidBase) => [
-    { uid: uidBase + 1, unitId: 'knight', star: 1, x: 3, y: 0 },
-    { uid: uidBase + 2, unitId: 'hunter', star: 1, x: 4, y: 3 },
-  ];
-  const r = simulate(catalog, [side(0), side(10)]);
-  // Either side may win by a hair, but survivors should be few and hurt.
-  assert.ok(r.survivors.length <= 1);
+test('buying places onto the chosen square and removes the copy from the pool', () => {
+  const s = startedGame();
+  const p = s.players[0];
+  p.gold = 99;
+  const id = p.shop[0];
+  const before = p.pool[id];
+  assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: 0, y: 1 }).ok);
+  const placed = p.board.find((u) => u.x === 0 && u.y === 1);
+  assert.deepEqual([placed.unitId, placed.star], [id, 0]);
+  assert.equal(p.pool[id], before - 1);
+  assert.equal(p.shop[0], null);
+  assert.equal(p.gold, 99 - catalog[id].cost);
+  assertCopiesConserved(p);
+  assert.equal(applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: 1, y: 1 }).ok, false, 'slot is now empty');
 });
 
-test('rejects invalid and out-of-phase intents', () => {
+test('copies combine only when placed on the same troop: 1-4 copies = 0-3 stars', () => {
+  const s = startedGame();
+  const p = s.players[0];
+  const id = 'mawile';
+  const other = TROOPS.find((t) => t !== id);
+  p.gold = 99;
+  p.shop = [id, id, other];
+  assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: 0, y: 0 }).ok);
+  assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 1, x: 1, y: 0 }).ok, 'an empty square makes a separate troop');
+  assert.deepEqual(p.board.filter((u) => u.unitId === id).map((u) => u.star), [0, 0]);
+  assert.equal(applyIntent(s, catalog, 0, { type: 'buy', slot: 2, x: 0, y: 0 }).ok, false, 'cannot buy onto a different troop');
+  assert.equal(applyIntent(s, catalog, 0, { type: 'buy', slot: 2, x: 2, y: 3 }).ok, false, 'cannot buy onto the leader');
+  // Moving one Mawile onto the other combines them.
+  const [a, b] = p.board.filter((u) => u.unitId === id);
+  assert.ok(applyIntent(s, catalog, 0, { type: 'move', uid: b.uid, x: a.x, y: a.y }).ok);
+  assert.deepEqual(p.board.filter((u) => u.unitId === id).map((u) => u.star), [1]);
+  // Two more copies bought onto it: 3★ (4 copies).
+  for (let i = 0; i < 2; i++) {
+    p.shop = [id, null, null];
+    assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: a.x, y: a.y }).ok);
+  }
+  assert.equal(a.star, MAX_STAR);
+  assert.equal(p.pool[id], 0);
+  assertCopiesConserved(p);
+});
+
+test('selling refunds gold per copy and returns every copy to the pool', () => {
+  const s = startedGame();
+  const p = s.players[0];
+  p.gold = 99;
+  p.shop = ['beheeyem', 'beheeyem', null];
+  applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: 0, y: 3 });
+  applyIntent(s, catalog, 0, { type: 'buy', slot: 1, x: 0, y: 3 });
+  const unit = p.board.find((u) => u.unitId === 'beheeyem');
+  assert.equal(unit.star, 1);
+  const gold = p.gold;
+  assert.ok(applyIntent(s, catalog, 0, { type: 'sell', uid: unit.uid }).ok);
+  assert.equal(p.gold, gold + 2 * catalog.beheeyem.cost);
+  assert.equal(p.pool.beheeyem, COPIES_PER_TROOP);
+  assertCopiesConserved(p);
+});
+
+test('board cap counts troops (not copies or the leader); enemy half is off limits', () => {
+  const s = startedGame();
+  const p = s.players[0];
+  const cap = boardCap(s.round);
+  p.gold = 999;
+  let placed = 0;
+  for (let i = 0; placed < cap + 2 && i < 40; i++) {
+    p.shop = [p.team[i % p.team.length], null, null];
+    if (p.pool[p.shop[0]] === 0) continue;
+    if (applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: placed % COLS, y: Math.floor(placed / COLS) }).ok) placed++;
+    else break;
+  }
+  assert.equal(fieldCount(p), cap);
+  assert.equal(p.board.length, cap + 1, 'leader is extra');
+  p.shop = [p.board.find((u) => !u.leader).unitId, null, null];
+  const stackOn = p.board.find((u) => u.unitId === p.shop[0]);
+  if (p.pool[p.shop[0]] > 0) assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: stackOn.x, y: stackOn.y }).ok, 'stacking still works at the cap');
+  const someone = p.board.find((u) => !u.leader);
+  assert.equal(applyIntent(s, catalog, 0, { type: 'move', uid: someone.uid, x: 0, y: HALF }).ok, false);
+  assert.equal(applyIntent(s, catalog, 0, { type: 'move', uid: someone.uid, x: -1, y: 0 }).ok, false);
+});
+
+test('leader cannot be sold or combined, but can move and swap', () => {
+  const s = startedGame();
+  const p = s.players[0];
+  const leader = p.board[0];
+  p.gold = 99;
+  p.shop = ['mawile', null, null];
+  applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: 0, y: 0 });
+  const troop = p.board.find((u) => !u.leader);
+  assert.equal(applyIntent(s, catalog, 0, { type: 'sell', uid: leader.uid }).ok, false);
+  assert.ok(applyIntent(s, catalog, 0, { type: 'move', uid: leader.uid, x: 0, y: 0 }).ok, 'swap with a troop');
+  assert.deepEqual([leader.x, leader.y, troop.x, troop.y], [0, 0, 2, 3]);
+  assert.equal(p.board.length, 2);
+});
+
+test('rejects invalid and out-of-phase intents without changing state', () => {
   const s = startedGame();
   const bad = [
     [5, { type: 'reroll' }],
     [0, null],
     [0, { type: 'hack' }],
     [0, { type: 'toString' }],
-    [0, { type: 'buy', slot: 99 }],
-    [0, { type: 'buy', slot: '0' }],
+    [0, { type: 'buy', slot: 99, x: 0, y: 0 }],
+    [0, { type: 'buy', slot: '0', x: 0, y: 0 }],
+    [0, { type: 'buy', slot: 0 }],
+    [0, { type: 'buy', slot: 0, x: 0, y: HALF }],
     [0, { type: 'sell', uid: 12345 }],
+    [0, { type: 'move', uid: 12345, x: 0, y: 0 }],
     [0, { type: 'continue' }],
+    [0, team()],
   ];
   for (const [p, intent] of bad) {
     const before = clone(s);
     assert.equal(applyIntent(s, catalog, p, intent).ok, false, JSON.stringify(intent));
     assert.deepEqual(s, before, 'rejected intent must not change state');
   }
-});
-
-test('cannot place on the enemy half or exceed the board cap', () => {
-  const s = startedGame();
-  const p = s.players[0];
-  p.gold = 50;
-  for (let i = 0; i < 5; i++) applyIntent(s, catalog, 0, { type: 'buy', slot: i });
-  const benched = p.bench.filter(Boolean);
-  assert.equal(applyIntent(s, catalog, 0, { type: 'move', uid: benched[0].uid, to: { area: 'board', x: 0, y: 4 } }).ok, false);
-  assert.equal(applyIntent(s, catalog, 0, { type: 'move', uid: benched[0].uid, to: { area: 'board', x: 0, y: -1 } }).ok, false);
-  const cap = boardCap(s.round);
-  const placed = p.bench.filter(Boolean).map((u, i) =>
-    applyIntent(s, catalog, 0, { type: 'move', uid: u.uid, to: { area: 'board', x: i, y: 0 } }).ok);
-  assert.equal(placed.filter(Boolean).length, Math.min(cap, placed.length));
-  assert.equal(fieldCount(p), Math.min(cap, placed.length));
-  assert.equal(p.board.length, fieldCount(p) + 1, 'leader is on the board but outside the cap');
-});
-
-test('three copies merge into a 2-star, even with a full bench', () => {
-  const s = startedGame();
-  const p = s.players[0];
-  p.gold = 100;
-  p.bench = Array(BENCH_SIZE).fill(null).map((_, i) => ({ uid: 1000 + i, unitId: i < 2 ? 'squire' : 'scout', star: 1 }));
-  p.bench[2].unitId = 'acolyte';
-  p.shop = ['squire', null, null, null, null];
-  assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 0 }).ok);
-  const squires = p.bench.filter((u) => u?.unitId === 'squire');
-  assert.equal(squires.length, 1);
-  assert.equal(squires[0].star, 2);
 });
 
 test('locked-in players cannot act; combat starts when both are ready', () => {
@@ -162,65 +265,72 @@ test('locked-in players cannot act; combat starts when both are ready', () => {
   assert.ok(s.combat.result.events.length > 0);
 });
 
-test('leader phase: valid picks only, then round 1 starts with leaders on the board', () => {
-  const s = createGame({ seed: 7, catalog, names: ['A', 'B'] });
-  assert.equal(s.phase, 'leader');
-  assert.deepEqual(leaderIds(catalog), ['decidueye', 'greninja', 'infernape']);
-  for (const bad of [{ type: 'buy', slot: 0 }, { type: 'ready' }, { type: 'chooseLeader', leader: 'squire' },
-    { type: 'chooseLeader', leader: 'toString' }, { type: 'chooseLeader' }]) {
-    assert.equal(applyIntent(s, catalog, 0, bad).ok, false, JSON.stringify(bad));
-  }
-  assert.ok(applyIntent(s, catalog, 0, { type: 'chooseLeader', leader: 'infernape' }).ok);
-  assert.equal(applyIntent(s, catalog, 0, { type: 'chooseLeader', leader: 'greninja' }).ok, false);
-  assert.equal(s.phase, 'leader');
-  assert.ok(applyIntent(s, catalog, 1, { type: 'chooseLeader', leader: 'decidueye' }).ok);
-  assert.equal(s.phase, 'planning');
-  assert.equal(s.round, 1);
-  assert.deepEqual(s.players.map((p) => p.board.map((u) => [u.unitId, u.leader, u.y])),
-    [[['infernape', true, 0]], [['decidueye', true, 3]]], 'melee leaders start in front, ranged at the back');
-});
-
-test('leaders never appear in the shop', () => {
-  const s = startedGame();
-  for (let i = 0; i < 200; i++) {
-    s.players[0].gold = 99;
-    applyIntent(s, catalog, 0, { type: 'reroll' });
-    for (const id of s.players[0].shop) assert.ok(!catalog[id].leader, id);
-  }
-});
-
-test('leader cannot be sold or benched, but can move around the board', () => {
-  const s = startedGame();
-  const p = s.players[0];
-  const leader = p.board[0];
-  p.bench[0] = { uid: 500, unitId: 'squire', star: 1 };
-  assert.equal(applyIntent(s, catalog, 0, { type: 'sell', uid: leader.uid }).ok, false);
-  assert.equal(applyIntent(s, catalog, 0, { type: 'move', uid: leader.uid, to: { area: 'bench', index: 1 } }).ok, false);
-  assert.equal(applyIntent(s, catalog, 0, { type: 'move', uid: leader.uid, to: { area: 'bench', index: 0 } }).ok, false);
-  assert.equal(applyIntent(s, catalog, 0, { type: 'move', uid: 500, to: { area: 'board', x: leader.x, y: leader.y } }).ok, false,
-    'a bench unit cannot swap the leader off the board');
-  assert.ok(applyIntent(s, catalog, 0, { type: 'move', uid: leader.uid, to: { area: 'board', x: 0, y: 0 } }).ok);
-  assert.deepEqual([leader.x, leader.y], [0, 0]);
-  assert.ok(applyIntent(s, catalog, 0, { type: 'move', uid: 500, to: { area: 'board', x: 1, y: 0 } }).ok);
-  assert.ok(applyIntent(s, catalog, 0, { type: 'move', uid: leader.uid, to: { area: 'board', x: 1, y: 0 } }).ok, 'board-to-board swap is fine');
-  assert.equal(p.board.find((u) => u.uid === 500).x, 0);
-});
-
-test('featured unit is in slot 0 of every shop, including rerolls; bad ids are ignored', () => {
-  const s = createGame({ seed: 3, catalog, names: ['A', 'B'], featured: 'beheeyem' });
-  for (const p of [0, 1]) applyIntent(s, catalog, p, { type: 'chooseLeader', leader: 'greninja' });
-  assert.equal(s.round, 1);
+test('featured troop leads the shop while its pool has copies; bad ids are ignored', () => {
+  const s = startedGame(3, ['greninja', 'greninja'], { featured: 'beheeyem' });
   for (const p of s.players) assert.equal(p.shop[0], 'beheeyem');
-  s.players[0].gold = 50;
+  const p = s.players[0];
+  p.gold = 50;
   for (let i = 0; i < 5; i++) {
     assert.ok(applyIntent(s, catalog, 0, { type: 'reroll' }).ok);
-    assert.equal(s.players[0].shop[0], 'beheeyem');
+    assert.equal(p.shop[0], 'beheeyem');
   }
   for (const bad of ['greninja', 'nope', 'toString', '', null]) {
     assert.equal(createGame({ seed: 3, catalog, names: ['A', 'B'], featured: bad }).featured, null, String(bad));
   }
-  // Without the option, shops are unchanged from before.
-  assert.equal(createGame({ seed: 3, catalog, names: ['A', 'B'] }).featured, null);
+});
+
+// ---- combat -----------------------------------------------------------------
+
+test('simulate does not mutate its inputs and is repeatable', () => {
+  const boards = [
+    [{ uid: 1, unitId: 'mawile', star: 0, x: 2, y: 0 }, { uid: 2, unitId: 'toxtricity', star: 2, x: 1, y: 3 }],
+    [{ uid: 3, unitId: 'coalossal', star: 1, x: 2, y: 0 }, { uid: 4, unitId: 'beheeyem', star: 0, x: 3, y: 3 }],
+  ];
+  const before = clone(boards);
+  const a = simulate(catalog, boards, 42);
+  assert.deepEqual(boards, before);
+  assert.deepEqual(a, simulate(catalog, clone(boards), 42));
+  assert.ok(a.ticks <= MAX_TICKS);
+  assert.equal(a.events.at(-1).type, 'end');
+});
+
+test('empty boards resolve immediately', () => {
+  const unit = [{ uid: 1, unitId: 'mawile', star: 0, x: 0, y: 0 }];
+  assert.equal(simulate(catalog, [[], []]).winner, null);
+  assert.equal(simulate(catalog, [unit, []]).winner, 0);
+  assert.equal(simulate(catalog, [[], unit]).winner, 1);
+});
+
+test('combat is fair: identical mirrored armies never favour a side', () => {
+  // Every unit 1v1 against itself from every square: must always be a draw.
+  for (const id of Object.keys(catalog)) {
+    for (let x = 0; x < COLS; x++) for (let y = 0; y < HALF; y++) {
+      const r = simulate(catalog, [[{ uid: 1, unitId: id, star: 0, x, y }], [{ uid: 2, unitId: id, star: 0, x, y }]], x * 7 + y);
+      assert.equal(r.winner, null, `${id} at (${x},${y}) won for side ${r.winner}`);
+    }
+  }
+  // Random mirrored armies: wins (if any) split evenly.
+  const ids = Object.keys(catalog);
+  const wins = [0, 0];
+  for (let i = 0; i < 300; i++) {
+    const army = [];
+    const used = new Set();
+    for (let k = 0; k < 1 + (i % 5); k++) {
+      const x = (i * 3 + k * 7) % COLS;
+      const y = (i + k * 3) % HALF;
+      if (used.has(`${x},${y}`)) continue;
+      used.add(`${x},${y}`);
+      army.push({ unitId: ids[(i + k) % ids.length], star: (i + k) % 4, x, y });
+    }
+    const r = simulate(catalog, [army.map((u, k) => ({ ...u, uid: 2 * k + 1 })), army.map((u, k) => ({ ...u, uid: 2 * k + 2 }))], i);
+    if (r.winner !== null) wins[r.winner]++;
+  }
+  assert.ok(Math.abs(wins[0] - wins[1]) <= 10, `mirror wins split ${wins}`);
+});
+
+test('more copies make a troop stronger', () => {
+  const fight = (a, b) => simulate(catalog, [[{ uid: 1, unitId: 'mawile', star: a, x: 2, y: 0 }], [{ uid: 2, unitId: 'mawile', star: b, x: 2, y: 0 }]]).winner;
+  for (let s = 1; s <= MAX_STAR; s++) assert.equal(fight(s, s - 1), 0, `${s}★ beats ${s - 1}★`);
 });
 
 let failed = 0;

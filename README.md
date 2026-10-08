@@ -16,7 +16,7 @@ python3 -m http.server 8000      # or: npm start
 # open http://localhost:8000
 ```
 
-Add `?unit=<id>` (e.g. `?unit=beheeyem`) to put that unit in the first slot of every shop from round 1, for testing new units.
+Add `?unit=<id>` (e.g. `?unit=beheeyem`) to put that troop in the first shop slot whenever your pool still has a copy, for testing new units.
 Add `?seed=anything` to the URL to make the first match reproducible, which helps with bug reports.
 In the browser console, `game.state` shows the live game state.
 
@@ -32,19 +32,26 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
 
 ## How to play
 
-- **Leader:** each player picks a leader (Decidueye, Greninja or Infernape) before round 1. It starts
-  on the field, fights every round, and doesn't count toward the board cap. It can be moved but not
-  sold or benched.
-- **Shop:** you get 5 gold per round, plus 1 gold of interest per 10 banked (max +5), plus 1 gold for a win.
-  Units cost 1–3 gold. Rerolling costs 2 gold. Higher-cost units show up more often in later rounds.
-- **Board:** you place units on your 5×4 half (the board is 5 wide by 8 tall). The row next to the centre line is the front.
-  You can field 3 units at first, and the cap rises by 1 every 2 rounds up to 8. The bench holds 8.
-- **Merging:** 3 copies of the same unit make a ★★ unit (×1.8 stats). 3 ★★ units make a ★★★ unit (×3.2).
+- **Team:** before round 1, each player picks 1 leader and 5 Pokémon troops. The leader starts on the
+  field, fights every round, doesn't count toward the board cap and can't be sold. Each troop puts
+  4 copies into that player's own pool.
+- **Shop:** 3 slots, drawn from your pool (never more copies than the pool holds). A new shop is
+  rolled each round; rerolling costs 2 gold. You get 5 gold per round, plus 1 gold of interest per 10
+  banked (max +5), plus 1 gold for a win. Troops cost 1–3 gold per copy.
+- **Buying:** click a shop troop, then a square on your half (or drag the card onto the board). A copy
+  you buy leaves your pool. There is no bench.
+- **Stars:** copies only combine when placed on top of the same troop (buying onto it, or moving one
+  onto another): 1 copy = 0★, 2 = ★ (×1.5 stats), 3 = ★★ (×2.2), 4 = ★★★ (×3.2).
+- **Selling:** drag a troop onto the shop (or press Sell) for its cost per copy; all its copies go back
+  to your pool.
+- **Board:** your half is 5×4 (the board is 5 wide by 8 tall); the row next to the centre line is the
+  front. You can field 3 troops at first, and the cap rises by 1 every 2 rounds up to 8.
 - **Combat:** units target the nearest enemy, walk into range and attack. Each attack builds mana,
-  and so does taking a hit. At full mana a unit casts its ability instead of attacking.
-- **Damage:** the loser takes `round + 2 × (stars of the winner's surviving units)`. A draw (both sides
-  wiped out, or the 30s timer runs out) costs each player `ceil(round / 2)`. Everyone starts at 100 HP.
-- **Keys:** `D` reroll, `F` fight, `E` sell the selected unit, `Space` skip the combat replay, `Esc` deselect.
+  and so does taking a hit. At full mana a unit casts its ability instead of attacking. Each tick
+  resolves simultaneously, so neither side gets a first-mover advantage.
+- **Damage:** the loser takes `round + 2 × (copies in the winner's surviving troops)`. A draw (both
+  sides wiped out, or the 30s timer runs out) costs each player `ceil(round / 2)`. Everyone starts at 100 HP.
+- **Keys:** `D` reroll, `F` fight, `E` sell the selected troop, `Space` skip the combat replay, `Esc` deselect.
 
 ## Project layout
 
