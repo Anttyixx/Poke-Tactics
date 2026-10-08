@@ -7,6 +7,7 @@
 //   - the host then broadcasts the resulting state to both clients
 //
 // Intents:
+//   { type: 'chooseLeader', leader }          pick a leader before round 1
 //   { type: 'buy', slot }                     buy shop slot 0..SHOP_SIZE-1
 //   { type: 'sell', uid }                     sell an owned unit
 //   { type: 'reroll' }                        new shop for REROLL_COST gold
@@ -39,6 +40,9 @@ export const boardCap = (round) => Math.min(8, 3 + Math.floor((round - 1) / 2));
 export const interest = (gold) => Math.min(MAX_INTEREST, Math.floor(gold / 10));
 export const sellValue = (catalog, inst) => catalog[inst.unitId].cost * 3 ** (inst.star - 1);
 export const tierOdds = (round) => TIER_ODDS.find(([from]) => round >= from)[1];
+export const leaderIds = (catalog) => Object.keys(catalog).filter((id) => catalog[id].leader).sort();
+// Units counting toward the board cap. The leader is always on the field for free.
+export const fieldCount = (player) => player.board.filter((u) => !u.leader).length;
 
 const OK = Object.freeze({ ok: true });
 const fail = (error) => ({ ok: false, error });
@@ -49,7 +53,7 @@ export function createGame({ seed, catalog, names }) {
     version: 1,
     seed: seed >>> 0,
     round: 0,
-    phase: 'planning', // planning -> combat -> planning ... -> gameover
+    phase: 'leader', // leader -> planning -> combat -> planning ... -> gameover
     nextUid: 1,
     players: names.map((name, i) => ({
       name,
@@ -59,6 +63,7 @@ export function createGame({ seed, catalog, names }) {
       bench: Array(BENCH_SIZE).fill(null),
       board: [],
       ready: false,
+      leader: null, // unitId of the chosen leader
       // Per-player RNG so one player's rerolls never change the other's shops,
       // regardless of the order the host receives intents in.
       rng: (seed ^ Math.imul(i + 1, 0x9e3779b9)) >>> 0,
@@ -66,7 +71,6 @@ export function createGame({ seed, catalog, names }) {
     combat: null, // { round, result, damage: [p0, p1] } while phase === 'combat'
     winner: null, // player index, or null for a draw, once phase === 'gameover'
   };
-  startRound(state, catalog);
   return state;
 }
 
@@ -78,6 +82,18 @@ export function applyIntent(state, catalog, playerIndex, intent) {
 }
 
 const HANDLERS = {
+  chooseLeader(state, catalog, player, { leader }) {
+    if (state.phase !== 'leader') return fail('Leaders have already been chosen');
+    if (player.ready) return fail('You already chose a leader');
+    if (typeof leader !== 'string' || !Object.hasOwn(catalog, leader) || !catalog[leader].leader) return fail('Unknown leader');
+    player.leader = leader;
+    // Melee leaders start on the front line, ranged ones at the back, both centred.
+    player.board = [{ uid: state.nextUid++, unitId: leader, star: 1, leader: true, x: 3, y: catalog[leader].range > 1 ? HALF - 1 : 0 }];
+    player.ready = true;
+    if (state.players.every((p) => p.ready)) startRound(state, catalog);
+    return OK;
+  },
+
   buy(state, catalog, player, { slot }) {
     const blocked = planningGuard(state, player);
     if (blocked) return blocked;
@@ -107,6 +123,7 @@ const HANDLERS = {
     if (blocked) return blocked;
     const inst = ownedUnits(player).find((u) => u.uid === uid);
     if (!inst) return fail('You do not own that unit');
+    if (inst.leader) return fail('Your leader cannot be sold');
     removeUnit(player, inst);
     player.gold += sellValue(catalog, inst);
     return OK;
@@ -138,11 +155,12 @@ const HANDLERS = {
         if (occupant) { occupant.x = inst.x; occupant.y = inst.y; }
       } else {
         const benchIndex = player.bench.indexOf(inst);
+        if (occupant?.leader) return fail('Your leader must stay on the field');
         if (occupant) {
           removeUnit(player, occupant);
           player.bench[benchIndex] = toBench(occupant);
         } else {
-          if (player.board.length >= boardCap(state.round)) return fail(`Board is full (${boardCap(state.round)} units this round)`);
+          if (fieldCount(player) >= boardCap(state.round)) return fail(`Board is full (${boardCap(state.round)} units this round)`);
           player.bench[benchIndex] = null;
         }
         player.board.push(inst);
@@ -157,6 +175,7 @@ const HANDLERS = {
       if (!isIndex(index, BENCH_SIZE)) return fail('Invalid bench slot');
       const occupant = player.bench[index];
       if (occupant === inst) return OK;
+      if (inst.leader) return fail('Your leader must stay on the field');
       if (fromBoard) {
         removeUnit(player, inst);
         if (occupant) {
@@ -234,7 +253,7 @@ function combine(player, group) {
 function rollShop(player, catalog, round) {
   const odds = tierOdds(round);
   const total = odds.reduce((a, b) => a + b, 0);
-  const ids = Object.keys(catalog).sort();
+  const ids = Object.keys(catalog).filter((id) => !catalog[id].leader).sort();
   player.shop = Array.from({ length: SHOP_SIZE }, () => {
     let roll = randInt(player, total);
     let tier = 0;

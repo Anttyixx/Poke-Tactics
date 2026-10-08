@@ -31,6 +31,9 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
 
 ## How to play
 
+- **Leader:** each player picks a leader (Decidueye, Greninja or Infernape) before round 1. It starts
+  on the field, fights every round, and doesn't count toward the board cap. It can be moved but not
+  sold or benched.
 - **Shop:** you get 5 gold per round, plus 1 gold of interest per 10 banked (max +5), plus 1 gold for a win.
   Units cost 1–3 gold. Rerolling costs 2 gold. Higher-cost units show up more often in later rounds.
 - **Board:** you place units on your 8×4 half. The row next to the centre line is the front.
@@ -47,8 +50,11 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
 ```
 index.html          page shell
 styles.css
+assets/sprites/     leader walk sheets: 256x256, 4x4 grid of 64px frames;
+                    rows = facing down, left, right, up; columns = walk cycle
 data/units.json     unit catalog (stats + ability). Add units here; no code change needed
-                    unless you add a new ability "kind"
+                    unless you add a new ability "kind". Leaders have
+                    "leader": true and a "sprite" path, and never show up in the shop
 src/rng.js          seeded PRNG whose state is stored in game state
 src/combat.js       simulate(catalog, boards). Pure and deterministic, returns an event log
 src/game.js         rules: createGame(), applyIntent(). The only thing that changes state

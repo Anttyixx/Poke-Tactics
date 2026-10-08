@@ -189,6 +189,7 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 
 .float {
   position: absolute;
+  z-index: 20;
   width: 12.5%;
   text-align: center;
   font-weight: 800;
@@ -206,6 +207,75 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
   from { transform: translateY(0); opacity: 1; }
   to { transform: translateY(-90%); opacity: 0; }
 }
+
+/* ---- Sprite units (leaders) ----
+   Sheets are 4x4 grids of 64px frames. Rows: down, left, right, up.
+   background-size 400% makes one frame fill the box; stepping
+   background-position-x through 0/33/67/100% plays the 4-frame walk. */
+.sprite {
+  position: absolute;
+  width: 135%;
+  aspect-ratio: 1;
+  left: -17.5%;
+  bottom: -4%;
+  background-size: 400% 400%;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  --walk: calc(0.72s / var(--speed, 1));
+  animation: walk var(--walk) steps(4) infinite;
+  transition: translate 0.9s linear;
+  pointer-events: none;
+}
+[data-facing="down"] .sprite { background-position-y: 0%; }
+[data-facing="left"] .sprite { background-position-y: 33.333%; }
+[data-facing="right"] .sprite { background-position-y: 66.667%; }
+[data-facing="up"] .sprite { background-position-y: 100%; }
+@keyframes walk {
+  from { background-position-x: 0%; }
+  to { background-position-x: 133.333%; }
+}
+
+.unit.leader .shadow {
+  position: absolute;
+  bottom: 8%;
+  width: 62%;
+  height: 20%;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ally) 45%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ally) 70%, transparent);
+}
+.unit.leader.enemy .shadow {
+  background: color-mix(in srgb, var(--enemy) 45%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--enemy) 70%, transparent);
+}
+.unit.leader.selected .shadow { box-shadow: 0 0 0 3px #fff; }
+.unit.leader .bars { z-index: 1; }
+
+.unit.leader.lunge .sprite { animation: walk var(--walk) steps(4) infinite, lunge 0.2s ease-out; }
+.unit.leader.shoot .sprite { animation: walk var(--walk) steps(4) infinite, shoot 0.2s ease-out; }
+.unit.leader.hit .sprite { animation: walk var(--walk) steps(4) infinite, hit 0.2s; }
+.unit.leader.casting .sprite { animation: walk var(--walk) steps(4) infinite, sprite-cast 0.45s ease-out; }
+.unit.leader.stunned .sprite { filter: grayscale(0.8) brightness(0.8); animation-play-state: paused; }
+@keyframes sprite-cast {
+  60% { filter: drop-shadow(0 0 4px #d58cff) drop-shadow(0 0 8px #d58cff); }
+}
+
+.portrait { position: relative; display: inline-block; width: 64px; height: 64px; flex: none; }
+.portrait .sprite { width: 100%; left: 0; bottom: 0; }
+
+/* Leader picker */
+#overlay .card:has(.leader-pick) { max-width: 760px; }
+.leader-pick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 16px 0 4px; }
+#overlay .leader-card {
+  margin: 0;
+  min-width: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 12px 10px;
+  border-top: 4px solid var(--type);
+}
+.leader-card .portrait { width: 96px; height: 96px; }
+.leader-card small { color: #c7cad4; line-height: 1.35; }
+.leader-card.chosen { border-color: var(--good); }
 
 /* ---- Bench ---- */
 #bench-wrap { grid-area: bench; max-width: 560px; width: 100%; margin: 0 auto; }
@@ -282,7 +352,9 @@ kbd { background: var(--panel-2); border: 1px solid var(--line); border-radius: 
 /* ---- Overlay / toast ---- */
 #overlay {
   position: fixed; inset: 0;
-  display: grid; place-items: center;
+  display: flex;
+  overflow-y: auto;
+  z-index: 50;
   background: #0009;
   backdrop-filter: blur(2px);
   padding: 16px;
@@ -295,12 +367,13 @@ kbd { background: var(--panel-2); border: 1px solid var(--line); border-radius: 
   padding: 24px 28px;
   max-width: 420px;
   width: 100%;
+  margin: auto; /* centred, but scrolls instead of clipping when taller than the screen */
   text-align: center;
 }
 #overlay h1 { font-size: 30px; margin-bottom: 8px; }
 #overlay h1.win { color: var(--good); }
 #overlay h1.loss { color: var(--enemy); }
-#overlay .muted { color: var(--muted); }
+.muted { color: var(--muted); }
 #overlay button { margin-top: 8px; min-width: 160px; }
 
 #toast {
@@ -324,6 +397,9 @@ kbd { background: var(--panel-2); border: 1px solid var(--line); border-radius: 
   #shop .card { padding: 6px 2px; font-size: 12px; }
   #shop .card .emoji { font-size: 20px; }
   #shop-actions { flex-direction: row; width: 100%; }
+  .leader-pick { grid-template-columns: 1fr; }
+  #overlay .leader-card { display: grid; grid-template-columns: 72px 1fr; text-align: left; align-items: center; column-gap: 10px; }
+  .leader-card .portrait { width: 72px; height: 72px; grid-row: span 3; }
 }
 
 /* Added by the Pages deploy so you can tell which build you're on. */
