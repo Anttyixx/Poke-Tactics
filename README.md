@@ -50,8 +50,8 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
 - **Board:** your half is 5×4 (the board is 5 wide by 8 tall); the row next to the centre line is the
   front. There is no limit on how many troops you field.
 - **Combat:** units target the nearest enemy they can reach and walk (pathing around anyone in the way)
-  into range one square at a time (up/down/left/right). Movement speed is a tier: fast 0.5s per square,
-  medium 0.8s, slow 1.0s, very slow 1.3s. A unit attacks every `secPerHit` seconds; each basic attack
+  into range one square at a time (up/down/left/right). Movement speed is how long each step takes: fast
+  0.5s per square, medium 0.8s, slow 1.0s, very slow 1.3s. A unit can't attack until it finishes its step. A unit attacks every `secPerHit` seconds; each basic attack
   has a `critChance`% chance to crit for 50% more damage (powers never crit). Each tick resolves
   simultaneously, and crit luck is shared slot for slot between the sides, so neither side gets an edge.
 - **Powers:** every Pokémon has one. Most count attacks (the purple bar). Every fight starts with the bar

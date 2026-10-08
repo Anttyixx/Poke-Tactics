@@ -646,8 +646,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         face(a, p.x - from.x, p.y - from.y);
         place(a.el, p.x, p.y);
         if (animate) {
-          // Hop to the next square; the walk cycle plays only during the hop.
-          const hopMs = Math.min(MOVE_SPEEDS[catalog[a.unitId].moveSpeed] * 1000, 360) / speed;
+          // Walk to the next square over the unit's whole move time, with a hop;
+          // the walk cycle plays only while it's moving.
+          const hopMs = (unitStats(catalog[a.unitId], 0).moveCd * TICK_MS) / speed;
           play(a.el, 'hop', hopMs);
           play(a.el, 'moving', hopMs);
         }

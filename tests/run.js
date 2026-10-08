@@ -517,6 +517,8 @@ test('units walk one square at a time (no diagonal steps), at their own pace', (
     const def = catalog[all.find((u) => u.id === e.id).unitId];
     const pace = MOVE_SPEEDS[def.moveSpeed];
     assert.ok(e.t - p.t >= Math.round(pace / TICK_SECONDS), `${def.name} stepped faster than ${pace}s per square`);
+    const early = r.events.find((ev) => ev.type === 'attack' && ev.id === e.id && ev.t > e.t && ev.t < e.t + Math.round(pace / TICK_SECONDS));
+    assert.ok(!early, `${def.name} attacked at tick ${early?.t} before finishing its step from tick ${e.t}`);
     pos.set(e.id, { x: e.x, y: e.y, t: e.t });
     moves++;
   }

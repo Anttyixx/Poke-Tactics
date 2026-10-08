@@ -306,7 +306,9 @@ export function simulate(catalog, boards, seed = 0) {
     if (!target) return;
     // The wave takes time to cross the board: whoever it moves is out of action
     // until it lands (wind-up plus about a tick per square).
-    const travel = WAVE_WINDUP + Math.abs(end - u.y);
+    // Measured from where Beheeyem stood when the fight began, so two waves
+    // fired at each other on the first tick resolve the same either way round.
+    const travel = WAVE_WINDUP + Math.abs(end - at(u).y);
     damage(target, Math.floor((u.atk * p.damagePct) / 100), u);
     if (!standing(target) || target.y === end) return;
     const blocker = unitAt(u.x, end);
@@ -407,7 +409,8 @@ export function simulate(catalog, boards, seed = 0) {
     }
 
     if (dist(u, at(target)) <= u.range) {
-      if (u.atkTimer > 0) return;
+      // A step takes the unit's whole move time; it can't attack mid-step.
+      if (u.atkTimer > 0 || u.moveTimer > 0) return;
       if (empowered) {
         powerStrike(u, target);
       } else {

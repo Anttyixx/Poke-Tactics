@@ -149,10 +149,10 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
   position: absolute;
   width: calc(100% / var(--cols));
   height: calc(100% / var(--rows));
-  /* Each step is a quick hop to the next square (at most 0.36s, or the unit's
-     whole step time if that is shorter), then the unit waits for its next step. */
-  --hop: calc(min(var(--tick, 100ms) * 5 * var(--step, 1), 360ms) / var(--speed, 1));
-  transition: left var(--hop) ease-in-out, top var(--hop) ease-in-out;
+  /* Each step takes the unit's whole move time (0.5s fast to 1.3s very slow),
+     so a slow Pokémon is visibly slow crossing every square. */
+  --hop: calc(var(--tick, 100ms) * 5 * var(--step, 1) / var(--speed, 1));
+  transition: left var(--hop) linear, top var(--hop) linear;
 }
 .token {
   width: 74%;
