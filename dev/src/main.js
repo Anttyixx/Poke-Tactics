@@ -3,15 +3,15 @@
 // host keeps this shape: the bot's seat is taken by intents arriving from the
 // guest's connection, and the host broadcasts state after each dispatch.
 
-import { createGame, applyIntent } from './game.js';
-import { botTurn } from './bot.js';
-import { createUI } from './ui.js';
-import { hashSeed } from './rng.js';
+import { createGame, applyIntent } from './game.js?v=0de7310';
+import { botTurn } from './bot.js?v=0de7310';
+import { createUI } from './ui.js?v=0de7310';
+import { hashSeed } from './rng.js?v=0de7310';
 
 const HUMAN = 0;
 const BOT = 1;
 
-const catalog = await (await fetch('data/units.json')).json();
+const catalog = await (await fetch('data/units.json?v=0de7310')).json();
 let state;
 let firstGame = true;
 

@@ -2,8 +2,8 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, ROWS, HALF, TICK_SECONDS, scale } from './combat.js';
-import { BASE_INCOME, BENCH_SIZE, MAX_INTEREST, REROLL_COST, boardCap, fieldCount, interest, leaderIds, sellValue } from './game.js';
+import { COLS, ROWS, HALF, TICK_SECONDS, scale } from './combat.js?v=0de7310';
+import { BASE_INCOME, BENCH_SIZE, MAX_INTEREST, REROLL_COST, boardCap, fieldCount, interest, leaderIds, sellValue } from './game.js?v=0de7310';
 
 const TICK_MS = 50; // playback speed at 1x (sim tick is 100ms, so 1x plays at double speed)
 
