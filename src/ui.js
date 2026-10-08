@@ -5,7 +5,7 @@
 import { COLS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, TICK_SECONDS, abilityPower, unitStats } from './combat.js';
 import {
   COPIES_PER_TROOP, LOSS_COINS, MAX_REROLLS, WIN_COINS,
-  boardCap, copiesOf, fieldCount, leaderIds, poolSize, sellValue, teamSize, troopIds,
+  copiesOf, fielded, leaderIds, poolSize, sellValue, teamSize, troopIds,
 } from './game.js';
 
 const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
@@ -306,7 +306,6 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
       <div class="stat"><span class="label">Round</span><b>${state.round}</b></div>
       <div class="stat" title="Win a battle: +${WIN_COINS}. Lose: +${LOSS_COINS}. Coins carry over."><span class="label">Coins</span><b class="gold">${p.coins}</b></div>
       <div class="stat" title="Free rerolls. +1 each round, up to ${MAX_REROLLS}."><span class="label">Rerolls</span><b>${p.rerolls}/${MAX_REROLLS}</b></div>
-      <div class="stat"><span class="label">Board</span><b>${fieldCount(p)}/${boardCap(Math.max(1, state.round))}</b></div>
       <div class="stat" title="Copies left to buy"><span class="label">Pool</span><b>${poolSize(p)}</b></div>
       ${hpBox(p, 'ally')}
       ${hpBox(foe(), 'enemy')}
@@ -318,7 +317,6 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     controls.hidden = true;
     const draggable = canPlan();
     const buyingId = buying !== null ? me().shop[buying] : null;
-    const movingId = selected !== null ? owned(selected)?.unitId : null;
     arena.classList.toggle('buying', !!buyingId);
 
     layer.replaceChildren(...me().board.map((u) => {
@@ -326,9 +324,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
       el.dataset.uid = u.uid;
       el.draggable = draggable;
       el.classList.toggle('selected', u.uid === selected);
-      // Highlight troops the picked shop copy (or selected troop) would combine with.
-      const combineWith = buyingId ?? movingId;
-      el.classList.toggle('combine-target', !u.leader && u.uid !== selected && u.unitId === combineWith);
+      // Highlight the troop the picked shop copy would level up.
+      el.classList.toggle('combine-target', !u.leader && u.unitId === buyingId);
       place(el, u.x, u.y + HALF);
       return el;
     }));
@@ -350,6 +347,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         <span class="name">${esc(def.name)}</span>
         <span class="type">${def.type}</span>
         <span class="cost c${def.cost}">${def.cost} 🪙</span>
+        ${fielded(p, id) ? `<span class="levelup">Level up ${'★'.repeat(fielded(p, id).star) || '0★'}→${'★'.repeat(fielded(p, id).star + 1)}</span>` : ''}
         <span class="left">${p.pool[id]} left in pool</span>
       </button>`;
     }).join('');
@@ -382,7 +380,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
       infoEl.innerHTML = `<h2>How to play</h2>
         <ul class="help">
           <li>Click a troop in the shop, then click a square on <b>your half</b> (bottom) to buy it there. Desktop: drag it onto the board.</li>
-          <li>Place a copy on top of the <b>same troop</b> to combine them: 2 copies = ★, 3 = ★★, 4 = ★★★.</li>
+          <li>Each troop can be on the board only once. Buying one you already have <b>levels it up</b>: 2 copies = ★, 3 = ★★, 4 = ★★★. There's no limit on how many different troops you field.</li>
           <li>The row nearest the middle is your front line. Put melee troops there.</li>
           <li>Drag a troop onto the shop (or press Sell) to sell it. Its copies go back to your pool.</li>
           <li>Press <b>Fight!</b> to watch the battle play out by itself.</li>
@@ -397,8 +395,11 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     const star = inst?.star ?? 0;
     const stats = unitStats(def, star);
     const copies = inst ? copiesOf(inst) : 1;
-    const hint = shopId && !inst
-      ? `<p class="hint">Click an empty square to place it, or a ${esc(def.name)} on the board to combine.</p>` : '';
+    const onBoard = shopId && !inst ? fielded(me(), shopId) : null;
+    const hint = !shopId || inst ? ''
+      : onBoard
+        ? `<p class="hint">You already have a ${esc(def.name)} on the board. Click anywhere on your side to level it up to ${'★'.repeat(onBoard.star + 1)}.</p>`
+        : '<p class="hint">Click an empty square on your side to place it.</p>';
     infoEl.innerHTML = `
       <div class="info-head" data-type="${def.type}">
         ${portrait(def)}

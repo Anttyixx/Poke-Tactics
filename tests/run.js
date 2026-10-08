@@ -5,7 +5,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import {
-  createGame, applyIntent, boardCap, fieldCount, leaderIds, troopIds, teamSize, poolSize,
+  createGame, applyIntent, fielded, leaderIds, troopIds, teamSize, poolSize,
   COPIES_PER_TROOP, MAX_STAR, SHOP_SIZE, START_COINS, WIN_COINS, LOSS_COINS, MAX_REROLLS,
 } from '../src/game.js';
 import { simulate, MAX_TICKS, COLS, HALF, SUDDEN_DEATH_TICK, SUDDEN_DEATH_HP_PER_SECOND } from '../src/combat.js';
@@ -158,7 +158,7 @@ test('buying places onto the chosen square and removes the copy from the pool', 
   assert.equal(applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: 1, y: 1 }).ok, false, 'slot is now empty');
 });
 
-test('copies combine only when placed on the same troop: 1-4 copies = 0-3 stars', () => {
+test('no duplicates on the field: buying a troop you already have levels it up (1-4 copies = 0-3 stars)', () => {
   const s = startedGame();
   const p = s.players[0];
   const id = 'mawile';
@@ -166,22 +166,26 @@ test('copies combine only when placed on the same troop: 1-4 copies = 0-3 stars'
   p.coins = 99;
   p.shop = [id, id, other];
   assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: 0, y: 0 }).ok);
-  assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 1, x: 1, y: 0 }).ok, 'an empty square makes a separate troop');
-  assert.deepEqual(p.board.filter((u) => u.unitId === id).map((u) => u.star), [0, 0]);
-  assert.equal(applyIntent(s, catalog, 0, { type: 'buy', slot: 2, x: 0, y: 0 }).ok, false, 'cannot buy onto a different troop');
-  assert.equal(applyIntent(s, catalog, 0, { type: 'buy', slot: 2, x: 2, y: 3 }).ok, false, 'cannot buy onto the leader');
-  // Moving one Mawile onto the other combines them.
-  const [a, b] = p.board.filter((u) => u.unitId === id);
-  assert.ok(applyIntent(s, catalog, 0, { type: 'move', uid: b.uid, x: a.x, y: a.y }).ok);
-  assert.deepEqual(p.board.filter((u) => u.unitId === id).map((u) => u.star), [1]);
-  // Two more copies bought onto it: 3★ (4 copies).
+  // A second copy aimed at a different empty square still levels up the first one.
+  assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 1, x: 4, y: 2 }).ok);
+  assert.deepEqual(p.board.filter((u) => u.unitId === id).map((u) => [u.star, u.x, u.y]), [[1, 0, 0]]);
+  assert.equal(applyIntent(s, catalog, 0, { type: 'buy', slot: 2, x: 0, y: 0 }).ok, false, 'a new troop cannot go on a taken square');
+  assert.equal(applyIntent(s, catalog, 0, { type: 'buy', slot: 2, x: 2, y: 3 }).ok, false, 'nor onto the leader');
+  assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 2, x: 1, y: 0 }).ok, 'a different troop gets its own square');
+  // Two more copies, even without coordinates: 3★ (all 4 copies), still one Mawile.
   for (let i = 0; i < 2; i++) {
     p.shop = [id, null, null];
-    assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: a.x, y: a.y }).ok);
+    assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 0 }).ok);
   }
-  assert.equal(a.star, MAX_STAR);
+  assert.equal(fielded(p, id).star, MAX_STAR);
+  assert.equal(p.board.filter((u) => u.unitId === id).length, 1);
   assert.equal(p.pool[id], 0);
   assertCopiesConserved(p);
+  // Moving onto another troop swaps them (there is never a same-troop stack to merge).
+  const a = fielded(p, id);
+  const b = fielded(p, other);
+  assert.ok(applyIntent(s, catalog, 0, { type: 'move', uid: a.uid, x: b.x, y: b.y }).ok);
+  assert.deepEqual([a.x, a.y, b.x, b.y], [1, 0, 0, 0]);
 });
 
 test('selling refunds coins per copy and returns every copy to the pool', () => {
@@ -200,23 +204,15 @@ test('selling refunds coins per copy and returns every copy to the pool', () => 
   assertCopiesConserved(p);
 });
 
-test('board cap counts troops (not copies or the leader); enemy half is off limits', () => {
+test('no troop limit: every troop of the team can be on the board; enemy half is off limits', () => {
   const s = startedGame();
   const p = s.players[0];
-  const cap = boardCap(s.round);
   p.coins = 999;
-  let placed = 0;
-  for (let i = 0; placed < cap + 2 && i < 40; i++) {
-    p.shop = [p.team[i % p.team.length], null, null];
-    if (p.pool[p.shop[0]] === 0) continue;
-    if (applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: placed % COLS, y: Math.floor(placed / COLS) }).ok) placed++;
-    else break;
-  }
-  assert.equal(fieldCount(p), cap);
-  assert.equal(p.board.length, cap + 1, 'leader is extra');
-  p.shop = [p.board.find((u) => !u.leader).unitId, null, null];
-  const stackOn = p.board.find((u) => u.unitId === p.shop[0]);
-  if (p.pool[p.shop[0]] > 0) assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: stackOn.x, y: stackOn.y }).ok, 'stacking still works at the cap');
+  p.team.forEach((id, i) => {
+    p.shop = [id, null, null];
+    assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: i, y: 1 }).ok, `${id} placed`);
+  });
+  assert.equal(p.board.length, p.team.length + 1, 'all troops plus the leader');
   const someone = p.board.find((u) => !u.leader);
   assert.equal(applyIntent(s, catalog, 0, { type: 'move', uid: someone.uid, x: 0, y: HALF }).ok, false);
   assert.equal(applyIntent(s, catalog, 0, { type: 'move', uid: someone.uid, x: -1, y: 0 }).ok, false);

@@ -9,15 +9,17 @@
 // Flow: each player builds a team (1 leader + TEAM_SIZE troops). Every troop puts
 // COPIES_PER_TROOP copies into that player's own pool. The shop shows SHOP_SIZE
 // copies drawn from the pool; buying one places it straight onto the board and
-// removes that copy from the pool. Placing a copy on the same troop combines them:
-// 1 copy = 0★, 2 = 1★, 3 = 2★, 4 = 3★. There is no bench.
+// removes that copy from the pool. There is no bench and no limit on how many
+// troops are on the board, but each troop can only be there once: buying a troop
+// you already field levels that one up instead (1 copy = 0★, 2 = 1★, 3 = 2★, 4 = 3★).
 //
 // Intents:
 //   { type: 'chooseTeam', leader, troops }    before round 1; troops = TEAM_SIZE distinct troop ids
-//   { type: 'buy', slot, x, y }               buy shop slot onto own square (x, y); same troop = combine
+//   { type: 'buy', slot, x, y }               buy shop slot onto empty own square (x, y); if that troop is
+//                                             already on the board it levels up instead (x, y ignored)
 //   { type: 'sell', uid }                     sell a troop; its copies go back to the pool
 //   { type: 'reroll' }                        new shop; uses one of the player's free rerolls
-//   { type: 'move', uid, x, y }               move on the board; same troop = combine, other = swap
+//   { type: 'move', uid, x, y }               move on the board; onto another unit = swap
 //   { type: 'ready' }                         lock in planning; combat starts when all are ready
 //   { type: 'continue' }                      done watching combat; next round starts when all continue
 
@@ -38,15 +40,14 @@ export const MAX_REROLLS = 3;
 export const REROLLS_PER_ROUND = 1;
 export const MAX_STAR = COPIES_PER_TROOP - 1; // stars = copies - 1
 
-export const boardCap = (round) => Math.min(8, 3 + Math.floor((round - 1) / 2));
 export const copiesOf = (inst) => inst.star + 1;
 export const sellValue = (catalog, inst) => catalog[inst.unitId].cost * copiesOf(inst);
 export const leaderIds = (catalog) => Object.keys(catalog).filter((id) => catalog[id].leader).sort();
 export const troopIds = (catalog) => Object.keys(catalog).filter((id) => !catalog[id].leader).sort();
 // How many troops a team needs (fewer only if the catalog doesn't have enough).
 export const teamSize = (catalog) => Math.min(TEAM_SIZE, troopIds(catalog).length);
-// Units counting toward the board cap. The leader is always on the field for free.
-export const fieldCount = (player) => player.board.filter((u) => !u.leader).length;
+// The troop of this species already on the board, if any (never more than one).
+export const fielded = (player, unitId) => player.board.find((u) => !u.leader && u.unitId === unitId);
 export const poolSize = (player) => Object.values(player.pool).reduce((a, b) => a + b, 0);
 
 const OK = Object.freeze({ ok: true });
@@ -118,14 +119,14 @@ const HANDLERS = {
     const { cost } = catalog[unitId];
     if (player.coins < cost) return fail('Not enough coins');
     if (!(player.pool[unitId] > 0)) return fail('No copies left in your pool');
-    if (!isIndex(x, COLS) || !isIndex(y, HALF)) return fail('Place troops on your half of the board');
 
-    const occupant = unitAt(player, x, y);
-    if (occupant) {
-      if (occupant.leader || occupant.unitId !== unitId) return fail(`That square is taken. Place it on an empty square or on a ${catalog[unitId].name}`);
-      occupant.star++; // can't pass MAX_STAR: only COPIES_PER_TROOP copies exist
+    const existing = fielded(player, unitId);
+    if (existing) {
+      // No duplicates on the field: the copy levels up the one already there.
+      existing.star++; // can't pass MAX_STAR: only COPIES_PER_TROOP copies exist
     } else {
-      if (fieldCount(player) >= boardCap(state.round)) return fail(`Board is full (${boardCap(state.round)} troops this round)`);
+      if (!isIndex(x, COLS) || !isIndex(y, HALF)) return fail('Place troops on your half of the board');
+      if (unitAt(player, x, y)) return fail('That square is taken. Pick an empty square');
       player.board.push({ uid: state.nextUid++, unitId, star: 0, x, y });
     }
     player.coins -= cost;
@@ -163,12 +164,6 @@ const HANDLERS = {
     if (!isIndex(x, COLS) || !isIndex(y, HALF)) return fail('You can only place units on your half');
     const occupant = unitAt(player, x, y);
     if (occupant === inst) return OK;
-    if (occupant && !occupant.leader && !inst.leader && occupant.unitId === inst.unitId) {
-      // Combine: all copies end up on the target square.
-      occupant.star += copiesOf(inst);
-      player.board.splice(player.board.indexOf(inst), 1);
-      return OK;
-    }
     if (occupant) { occupant.x = inst.x; occupant.y = inst.y; }
     inst.x = x;
     inst.y = y;

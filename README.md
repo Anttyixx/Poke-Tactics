@@ -43,12 +43,13 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
   When you're out, you can't reroll until the next round.
 - **Buying:** click a shop troop, then a square on your half (or drag the card onto the board). A copy
   you buy leaves your pool. There is no bench.
-- **Stars:** copies only combine when placed on top of the same troop (buying onto it, or moving one
-  onto another): 1 copy = 0★, 2 = ★ (×1.5 stats), 3 = ★★ (×2.2), 4 = ★★★ (×3.2).
+- **Stars:** each troop can be on the board only once. Buying a copy of a troop you already field levels
+  that troop up instead (click anywhere on your side): 1 copy = 0★, 2 = ★ (×1.5 stats), 3 = ★★ (×2.2),
+  4 = ★★★ (×3.2). Moving a troop onto another unit swaps them.
 - **Selling:** drag a troop onto the shop (or press Sell) for its cost in coins per copy; all its copies go back
   to your pool.
 - **Board:** your half is 5×4 (the board is 5 wide by 8 tall); the row next to the centre line is the
-  front. You can field 3 troops at first, and the cap rises by 1 every 2 rounds up to 8.
+  front. There is no limit on how many troops you field; the leader is always there too.
 - **Combat:** units target the nearest enemy, walk into range one square at a time (up/down/left/right, at
   their `secPerTile` pace: every troop takes 1s per square; leaders have their own pace) and attack. Each attack builds mana,
   and so does taking a hit. At full mana a unit casts its ability instead of attacking. Each tick

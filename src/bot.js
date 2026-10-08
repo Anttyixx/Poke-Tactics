@@ -1,7 +1,7 @@
 // Dummy opponent. It plays through the exact same intent API as a human, so
 // in Phase 3 a remote guest can take its seat without touching the rules.
 
-import { MAX_STAR, boardCap, fieldCount, leaderIds, teamSize, troopIds } from './game.js';
+import { MAX_STAR, fielded, leaderIds, teamSize, troopIds } from './game.js';
 import { COLS, HALF } from './combat.js';
 
 // Columns ordered from the centre outwards, e.g. [2, 1, 3, 0, 4] for 5 columns.
@@ -25,17 +25,17 @@ export function botTurn(state, catalog, p, send) {
   send({ type: 'ready' });
 }
 
-// Buy until nothing useful is affordable: stacking a copy onto a troop already
-// on the board comes first (it powers it up without using a board slot), then
-// the most expensive troop that fits on a free square.
+// Buy until nothing useful is affordable: levelling up a troop already on the
+// board comes first, then the most expensive new troop on a free square.
 function shop(state, catalog, p, send) {
   const me = state.players[p];
   for (;;) {
     let best = null;
     me.shop.forEach((id, slot) => {
       if (!id || catalog[id].cost > me.coins) return;
-      const stack = me.board.find((u) => !u.leader && u.unitId === id && u.star < MAX_STAR);
-      const cell = stack ?? (fieldCount(me) < boardCap(state.round) ? freeCell(me, catalog[id].range <= 1) : null);
+      const stack = fielded(me, id);
+      if (stack?.star >= MAX_STAR) return;
+      const cell = stack ?? freeCell(me, catalog[id].range <= 1);
       if (!cell) return;
       const score = (stack ? 100 : 0) + catalog[id].cost;
       if (!best || score > best.score) best = { score, intent: { type: 'buy', slot, x: cell.x, y: cell.y } };
