@@ -61,6 +61,14 @@ jobs:
           tar -C "$GITHUB_WORKSPACE/app" --exclude=.git --exclude=.github --exclude=tests --exclude=node_modules -cf - . \
             | tar -C "$TARGET" -xf -
 
+          # Cache-bust: GitHub Pages lets browsers cache files for 10 minutes, and a
+          # mix of old and new modules can load the previous version of the game.
+          # Tagging every reference with the commit makes each deploy a fresh set.
+          V="${SHA:0:7}"
+          sed -i -E "s#(href=\"styles\.css|src=\"src/main\.js)\"#\1?v=$V\"#" "$TARGET/index.html"
+          sed -i -E "s#(from '\./[A-Za-z0-9_-]+\.js)'#\1?v=$V'#; s#fetch\('(data/[A-Za-z0-9_-]+\.json)'\)#fetch('\1?v=$V')#" "$TARGET"/src/*.js
+          sed -i -E "s#(\"assets/[^\"]+\.png)\"#\1?v=$V\"#" "$TARGET"/data/*.json
+
           # Stamp the build so it's obvious which version you're testing.
           if [ -f "$TARGET/index.html" ]; then
             sed -i "s|</body>|  <a class=\"build-badge $LABEL\" href=\"https://github.com/${{ github.repository }}/commit/$SHA\">$LABEL · ${SHA:0:7}</a>\n</body>|" "$TARGET/index.html"
