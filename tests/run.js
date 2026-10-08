@@ -436,6 +436,26 @@ test('every fight ends with a winner unless both sides fall at the same moment',
   }
 });
 
+test('a unit boxed in by its allies paths around them to reach an enemy', () => {
+  // Mawile at own (2,1) with allies on its left, right, front and both front
+  // corners: the only way out is backwards. The enemy is a stationary target in
+  // the far corner. Allies and the enemy are immobile and harmless.
+  const cat = clone(catalog);
+  cat.wall = { ...clone(catalog.mawile), secPerTile: 1000, hitsPerSec: 0.01, hp: [999, 999, 999, 999] };
+  const wall = [[1, 1], [3, 1], [2, 0], [1, 0], [3, 0]].map(([x, y], i) => ({ uid: 10 + i, unitId: 'wall', star: 0, x, y }));
+  const r = simulate(cat, [
+    [{ uid: 1, unitId: 'mawile', star: 0, x: 2, y: 1 }, ...wall],
+    [{ uid: 2, unitId: 'wall', star: 0, x: 0, y: HALF - 1 }],
+  ]);
+  const mawile = r.initial.find((u) => u.uid === 1).id;
+  const enemy = r.initial.find((u) => u.uid === 2).id;
+  const firstMove = r.events.find((e) => e.type === 'move' && e.id === mawile);
+  assert.ok(firstMove, 'Mawile must not just stand there');
+  assert.ok(firstMove.y > r.initial.find((u) => u.uid === 1).y, 'first step is backwards, out of the pocket');
+  const hit = r.events.find((e) => e.type === 'attack' && e.id === mawile && e.target === enemy);
+  assert.ok(hit && hit.t < 300, 'it walks around and attacks the enemy before sudden death');
+});
+
 test('more copies make a troop stronger', () => {
   const fight = (a, b) => simulate(catalog, [[{ uid: 1, unitId: 'mawile', star: a, x: 2, y: 0 }], [{ uid: 2, unitId: 'mawile', star: b, x: 2, y: 0 }]]).winner;
   for (let s = 1; s <= MAX_STAR; s++) assert.equal(fight(s, s - 1), 0, `${s}★ beats ${s - 1}★`);

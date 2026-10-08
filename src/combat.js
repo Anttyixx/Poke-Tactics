@@ -196,6 +196,49 @@ export function simulate(catalog, boards, seed = 0) {
   }
 
   // Step to the free neighbouring cell that gets closest to the target.
+  // Shortest walk (breadth-first search, up/down/left/right) from `u` around
+  // every other unit to a square where some enemy is within its attack range.
+  // Returns the first square of that walk and the enemy it leads to, or null if
+  // every route is blocked. Neighbours are explored in a side-mirrored order, so
+  // both sides break ties the same way.
+  function findPath(u) {
+    const flip = u.side === 1 ? -1 : 1;
+    const enemies = units.filter((e) => standing(e) && e.side !== u.side);
+    const key = (c) => c.y * COLS + c.x;
+    const start = { x: u.x, y: u.y };
+    const prev = new Map([[key(start), null]]);
+    const queue = [start];
+    for (let i = 0; i < queue.length; i++) {
+      const c = queue[i];
+      if (c !== start) {
+        let reachable = null;
+        for (const e of enemies) {
+          const d = dist(c, at(e));
+          if (d <= u.range && (!reachable || d < reachable.d)) reachable = { e, d };
+        }
+        if (reachable) {
+          let first = c;
+          while (prev.get(key(first)) !== start) first = prev.get(key(first));
+          return { next: first, target: reachable.e };
+        }
+      }
+      for (const [ndx, ndy] of NEIGHBORS) {
+        const n = { x: c.x + ndx * flip, y: c.y + ndy * flip };
+        if (n.x < 0 || n.y < 0 || n.x >= COLS || n.y >= ROWS || prev.has(key(n)) || occupied(n.x, n.y)) continue;
+        prev.set(key(n), c);
+        queue.push(n);
+      }
+    }
+    return null;
+  }
+
+  function moveTo(u, cell) {
+    u.x = cell.x;
+    u.y = cell.y;
+    emit('move', { id: u.id, x: u.x, y: u.y });
+  }
+
+  // Fallback when no route exists right now: a step that gets closer, if any.
   function step(u, target) {
     const goal = at(target);
     let best = null;
@@ -214,9 +257,7 @@ export function simulate(catalog, boards, seed = 0) {
       if (d < bestD || (d === bestD && m < bestM)) { best = cell; bestD = d; bestM = m; }
     }
     if (!best) return false;
-    u.x = best.x;
-    u.y = best.y;
-    emit('move', { id: u.id, x: u.x, y: u.y });
+    moveTo(u, best);
     return true;
   }
 
@@ -244,8 +285,17 @@ export function simulate(catalog, boards, seed = 0) {
         damage(target, Math.max(1, Math.floor((u.atk * 100) / (100 + target.armor))), u);
       }
       u.atkTimer = u.attackCd;
-    } else if (u.moveTimer === 0 && step(u, target)) {
-      u.moveTimer = u.moveCd;
+    } else if (u.moveTimer === 0) {
+      // Out of range: walk around anyone in the way toward the enemy that can
+      // be reached soonest (which may not be the one closest as the crow flies).
+      const path = findPath(u);
+      if (path) {
+        u.target = path.target.id;
+        moveTo(u, path.next);
+        u.moveTimer = u.moveCd;
+      } else if (step(u, target)) {
+        u.moveTimer = u.moveCd;
+      }
     }
   }
 

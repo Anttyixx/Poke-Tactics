@@ -50,7 +50,7 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
   to your pool.
 - **Board:** your half is 5×4 (the board is 5 wide by 8 tall); the row next to the centre line is the
   front. There is no limit on how many troops you field; the leader is always there too.
-- **Combat:** units target the nearest enemy, walk into range one square at a time (up/down/left/right, at
+- **Combat:** units target the nearest enemy they can reach and walk (pathing around anyone in the way) into range one square at a time (up/down/left/right, at
   their `secPerTile` pace: every troop takes 1s per square; leaders have their own pace) and attack. Each attack builds mana,
   and so does taking a hit. At full mana a unit casts its ability instead of attacking. Each tick
   resolves simultaneously, so neither side gets a first-mover advantage.
