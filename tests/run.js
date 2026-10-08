@@ -598,6 +598,53 @@ test('basic attacks crit at the unit\'s crit chance for 50% more damage; mirrore
   assert.ok(!r.events.some((e) => e.crit));
 });
 
+test('every fight starts with power progress at 0 and a full attack cooldown before the first hit', () => {
+  const r = simulate(powerCat(), [[{ uid: 1, unitId: 'infernape', star: 2, x: 2, y: 0 }], [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }]], 1);
+  const i = unitOf(r, 1).id;
+  assert.equal(unitOf(r, 1).mana, 0);
+  assert.equal(evs(r, 'attack', i)[0].t, Math.round(catalog.infernape.secPerHit / TICK_SECONDS), 'first attack only after one full cooldown');
+  // Across a real match, every fight's units start from zero again.
+  let state = createGame({ seed: 5, catalog, names: ['A', 'B'] });
+  let fights = 0;
+  while (state.phase !== 'gameover' && fights < 8) {
+    for (const p of [0, 1]) {
+      const send = (intent) => applyIntent(state, catalog, p, intent);
+      if (state.phase === 'combat') send({ type: 'continue' }); else if (state.phase !== 'gameover') botTurn(state, catalog, p, send);
+    }
+    if (state.phase === 'combat') { fights++; assert.ok(state.combat.result.initial.every((u) => u.mana === 0), `fight ${fights}`); }
+  }
+});
+
+test('power progress never goes down except when the power is used', () => {
+  for (let i = 0; i < 60; i++) {
+    const ids = TROOPS;
+    const army = (k) => [0, 1, 2].map((j) => ({ uid: k * 10 + j, unitId: ids[(i + j * 3 + k) % ids.length], star: (i + j) % 4, x: (j * 2 + k) % COLS, y: (i + j) % HALF }));
+    const r = simulate(catalog, [army(1), army(2)], i);
+    const mana = new Map();
+    for (const e of r.events) {
+      if (e.type === 'cast') { mana.set(e.id, 0); continue; }
+      const m = e.type === 'attack' ? e.mana : undefined;
+      if (m === undefined) continue;
+      assert.ok(m >= (mana.get(e.id) ?? 0), `unit ${e.id} went from ${mana.get(e.id)} to ${m} at tick ${e.t}`);
+      mana.set(e.id, m);
+    }
+  }
+});
+
+test('a summon with no free square is not wasted: the power stays charged', () => {
+  const cat = powerCat();
+  cat.target = { ...cat.wall };
+  // Vespiquen boxed in by walls on every side; the enemy wall is in its range.
+  const box = [[1, 0], [3, 0], [2, 1], [1, 1], [3, 1]].map(([x, y], k) => ({ uid: 10 + k, unitId: 'wall', star: 0, x, y }));
+  const front = [1, 3].map((x, k) => ({ uid: 20 + k, unitId: 'target', star: 0, x, y: 0 })); // the diagonals ahead
+  const r = simulate(cat, [[{ uid: 1, unitId: 'vespiquen', star: 0, x: 2, y: 0 }, ...box], [{ uid: 2, unitId: 'target', star: 0, x: 2, y: 0 }, ...front]], 1);
+  const v = unitOf(r, 1).id;
+  assert.ok(!evs(r, 'summon', v).length, 'no room, no Combee');
+  const attacks = evs(r, 'attack', v);
+  assert.ok(attacks.length > catalog.vespiquen.energy + 2);
+  assert.ok(attacks.slice(catalog.vespiquen.energy - 1).every((e) => e.mana === catalog.vespiquen.energy), 'the charge is kept');
+});
+
 let failed = 0;
 for (const { name, fn } of tests) {
   try {

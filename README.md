@@ -54,13 +54,15 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
   medium 0.8s, slow 1.0s, very slow 1.3s. A unit attacks every `secPerHit` seconds; each basic attack
   has a `critChance`% chance to crit for 50% more damage (powers never crit). Each tick resolves
   simultaneously, and crit luck is shared slot for slot between the sides, so neither side gets an edge.
-- **Powers:** every Pokémon has one. Most count attacks (the purple bar):
+- **Powers:** every Pokémon has one. Most count attacks (the purple bar). Every fight starts with the bar
+  empty and a full attack cooldown before anyone's first hit, and progress is never lost mid-fight:
   - Mawile, **Jaw Lock**: after 8 attacks, the next hits for 130% and stuns for 1s.
   - Beheeyem, **Psywave**: at the start of battle, a wave down its column hits the first enemy for 50% and
     knocks it to the far end of the column; anyone already there is pushed to the side.
   - Toxtricity, **Thunderbolt**: every 8th attack also zaps the farthest enemy for 80%.
-  - Vespiquen, **Attack Order**: every 10 attacks, summons a Combee next to it (same star level). Combee
-    fight but never count as survivors for round damage.
+  - Vespiquen, **Attack Order**: every 7 attacks, summons a Combee next to it (same star level). Combee
+    fight but never count as survivors for round damage. With no free square, the power stays charged
+    and tries again after the next attack.
   - Coalossal, **Heat Crash**: after 6 attacks, the next hits for 130%, knocks the target back 2 squares
     (or to the closest free square) and stuns it for 1s.
   - Decidueye, **Phantom Force**: after 8 attacks, invisible for 3s and attacks 30% faster. Enemies can't

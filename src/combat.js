@@ -16,7 +16,6 @@ export const MAX_TICKS = 900;
 export const TICK_SECONDS = 0.1;
 export const MANA_PER_ATTACK = 1; // 1 energy per attack; a unit supers once it has `energy`
 export const MANA_PER_HIT = 0; // taking hits gives no energy
-const FIRST_ATTACK_DELAY = 3;
 // units.json uses the design sheet's numbers directly (HP, damage per hit, ...).
 // The UI divides by STAT_SCALE for display; 1 = combat runs in sheet units.
 export const STAT_SCALE = 1;
@@ -78,11 +77,13 @@ function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, in
     atk: stats.atk, crit: stats.crit,
     armor: def.armor ?? 0, range: def.range,
     attackCd: stats.attackCd, moveCd: stats.moveCd,
+    // Every fight (and every summon) starts fresh: power progress at 0 and a full
+    // attack cooldown before the first hit.
     mana: 0, maxMana: stats.energy, // mana counts attacks toward the power; 0 = no counter
     power: def.ability,
     shield: 0, stun: 0,
     pendingMana: 0, pendingStun: 0, // applied at the end of the tick
-    atkTimer: FIRST_ATTACK_DELAY, moveTimer: 0,
+    atkTimer: stats.attackCd, moveTimer: 0,
     hasteUntil: 0, hastePct: 0, stealthFrom: 0, stealthUntil: 0,
     target: null, alive: true, summoned: Boolean(inst.summoned),
   };
@@ -223,12 +224,12 @@ export function simulate(catalog, boards, seed = 0) {
     knocks.push({ target, goal, side: u.side });
   }
 
-  function summon(u) {
+  const summonCell = (u) => [...dirs(u), ...dirs(u, DIAGONALS)]
+    .map(([dx, dy]) => ({ x: u.x + dx, y: u.y + dy }))
+    .find((c) => inside(c.x, c.y) && !occupied(c.x, c.y));
+
+  function summon(u, cell) {
     const kin = units.length;
-    const cell = [...dirs(u), ...dirs(u, DIAGONALS)]
-      .map(([dx, dy]) => ({ x: u.x + dx, y: u.y + dy }))
-      .find((c) => inside(c.x, c.y) && !occupied(c.x, c.y));
-    if (!cell) return;
     const pal = spawn(catalog, { uid: -kin, unitId: u.power.unit, star: u.star, summoned: true }, u.side, kin, bySide[u.side].length, cell);
     pal.sx = pal.x;
     pal.sy = pal.y;
@@ -240,6 +241,10 @@ export function simulate(catalog, boards, seed = 0) {
   // Powers that fire the moment the attack counter fills (no attack is lost).
   function instantPower(u, target) {
     const p = u.power;
+    // A charged power is never wasted: with no free square to summon into, it
+    // stays charged and tries again after the next attack.
+    const cell = p.kind === 'summon' ? summonCell(u) : null;
+    if (p.kind === 'summon' && !cell) return;
     u.mana = 0;
     switch (p.kind) {
       case 'snipe': {
@@ -250,7 +255,7 @@ export function simulate(catalog, boards, seed = 0) {
       }
       case 'summon':
         emit('cast', { id: u.id, target: null });
-        summon(u);
+        summon(u, cell);
         break;
       case 'stealth':
         emit('cast', { id: u.id, target: null });

@@ -16,7 +16,7 @@
   },
   "vespiquen": {
     "name": "Vespiquen", "sprite": "assets/sprites/vespiquen.png", "fx": "#ffc23d", "type": "ranger", "cost": 3,
-    "hp": [840, 1350, 2155, 3450], "damage": [80, 125, 200, 320], "range": 3, "moveSpeed": "very slow", "secPerHit": 1.42, "critChance": 15, "energy": 10,
+    "hp": [840, 1350, 2155, 3450], "damage": [80, 125, 200, 320], "range": 3, "moveSpeed": "very slow", "secPerHit": 1.42, "critChance": 15, "energy": 7,
     "ability": {"name": "Attack Order", "kind": "summon", "unit": "combee"}
   },
   "coalossal": {
@@ -41,7 +41,7 @@
   },
   "combee": {
     "name": "Combee", "summon": true, "sprite": "assets/sprites/combee.png", "fx": "#ffd35a", "type": "warrior", "cost": 0,
-    "hp": [250, 400, 650, 1050], "damage": [35, 55, 90, 145], "range": 1, "moveSpeed": "fast", "secPerHit": 1.0, "critChance": 15, "energy": 0,
+    "hp": [150, 240, 385, 615], "damage": [30, 47, 75, 120], "range": 1, "moveSpeed": "fast", "secPerHit": 0.8, "critChance": 15, "energy": 0,
     "ability": null
   }
 }

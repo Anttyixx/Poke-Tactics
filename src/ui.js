@@ -633,6 +633,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     const a = actors.get(ev.id);
     if (!a) return;
     const newest = () => { if (idx < (a.seq ?? -1)) return false; a.seq = idx; return true; };
+    // Power progress has its own guard: a hit that lands late (after a projectile's
+    // flight) must not roll the bar back past attacks made since it was fired.
+    const setMana = (m) => { if (idx < (a.manaSeq ?? -1)) return; a.manaSeq = idx; a.mana = m; };
     const at = () => viewPos(a.x, a.y);
     switch (ev.type) {
       case 'move': {
@@ -651,7 +654,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         break;
       }
       case 'attack': {
-        a.mana = ev.mana;
+        setMana(ev.mana);
         bars(a);
         ctx.action.set(a.id, 'attack');
         if (!animate) break;
@@ -671,7 +674,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         break;
       }
       case 'cast': {
-        a.mana = 0;
+        setMana(0);
         bars(a);
         ctx.action.set(a.id, 'cast');
         if (!animate) break;
@@ -737,7 +740,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
           if (newest()) {
             a.hp = ev.hp;
             a.shield = ev.shield;
-            a.mana = ev.mana;
+            setMana(ev.mana);
             bars(a);
           }
           if (!animate) return;
