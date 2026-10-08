@@ -33,6 +33,7 @@ export function unitStats(def, star) {
     hp: Math.round(hp * STAT_SCALE),
     atk: Math.round(def.atk * ratio * STAT_SCALE),
     attackCd: Math.max(1, Math.round(1 / (def.hitsPerSec * TICK_SECONDS))),
+    moveCd: Math.max(1, Math.round(def.secPerTile / TICK_SECONDS)), // ticks per square
     energy: def.energy,
     ratio,
   };
@@ -48,7 +49,8 @@ export function toCombatPos(side, x, y) {
 }
 
 // Fixed order = deterministic tie-breaking when choosing where to step.
-const NEIGHBORS = [[0, -1], [0, 1], [-1, 0], [1, 0], [-1, -1], [1, -1], [-1, 1], [1, 1]];
+// Units walk one square at a time, up/down/left/right only (no diagonal steps).
+const NEIGHBORS = [[0, -1], [0, 1], [-1, 0], [1, 0]];
 
 // Deterministic hash -> 0 or 1 (no Math.random: combat must replay identically).
 function coin(seed, t) {
@@ -72,7 +74,7 @@ function spawn(catalog, inst, side, id) {
     hp: stats.hp, maxHp: stats.hp,
     atk: stats.atk, ratio: stats.ratio,
     armor: def.armor ?? 0, range: def.range,
-    attackCd: stats.attackCd, moveCd: def.moveCd,
+    attackCd: stats.attackCd, moveCd: stats.moveCd,
     mana: 0, maxMana: stats.energy,
     ability: def.ability,
     shield: 0, stun: 0,

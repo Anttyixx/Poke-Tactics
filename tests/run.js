@@ -57,7 +57,8 @@ test('unit catalog is well formed, and every unit has a sprite that exists', () 
     assert.ok(hp.every((h) => h > 0), `${id}.hp must be positive`);
     if (!u.leader) assert.ok(hp.length === COPIES_PER_TROOP && hp.every((h, i) => !i || h > hp[i - 1]), `${id}: troops list HP for 0-${MAX_STAR}★, increasing`);
     for (const k of ['atk', 'hitsPerSec']) assert.ok(u[k] > 0, `${id}.${k} must be positive`);
-    for (const k of ['energy', 'range', 'moveCd']) assert.ok(Number.isInteger(u[k]) && u[k] > 0, `${id}.${k} must be a positive integer`);
+    for (const k of ['energy', 'range']) assert.ok(Number.isInteger(u[k]) && u[k] > 0, `${id}.${k} must be a positive integer`);
+    assert.ok(u.secPerTile > 0, `${id}.secPerTile must be positive`);
     assert.ok(u.leader ? u.cost === 0 : Number.isInteger(u.cost) && u.cost > 0, `${id} cost`);
     assert.ok(kinds.has(u.ability.kind), `${id} ability kind`);
     assert.ok(u.sprite && existsSync(new URL(`../${u.sprite}`, import.meta.url)), `${id}: missing sprite ${u.sprite}`);
@@ -334,7 +335,7 @@ test("a Super with its own reach (Decidueye's) hits enemies beyond basic range w
   // Test-only catalog: Decidueye supers after 1 attack; two dummies that never move.
   const cat = clone(catalog);
   cat.decidueye.energy = 1;
-  cat.dummy = { ...clone(catalog.mawile), hp: [0.1, 1, 2, 3], hitsPerSec: 0.01, moveCd: 10000 };
+  cat.dummy = { ...clone(catalog.mawile), hp: [0.1, 1, 2, 3], hitsPerSec: 0.01, secPerTile: 1000 };
   cat.far = { ...cat.dummy, hp: [500, 501, 502, 503] };
   const r = simulate(cat, [
     [{ uid: 1, unitId: 'decidueye', star: 0, leader: true, x: 0, y: HALF - 1 }], // back row
@@ -347,6 +348,25 @@ test("a Super with its own reach (Decidueye's) hits enemies beyond basic range w
   const d = r.initial.find((u) => u.id === 0);
   const f = r.initial.find((u) => u.unitId === 'far');
   assert.ok(Math.max(Math.abs(d.x - f.x), Math.abs(d.y - f.y)) > catalog.decidueye.range, 'target was out of basic range');
+});
+
+test('units walk one square at a time (no diagonal steps), at their own pace', () => {
+  const boards = [
+    [{ uid: 1, unitId: 'decidueye', star: 0, leader: true, x: 0, y: 3 }, { uid: 3, unitId: 'mawile', star: 1, x: 4, y: 0 }, { uid: 5, unitId: 'coalossal', star: 0, x: 2, y: 1 }],
+    [{ uid: 2, unitId: 'greninja', star: 0, leader: true, x: 1, y: 0 }, { uid: 4, unitId: 'vespiquen', star: 2, x: 3, y: 3 }],
+  ];
+  const r = simulate(catalog, boards, 5);
+  const pos = new Map(r.initial.map((u) => [u.id, { x: u.x, y: u.y, t: -Infinity }]));
+  let moves = 0;
+  for (const e of r.events.filter((ev) => ev.type === 'move')) {
+    const p = pos.get(e.id);
+    assert.equal(Math.abs(e.x - p.x) + Math.abs(e.y - p.y), 1, 'one orthogonal square per step');
+    const def = catalog[r.initial.find((u) => u.id === e.id).unitId];
+    assert.ok(e.t - p.t >= Math.round(def.secPerTile * 10), `${def.name} stepped faster than ${def.secPerTile}s per square`);
+    pos.set(e.id, { x: e.x, y: e.y, t: e.t });
+    moves++;
+  }
+  assert.ok(moves > 0);
 });
 
 test('more copies make a troop stronger', () => {
