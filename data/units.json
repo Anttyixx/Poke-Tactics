@@ -16,12 +16,12 @@
   },
   "vespiquen": {
     "name": "Vespiquen", "sprite": "assets/sprites/vespiquen.png", "fx": "#ffc23d", "type": "ranger", "cost": 3,
-    "hp": [15, 25, 35, 45], "atk": 2, "hitsPerSec": 0.5, "energy": 4, "range": 5, "secPerTile": 0.8,
+    "hp": [15, 25, 35, 45], "atk": 2, "hitsPerSec": 0.5, "energy": 4, "range": 5, "secPerTile": 1.0,
     "ability": {"name": "Attack Order", "kind": "strike", "damage": 8}
   },
   "coalossal": {
     "name": "Coalossal", "sprite": "assets/sprites/coalossal.png", "fx": "#ff7a2f", "type": "warrior", "cost": 4,
-    "hp": [35, 55, 75, 95], "atk": 12, "hitsPerSec": 0.3, "energy": 8, "range": 1, "secPerTile": 2.0,
+    "hp": [35, 55, 75, 95], "atk": 12, "hitsPerSec": 0.3, "energy": 8, "range": 1, "secPerTile": 1.0,
     "ability": {"name": "Heat Crash", "kind": "strike", "damage": 42}
   },
 

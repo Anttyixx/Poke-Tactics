@@ -47,7 +47,7 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
 - **Board:** your half is 5×4 (the board is 5 wide by 8 tall); the row next to the centre line is the
   front. You can field 3 troops at first, and the cap rises by 1 every 2 rounds up to 8.
 - **Combat:** units target the nearest enemy, walk into range one square at a time (up/down/left/right, at
-  their `secPerTile` pace; most take about 1s per square) and attack. Each attack builds mana,
+  their `secPerTile` pace: every troop takes 1s per square; leaders have their own pace) and attack. Each attack builds mana,
   and so does taking a hit. At full mana a unit casts its ability instead of attacking. Each tick
   resolves simultaneously, so neither side gets a first-mover advantage.
 - **Damage:** the loser takes `round + 2 × (copies in the winner's surviving troops)`. A draw (both

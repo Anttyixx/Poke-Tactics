@@ -63,6 +63,7 @@ test('unit catalog is well formed, and every unit has a sprite that exists', () 
     assert.ok(kinds.has(u.ability.kind), `${id} ability kind`);
     assert.ok(u.sprite && existsSync(new URL(`../${u.sprite}`, import.meta.url)), `${id}: missing sprite ${u.sprite}`);
   }
+  assert.equal(new Set(TROOPS.map((id) => catalog[id].secPerTile)).size, 1, 'all troops move at the same speed');
   assert.ok(TROOPS.length >= teamSize(catalog) && teamSize(catalog) > 0);
 });
 
