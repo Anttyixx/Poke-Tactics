@@ -1,0 +1,516 @@
+// Rendering and input. The UI never mutates game state: it reads `state`,
+// and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
+// replaying the event log from the combat result, never by re-simulating.
+
+import { COLS, ROWS, HALF, TICK_SECONDS, scale } from './combat.js';
+import { BASE_INCOME, BENCH_SIZE, MAX_INTEREST, REROLL_COST, boardCap, interest, sellValue } from './game.js';
+
+const TICK_MS = 50; // playback speed at 1x (sim tick is 100ms, so 1x plays at double speed)
+
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+const secs = (ticks) => +(ticks * TICK_SECONDS).toFixed(1);
+
+export function describeAbility(ab, star) {
+  const p = (v) => scale(v, star);
+  const stunText = ab.duration ? ` and stuns for ${secs(ab.duration)}s` : '';
+  switch (ab.kind) {
+    case 'strike': return `Strikes its target for ${p(ab.damage)} damage.`;
+    case 'stun': return `Hits its target for ${p(ab.damage)} damage${stunText}.`;
+    case 'blast': return `Blasts the target and adjacent enemies for ${p(ab.damage)} damage${stunText}.`;
+    case 'heal': return ab.target === 'all' ? `Heals all allies for ${p(ab.amount)}.` : `Heals the most injured ally for ${p(ab.amount)}.`;
+    case 'shield': return ab.target === 'allies' ? `Shields all allies for ${p(ab.amount)}.` : `Shields itself for ${p(ab.amount)}.`;
+    default: return '';
+  }
+}
+
+export function createUI({ catalog, viewer, onIntent, onNewGame }) {
+  const $ = (id) => document.getElementById(id);
+  const arena = $('arena');
+  const layer = $('units');
+  const benchEl = $('bench');
+  const shopEl = $('shop');
+  const infoEl = $('info');
+  const hudEl = $('hud');
+  const overlay = $('overlay');
+  const controls = $('combat-controls');
+  const rerollBtn = $('reroll');
+  const readyBtn = $('ready');
+  const toastEl = $('toast');
+
+  let state = null;
+  let selected = null; // uid of selected own unit
+  let hovered = null; // unitId hovered in the shop
+  let playedRound = 0; // last combat round we started animating
+  let playback = null;
+  let speed = 1;
+  let toastTimer = 0;
+
+  for (let vy = 0; vy < ROWS; vy++) {
+    for (let vx = 0; vx < COLS; vx++) {
+      const c = document.createElement('div');
+      c.className = `cell ${vy >= HALF ? 'own' : 'enemy'}${(vx + vy) % 2 ? ' alt' : ''}${vy === HALF ? ' front' : ''}`;
+      $('cells').append(c);
+    }
+  }
+  const slots = Array.from({ length: BENCH_SIZE }, (_, i) => {
+    const s = document.createElement('div');
+    s.className = 'slot';
+    s.dataset.index = i;
+    benchEl.append(s);
+    return s;
+  });
+
+  // ---- helpers -------------------------------------------------------------
+
+  const me = () => state.players[viewer];
+  const foe = () => state.players[1 - viewer];
+  const canPlan = () => state?.phase === 'planning' && !me().ready;
+  const owned = (uid) => [...me().board, ...me().bench].find((u) => u?.uid === uid);
+  // Combat coordinates -> what this viewer sees (own side always at the bottom).
+  const viewPos = (x, y) => (viewer === 0 ? { x, y } : { x: COLS - 1 - x, y: ROWS - 1 - y });
+
+  function place(el, vx, vy) {
+    el.style.left = `${(vx * 100) / COLS}%`;
+    el.style.top = `${(vy * 100) / ROWS}%`;
+  }
+
+  function cellAt(e) {
+    const r = arena.getBoundingClientRect();
+    const vx = Math.floor(((e.clientX - r.left) / r.width) * COLS);
+    const vy = Math.floor(((e.clientY - r.top) / r.height) * ROWS);
+    if (vx < 0 || vy < 0 || vx >= COLS || vy >= ROWS) return null;
+    return { vx, vy };
+  }
+
+  function unitEl(unitId, star, side = 'ally') {
+    const def = catalog[unitId];
+    const el = document.createElement('div');
+    el.className = `unit ${side}`;
+    el.dataset.type = def.type;
+    el.innerHTML = `
+      <div class="token"><span>${def.emoji}</span></div>
+      <div class="stars s${star}">${'★'.repeat(star)}</div>
+      <div class="bars"><div class="hp"><i></i><b></b></div><div class="mana"><i></i></div></div>`;
+    return el;
+  }
+
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => (toastEl.hidden = true), 1800);
+  }
+
+  function showOverlay(html) {
+    overlay.querySelector('.card').innerHTML = html;
+    overlay.hidden = false;
+  }
+
+  function select(uid) {
+    selected = uid;
+    renderPlanning();
+  }
+
+  function intent(i) {
+    selected = null;
+    onIntent(i);
+  }
+
+  // ---- input ---------------------------------------------------------------
+
+  arena.addEventListener('click', (e) => {
+    if (state?.phase !== 'planning') return;
+    const cell = cellAt(e);
+    if (!cell || cell.vy < HALF) return select(null);
+    const x = cell.vx;
+    const y = cell.vy - HALF;
+    const occupant = me().board.find((u) => u.x === x && u.y === y);
+    if (selected !== null && occupant?.uid !== selected && canPlan()) {
+      intent({ type: 'move', uid: selected, to: { area: 'board', x, y } });
+    } else {
+      select(occupant && occupant.uid !== selected ? occupant.uid : null);
+    }
+  });
+
+  benchEl.addEventListener('click', (e) => {
+    const slot = e.target.closest('.slot');
+    if (!slot || state?.phase !== 'planning') return;
+    const index = +slot.dataset.index;
+    const occupant = me().bench[index];
+    if (selected !== null && occupant?.uid !== selected && canPlan()) {
+      intent({ type: 'move', uid: selected, to: { area: 'bench', index } });
+    } else {
+      select(occupant && occupant.uid !== selected ? occupant.uid : null);
+    }
+  });
+
+  // Drag and drop (desktop). Click-to-select-then-click works everywhere.
+  document.addEventListener('dragstart', (e) => {
+    const el = e.target.closest?.('.unit[data-uid]');
+    if (!el || !canPlan()) return e.preventDefault();
+    e.dataTransfer.setData('text/plain', el.dataset.uid);
+    e.dataTransfer.effectAllowed = 'move';
+    selected = +el.dataset.uid; // don't re-render mid-drag or the drag is cancelled
+    renderInfo();
+  });
+  const dropTarget = (el, onDrop) => {
+    el.addEventListener('dragover', (e) => { if (canPlan()) e.preventDefault(); });
+    el.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const uid = +e.dataTransfer.getData('text/plain');
+      if (uid) onDrop(e, uid);
+    });
+  };
+  dropTarget(arena, (e, uid) => {
+    const cell = cellAt(e);
+    if (cell && cell.vy >= HALF) intent({ type: 'move', uid, to: { area: 'board', x: cell.vx, y: cell.vy - HALF } });
+  });
+  dropTarget(benchEl, (e, uid) => {
+    const slot = e.target.closest('.slot');
+    if (slot) intent({ type: 'move', uid, to: { area: 'bench', index: +slot.dataset.index } });
+  });
+  dropTarget($('shop-wrap'), (e, uid) => intent({ type: 'sell', uid }));
+
+  shopEl.addEventListener('click', (e) => {
+    const card = e.target.closest('.card[data-slot]');
+    if (card && !card.disabled) intent({ type: 'buy', slot: +card.dataset.slot });
+  });
+  shopEl.addEventListener('pointerover', (e) => {
+    const card = e.target.closest('.card[data-slot]');
+    const id = card ? me().shop[+card.dataset.slot] : null;
+    if (id !== hovered) { hovered = id; renderInfo(); }
+  });
+  shopEl.addEventListener('pointerleave', () => { hovered = null; renderInfo(); });
+
+  rerollBtn.addEventListener('click', () => intent({ type: 'reroll' }));
+  readyBtn.addEventListener('click', () => intent({ type: 'ready' }));
+  infoEl.addEventListener('click', (e) => {
+    if (e.target.id === 'sell' && selected !== null) intent({ type: 'sell', uid: selected });
+  });
+  hudEl.addEventListener('click', (e) => {
+    if (e.target.id === 'new-game' && confirm('Abandon this match and start a new one?')) onNewGame();
+  });
+  overlay.addEventListener('click', (e) => {
+    if (e.target.id === 'continue') { e.target.disabled = true; onIntent({ type: 'continue' }); }
+    if (e.target.id === 'play-again') onNewGame();
+  });
+  controls.addEventListener('click', (e) => {
+    if (e.target.id === 'skip') return playback?.skip();
+    const s = +e.target.dataset.speed;
+    if (!s) return;
+    speed = s;
+    controls.querySelectorAll('[data-speed]').forEach((b) => b.classList.toggle('active', +b.dataset.speed === s));
+  });
+  document.addEventListener('keydown', (e) => {
+    if (!state || e.ctrlKey || e.metaKey || e.altKey || e.target.matches('input, textarea')) return;
+    const key = e.key.toLowerCase();
+    if (key === 'd' && canPlan()) intent({ type: 'reroll' });
+    else if (key === 'f' && canPlan()) intent({ type: 'ready' });
+    else if (key === 'e' && canPlan() && selected !== null) intent({ type: 'sell', uid: selected });
+    else if (key === 'escape') select(null);
+    else if (key === ' ' && playback) { e.preventDefault(); playback.skip(); }
+  });
+
+  // ---- rendering -----------------------------------------------------------
+
+  function render(next) {
+    // Compare by content, not object identity: in multiplayer every update
+    // arrives as a fresh state object deserialized from the network.
+    if (!state || next.seed !== state.seed || next.round < state.round) {
+      // New match: forget anything tied to the previous one.
+      playback?.cancel();
+      playedRound = 0;
+      selected = null;
+    }
+    state = next;
+    if (selected !== null && !owned(selected)) selected = null;
+    renderHud();
+
+    if (state.phase === 'combat') {
+      renderShop();
+      if (playedRound !== state.combat.round) startPlayback();
+      else if (!playback) showResult();
+      return;
+    }
+    overlay.hidden = true;
+    renderPlanning();
+    if (state.phase === 'gameover') showGameOver();
+  }
+
+  function hpBox(p, side) {
+    const pct = Math.max(0, p.hp);
+    return `<div class="hpbox ${side}">
+      <span class="name">${esc(p.name)}</span>
+      <div class="hpbar"><i style="width:${pct}%"></i></div>
+      <b>${p.hp}</b>
+    </div>`;
+  }
+
+  function renderHud() {
+    const p = me();
+    const income = BASE_INCOME + interest(p.gold);
+    hudEl.innerHTML = `
+      <div class="stat"><span class="label">Round</span><b>${state.round}</b></div>
+      <div class="stat"><span class="label">Gold</span><b class="gold">${p.gold}</b><small>+${income}/round</small></div>
+      <div class="stat"><span class="label">Board</span><b>${p.board.length}/${boardCap(state.round)}</b></div>
+      ${hpBox(p, 'ally')}
+      ${hpBox(foe(), 'enemy')}
+      <button id="new-game" class="ghost" title="Start a new match">New game</button>`;
+  }
+
+  function renderPlanning() {
+    arena.classList.remove('in-combat');
+    controls.hidden = true;
+    const draggable = canPlan();
+
+    layer.replaceChildren(...me().board.map((u) => {
+      const el = unitEl(u.unitId, u.star);
+      el.dataset.uid = u.uid;
+      el.draggable = draggable;
+      el.classList.toggle('selected', u.uid === selected);
+      place(el, u.x, u.y + HALF);
+      return el;
+    }));
+
+    me().bench.forEach((u, i) => {
+      slots[i].replaceChildren();
+      if (!u) return;
+      const el = unitEl(u.unitId, u.star);
+      el.dataset.uid = u.uid;
+      el.draggable = draggable;
+      el.classList.toggle('selected', u.uid === selected);
+      slots[i].append(el);
+    });
+
+    renderShop();
+    renderInfo();
+  }
+
+  function renderShop() {
+    const p = me();
+    shopEl.innerHTML = p.shop.map((id, slot) => {
+      if (!id) return `<button class="card empty" disabled><span>Sold</span></button>`;
+      const def = catalog[id];
+      const disabled = !canPlan() || p.gold < def.cost;
+      return `<button class="card" data-slot="${slot}" data-type="${def.type}" ${disabled ? 'disabled' : ''}>
+        <span class="emoji">${def.emoji}</span>
+        <span class="name">${esc(def.name)}</span>
+        <span class="type">${def.type}</span>
+        <span class="cost c${def.cost}">${def.cost}g</span>
+      </button>`;
+    }).join('');
+    rerollBtn.textContent = `Reroll (${REROLL_COST}g)`;
+    rerollBtn.disabled = !canPlan() || p.gold < REROLL_COST;
+    readyBtn.disabled = !canPlan();
+    readyBtn.textContent = state.phase === 'planning' && p.ready ? 'Waiting for opponent…' : 'Fight!';
+  }
+
+  function renderInfo() {
+    const inst = selected !== null ? owned(selected) : null;
+    const unitId = inst?.unitId ?? hovered;
+    if (!unitId) {
+      infoEl.innerHTML = `<h2>How to play</h2>
+        <ul class="help">
+          <li>Buy units from the shop below.</li>
+          <li>Click a unit, then click a square on <b>your half</b> (bottom) to place it. Desktop: drag and drop.</li>
+          <li>The row nearest the middle is your front line. Put tanky melee units there.</li>
+          <li>Three copies of a unit merge into a stronger ★★ version.</li>
+          <li>Press <b>Fight!</b> to watch the battle play out by itself.</li>
+          <li>Interest: +1 gold per 10 you hold (max +${MAX_INTEREST}).</li>
+        </ul>
+        <p class="keys">Keys: <kbd>D</kbd> reroll · <kbd>F</kbd> fight · <kbd>E</kbd> sell · <kbd>Space</kbd> skip</p>`;
+      return;
+    }
+    const def = catalog[unitId];
+    const star = inst?.star ?? 1;
+    infoEl.innerHTML = `
+      <div class="info-head" data-type="${def.type}">
+        <span class="emoji">${def.emoji}</span>
+        <div><h2>${esc(def.name)} <span class="stars s${star}">${'★'.repeat(star)}</span></h2>
+        <span class="sub">${def.type} · ${def.cost} gold</span></div>
+      </div>
+      <dl class="stats">
+        <dt>HP</dt><dd>${scale(def.hp, star)}</dd>
+        <dt>Attack</dt><dd>${scale(def.atk, star)}</dd>
+        <dt>Armor</dt><dd>${def.armor}</dd>
+        <dt>Range</dt><dd>${def.range}</dd>
+        <dt>Attacks/s</dt><dd>${(1 / (def.attackCd * TICK_SECONDS)).toFixed(2)}</dd>
+        <dt>Mana</dt><dd>${def.mana}</dd>
+      </dl>
+      <p class="ability"><b>${esc(def.ability.name)}:</b> ${describeAbility(def.ability, star)}</p>
+      ${inst && canPlan() ? `<button id="sell" class="danger">Sell for ${sellValue(catalog, inst)}g</button>` : ''}`;
+  }
+
+  // ---- combat playback -----------------------------------------------------
+
+  function startPlayback() {
+    const { result } = state.combat;
+    playedRound = state.combat.round;
+    selected = null;
+    overlay.hidden = true;
+    arena.classList.add('in-combat');
+    controls.hidden = false;
+    renderInfo();
+
+    const actors = new Map();
+    layer.replaceChildren();
+    for (const u of result.initial) {
+      const a = { ...u, shield: 0, stunUntil: 0, el: unitEl(u.unitId, u.star, u.side === viewer ? 'ally' : 'enemy') };
+      const p = viewPos(u.x, u.y);
+      place(a.el, p.x, p.y);
+      layer.append(a.el);
+      actors.set(u.id, a);
+      bars(a);
+    }
+
+    const { events } = result;
+    let tick = 0;
+    let next = 0;
+    let acc = 0;
+    let last = performance.now();
+    let raf = 0;
+
+    const advance = (animate) => {
+      tick++;
+      while (next < events.length && events[next].t <= tick) applyEvent(actors, events[next++], animate);
+      for (const a of actors.values()) {
+        if (a.stunUntil && tick >= a.stunUntil) { a.stunUntil = 0; a.el.classList.remove('stunned'); }
+      }
+    };
+    const finish = () => {
+      cancelAnimationFrame(raf);
+      playback = null;
+      controls.hidden = true;
+      setTimeout(() => { if (state.phase === 'combat' && !playback) render(state); }, 700);
+    };
+    const frame = (now) => {
+      acc += Math.min(now - last, 250) * speed;
+      last = now;
+      while (acc >= TICK_MS && tick < result.ticks) { acc -= TICK_MS; advance(true); }
+      if (tick >= result.ticks) return finish();
+      raf = requestAnimationFrame(frame);
+    };
+
+    playback = {
+      skip() {
+        while (tick < result.ticks) advance(false);
+        finish();
+      },
+      cancel() {
+        cancelAnimationFrame(raf);
+        playback = null;
+      },
+    };
+    raf = requestAnimationFrame(frame);
+  }
+
+  function bars(a) {
+    a.el.querySelector('.hp i').style.width = `${(100 * a.hp) / a.maxHp}%`;
+    a.el.querySelector('.hp b').style.width = `${Math.min(100, (100 * a.shield) / a.maxHp)}%`;
+    a.el.querySelector('.mana i').style.width = `${a.maxMana ? (100 * a.mana) / a.maxMana : 0}%`;
+  }
+
+  function floatText(a, text, kind) {
+    const el = document.createElement('div');
+    el.className = `float ${kind}`;
+    el.textContent = text;
+    const p = viewPos(a.x, a.y);
+    place(el, p.x, p.y);
+    el.addEventListener('animationend', () => el.remove());
+    layer.append(el);
+  }
+
+  function pulse(el, cls) {
+    el.classList.remove(cls);
+    void el.offsetWidth; // restart the CSS animation
+    el.classList.add(cls);
+  }
+
+  function applyEvent(actors, ev, animate) {
+    const a = actors.get(ev.id);
+    if (!a) return;
+    switch (ev.type) {
+      case 'move': {
+        a.x = ev.x;
+        a.y = ev.y;
+        const p = viewPos(a.x, a.y);
+        place(a.el, p.x, p.y);
+        break;
+      }
+      case 'attack': {
+        a.mana = ev.mana;
+        bars(a);
+        if (!animate) break;
+        const t = actors.get(ev.target);
+        const from = viewPos(a.x, a.y);
+        const to = viewPos(t.x, t.y);
+        a.el.style.setProperty('--dx', Math.sign(to.x - from.x));
+        a.el.style.setProperty('--dy', Math.sign(to.y - from.y));
+        pulse(a.el, a.range > 1 ? 'shoot' : 'lunge');
+        break;
+      }
+      case 'damage':
+        a.hp = ev.hp;
+        a.shield = ev.shield;
+        a.mana = ev.mana;
+        bars(a);
+        if (animate) { floatText(a, `-${ev.amount}`, 'dmg'); pulse(a.el, 'hit'); }
+        break;
+      case 'heal':
+        a.hp = ev.hp;
+        bars(a);
+        if (animate && ev.amount) floatText(a, `+${ev.amount}`, 'heal');
+        break;
+      case 'shield':
+        a.shield = ev.shield;
+        bars(a);
+        if (animate) floatText(a, `+${ev.amount}`, 'shield');
+        break;
+      case 'cast':
+        a.mana = 0;
+        bars(a);
+        if (animate) { pulse(a.el, 'casting'); floatText(a, catalog[a.unitId].ability.name, 'cast'); }
+        break;
+      case 'stun':
+        a.stunUntil = ev.t + ev.duration;
+        a.el.classList.add('stunned');
+        break;
+      case 'death':
+        a.el.classList.add('dead');
+        break;
+    }
+  }
+
+  // ---- overlays ------------------------------------------------------------
+
+  function showResult() {
+    const { result, damage, round } = state.combat;
+    const won = result.winner === viewer;
+    const draw = result.winner === null;
+    const title = draw ? 'Draw' : won ? 'Victory!' : 'Defeat';
+    const detail = draw
+      ? `Nobody won in time. Both players take ${damage[viewer]} damage.`
+      : won
+        ? `${result.survivors.length} of your units survived. ${esc(foe().name)} takes ${damage[1 - viewer]} damage.`
+        : `${result.survivors.length} enemy units survived. You take ${damage[viewer]} damage.`;
+    const hpAfter = Math.max(0, me().hp - damage[viewer]);
+    showOverlay(`
+      <h1 class="${draw ? '' : won ? 'win' : 'loss'}">${title}</h1>
+      <p>${detail}</p>
+      <p class="muted">Round ${round} · Your HP ${me().hp} → ${hpAfter}${won ? ' · +1 bonus gold' : ''}</p>
+      ${me().ready
+        ? '<button disabled>Waiting for opponent…</button>'
+        : '<button id="continue" class="primary" autofocus>Continue</button>'}`);
+    overlay.querySelector('#continue')?.focus();
+  }
+
+  function showGameOver() {
+    const title = state.winner === viewer ? 'You win the match! 🏆' : state.winner === null ? 'Double knockout. It\'s a draw.' : 'You were eliminated';
+    showOverlay(`
+      <h1 class="${state.winner === viewer ? 'win' : 'loss'}">${title}</h1>
+      <p>The match lasted ${state.round} rounds. Final HP: ${me().hp} vs ${foe().hp}.</p>
+      <button id="play-again" class="primary">Play again</button>`);
+  }
+
+  return { render, toast };
+}
