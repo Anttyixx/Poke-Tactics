@@ -19,6 +19,11 @@
     "hp": 460, "atk": 55, "armor": 10, "range": 1, "attackCd": 7, "moveCd": 3, "mana": 40,
     "ability": { "name": "Backstab", "kind": "strike", "damage": 150 }
   },
+  "mawile": {
+    "name": "Mawile", "sprite": "assets/sprites/mawile.png", "fx": "#d4dae6", "type": "warrior", "cost": 1,
+    "hp": 500, "atk": 46, "armor": 18, "range": 1, "attackCd": 8, "moveCd": 5, "mana": 50,
+    "ability": { "name": "Crunch", "kind": "strike", "damage": 170 }
+  },
   "acolyte": {
     "name": "Acolyte", "emoji": "🕯️", "type": "cleric", "cost": 1,
     "hp": 440, "atk": 30, "armor": 10, "range": 2, "attackCd": 11, "moveCd": 5, "mana": 60,
