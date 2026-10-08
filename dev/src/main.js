@@ -1,0 +1,57 @@
+// Phase 1 entry point: one human (player 0) vs. the local bot (player 1).
+// Every state change goes through dispatch() -> applyIntent(). In Phase 3 the
+// host keeps this shape: the bot's seat is taken by intents arriving from the
+// guest's connection, and the host broadcasts state after each dispatch.
+
+import { createGame, applyIntent } from './game.js';
+import { botTurn } from './bot.js';
+import { createUI } from './ui.js';
+import { hashSeed } from './rng.js';
+
+const HUMAN = 0;
+const BOT = 1;
+
+const catalog = await (await fetch('data/units.json')).json();
+let state;
+let firstGame = true;
+
+const ui = createUI({
+  catalog,
+  viewer: HUMAN,
+  onIntent: (intent) => dispatch(HUMAN, intent),
+  onNewGame: newGame,
+});
+
+function newGame() {
+  // ?seed=anything makes the first match reproducible (handy for bug reports).
+  const param = new URLSearchParams(location.search).get('seed');
+  const seed = firstGame && param ? hashSeed(param) : crypto.getRandomValues(new Uint32Array(1))[0];
+  firstGame = false;
+  state = createGame({ seed, catalog, names: ['You', 'Bot'] });
+  runBot();
+  ui.render(state);
+}
+
+function dispatch(player, intent) {
+  const res = applyIntent(state, catalog, player, intent);
+  if (!res.ok) {
+    if (player === HUMAN) ui.toast(res.error);
+    else console.warn('Bot intent rejected', intent, res.error);
+    return res;
+  }
+  runBot();
+  ui.render(state);
+  return res;
+}
+
+function runBot() {
+  if (state.players[BOT].ready) return;
+  const send = (intent) => applyIntent(state, catalog, BOT, intent);
+  if (state.phase === 'planning') botTurn(state, catalog, BOT, send);
+  else if (state.phase === 'combat') send({ type: 'continue' });
+}
+
+// Debug handle for the browser console: `game.state`
+window.game = { get state() { return state; }, catalog, dispatch };
+
+newGame();

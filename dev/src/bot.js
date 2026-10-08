@@ -1,0 +1,66 @@
+// Dummy opponent. It plays through the exact same intent API as a human, so
+// in Phase 3 a remote guest can take its seat without touching the rules.
+
+import { REROLL_COST, boardCap, ownedUnits, sellValue } from './game.js';
+import { COLS, HALF } from './combat.js';
+
+const CENTER_OUT = [3, 4, 2, 5, 1, 6, 0, 7].filter((x) => x < COLS);
+
+export function botTurn(state, catalog, p, send) {
+  shop(state, catalog, p, send);
+  if (state.round >= 3 && state.players[p].gold >= REROLL_COST + 4) {
+    send({ type: 'reroll' });
+    shop(state, catalog, p, send);
+  }
+  arrange(state, catalog, p, send);
+  send({ type: 'ready' });
+}
+
+function shop(state, catalog, p, send) {
+  const me = state.players[p];
+  const cap = boardCap(state.round);
+  for (;;) {
+    const owned = ownedUnits(me);
+    let best = -1;
+    let bestScore = -Infinity;
+    me.shop.forEach((id, slot) => {
+      if (!id) return;
+      const { cost } = catalog[id];
+      if (cost > me.gold) return;
+      const copies = owned.filter((u) => u.unitId === id && u.star === 1).length;
+      if (!me.bench.includes(null) && copies < 2) return;
+      if (owned.length >= cap + 3 && copies === 0) return;
+      const score = cost * 10 + copies * 25;
+      if (score > bestScore) { bestScore = score; best = slot; }
+    });
+    if (best === -1 || !send({ type: 'buy', slot: best }).ok) return;
+  }
+}
+
+function arrange(state, catalog, p, send) {
+  const me = state.players[p];
+  const all = ownedUnits(me).sort((a, b) => sellValue(catalog, b) - sellValue(catalog, a) || a.uid - b.uid);
+  const keep = new Set(all.slice(0, boardCap(state.round)));
+
+  for (const u of [...me.board]) {
+    if (keep.has(u)) continue;
+    const free = me.bench.indexOf(null);
+    send(free === -1 ? { type: 'sell', uid: u.uid } : { type: 'move', uid: u.uid, to: { area: 'bench', index: free } });
+  }
+  for (const u of keep) {
+    if (me.board.includes(u)) continue;
+    const cell = freeCell(me, catalog[u.unitId].range <= 1);
+    if (cell) send({ type: 'move', uid: u.uid, to: { area: 'board', ...cell } });
+  }
+}
+
+// Melee fills the front line from the centre out; ranged units fill the back.
+function freeCell(me, melee) {
+  const rows = [...Array(HALF).keys()];
+  for (const y of melee ? rows : rows.reverse()) {
+    for (const x of CENTER_OUT) {
+      if (!me.board.some((u) => u.x === x && u.y === y)) return { x, y };
+    }
+  }
+  return null;
+}
