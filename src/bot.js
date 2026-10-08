@@ -18,9 +18,10 @@ export function botTurn(state, catalog, p, send) {
   }
   shop(state, catalog, p, send);
   // Rerolls are free but limited; keep rerolling while there are coins left to
-  // spend (at least the price of the dearest troop).
+  // spend (at least the price of the cheapest troop on the team).
   const me = state.players[p];
-  while (me.rerolls > 0 && me.coins >= 3 && send({ type: 'reroll' }).ok) shop(state, catalog, p, send);
+  const cheapest = Math.min(...me.team.map((id) => catalog[id].cost));
+  while (me.rerolls > 0 && me.coins >= cheapest && send({ type: 'reroll' }).ok) shop(state, catalog, p, send);
   send({ type: 'ready' });
 }
 

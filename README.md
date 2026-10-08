@@ -35,7 +35,7 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
 - **Team:** before round 1, each player picks 6 Pokémon. Each one puts 4 copies into that player's own
   pool. The board starts empty: everything you field, you buy.
 - **Coins:** you start with 6. After each battle the winner gets 6 coins and the loser 9 (a draw pays
-  both 9). Coins carry over between rounds with no cap. Troops cost 3–4 coins per copy.
+  both 9). Coins carry over between rounds with no cap. Troops cost 2–5 coins per copy.
 - **Shop:** 3 slots, drawn from your pool (never more copies than the pool holds). The shop refreshes
   by itself after every battle.
 - **Rerolls:** free, but limited. You start with 3 and get 1 more each round, up to a maximum of 3.
