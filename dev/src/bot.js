@@ -4,7 +4,8 @@
 import { REROLL_COST, boardCap, leaderIds, ownedUnits, sellValue } from './game.js';
 import { COLS, HALF } from './combat.js';
 
-const CENTER_OUT = [3, 4, 2, 5, 1, 6, 0, 7].filter((x) => x < COLS);
+// Columns ordered from the centre outwards, e.g. [2, 1, 3, 0, 4] for 5 columns.
+const CENTER_OUT = [...Array(COLS).keys()].sort((a, b) => Math.abs(2 * a - (COLS - 1)) - Math.abs(2 * b - (COLS - 1)) || a - b);
 
 export function botTurn(state, catalog, p, send) {
   if (state.phase === 'leader') {

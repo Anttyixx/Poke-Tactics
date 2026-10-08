@@ -50,6 +50,10 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   let speed = 1;
   let toastTimer = 0;
 
+  // Board dimensions come from combat.js; CSS sizes everything from these.
+  arena.style.setProperty('--cols', COLS);
+  arena.style.setProperty('--rows', ROWS);
+  arena.style.aspectRatio = `${COLS} / ${ROWS}`;
   for (let vy = 0; vy < ROWS; vy++) {
     for (let vx = 0; vx < COLS; vx++) {
       const c = document.createElement('div');

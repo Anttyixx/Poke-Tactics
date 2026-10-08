@@ -36,7 +36,7 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
   sold or benched.
 - **Shop:** you get 5 gold per round, plus 1 gold of interest per 10 banked (max +5), plus 1 gold for a win.
   Units cost 1–3 gold. Rerolling costs 2 gold. Higher-cost units show up more often in later rounds.
-- **Board:** you place units on your 8×4 half. The row next to the centre line is the front.
+- **Board:** you place units on your 5×4 half (the board is 5 wide by 8 tall). The row next to the centre line is the front.
   You can field 3 units at first, and the cap rises by 1 every 2 rounds up to 8. The bench holds 8.
 - **Merging:** 3 copies of the same unit make a ★★ unit (×1.8 stats). 3 ★★ units make a ★★★ unit (×3.2).
 - **Combat:** units target the nearest enemy, walk into range and attack. Each attack builds mana,
