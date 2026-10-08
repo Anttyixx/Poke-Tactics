@@ -10,7 +10,6 @@ const TICK_MS = 50; // playback speed at 1x (sim tick is 100ms, so 1x plays at d
 // Sprite sheets are 4x4 grids of 64px frames: one row per facing direction,
 // four walk-cycle frames per row. CSS picks the row from data-facing.
 const facingFor = (dx, dy, fallback) => (dx < 0 ? 'left' : dx > 0 ? 'right' : dy < 0 ? 'up' : dy > 0 ? 'down' : fallback);
-const WANDER = [[0, -1], [0, 1], [-1, 0], [1, 0]];
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const secs = (ticks) => +(ticks * TICK_SECONDS).toFixed(1);
@@ -113,20 +112,6 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     }
     return el;
   }
-
-  // Planning-phase idle: sprite units on the board stroll out of their square and back, turning to
-  // face where they walk. Purely cosmetic; the real position never changes.
-  setInterval(() => {
-    if (state?.phase !== 'planning' || document.hidden) return;
-    for (const el of layer.querySelectorAll('.unit.sprite-unit')) {
-      if (el.classList.contains('selected') || Math.random() < 0.3) continue;
-      const [ox, oy] = (el.dataset.off ?? '0,0').split(',').map(Number);
-      const [nx, ny] = ox || oy ? [0, 0] : WANDER[Math.floor(Math.random() * WANDER.length)];
-      el.dataset.off = `${nx},${ny}`;
-      el.dataset.facing = facingFor(nx - ox, ny - oy, el.dataset.facing);
-      el.querySelector('.sprite').style.translate = `${nx * 22}% ${ny * 22}%`;
-    }
-  }, 1000);
 
   function toast(msg) {
     toastEl.textContent = msg;

@@ -217,18 +217,20 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
    background-position-x through 0/33/67/100% plays the 4-frame walk. */
 .sprite {
   position: absolute;
-  width: 135%;
+  width: 115%; /* frames are 64px with padding, so a sprite slightly overflows its square */
   aspect-ratio: 1;
-  left: -17.5%;
-  bottom: -4%;
+  left: -7.5%;
+  bottom: -3%;
   background-size: 400% 400%;
   background-repeat: no-repeat;
   image-rendering: pixelated;
   --walk: calc(0.72s * var(--step, 1) / var(--speed, 1));
   animation: walk var(--walk) steps(4) infinite;
-  transition: translate 0.9s linear;
   pointer-events: none;
 }
+/* Units waiting on the board or bench stand still (first frame); they only walk in combat. */
+#arena:not(.in-combat) .sprite,
+#bench .sprite { animation: none; background-position-x: 0%; }
 [data-facing="down"] .sprite { background-position-y: 0%; }
 [data-facing="left"] .sprite { background-position-y: 33.333%; }
 [data-facing="right"] .sprite { background-position-y: 66.667%; }
@@ -241,7 +243,7 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .unit.sprite-unit .shadow {
   position: absolute;
   bottom: 8%;
-  width: 62%;
+  width: 53%;
   height: 20%;
   border-radius: 50%;
   background: color-mix(in srgb, var(--ally) 45%, transparent);
