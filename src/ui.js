@@ -4,8 +4,8 @@
 
 import { COLS, ROWS, HALF, STAT_SCALE, TICK_SECONDS, abilityPower, unitStats } from './combat.js';
 import {
-  BASE_INCOME, COPIES_PER_TROOP, MAX_INTEREST, REROLL_COST,
-  boardCap, copiesOf, fieldCount, interest, leaderIds, poolSize, sellValue, teamSize, troopIds,
+  COPIES_PER_TROOP, LOSS_COINS, MAX_REROLLS, WIN_COINS,
+  boardCap, copiesOf, fieldCount, leaderIds, poolSize, sellValue, teamSize, troopIds,
 } from './game.js';
 
 const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
@@ -301,10 +301,10 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
 
   function renderHud() {
     const p = me();
-    const income = BASE_INCOME + interest(p.gold);
     hudEl.innerHTML = `
       <div class="stat"><span class="label">Round</span><b>${state.round}</b></div>
-      <div class="stat"><span class="label">Gold</span><b class="gold">${p.gold}</b><small>+${income}/round</small></div>
+      <div class="stat" title="Win a battle: +${WIN_COINS}. Lose: +${LOSS_COINS}. Coins carry over."><span class="label">Coins</span><b class="gold">${p.coins}</b></div>
+      <div class="stat" title="Free rerolls. +1 each round, up to ${MAX_REROLLS}."><span class="label">Rerolls</span><b>${p.rerolls}/${MAX_REROLLS}</b></div>
       <div class="stat"><span class="label">Board</span><b>${fieldCount(p)}/${boardCap(Math.max(1, state.round))}</b></div>
       <div class="stat" title="Copies left to buy"><span class="label">Pool</span><b>${poolSize(p)}</b></div>
       ${hpBox(p, 'ally')}
@@ -341,19 +341,19 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     shopEl.innerHTML = p.shop.map((id, slot) => {
       if (!id) return `<button class="card empty" disabled><span>${state.phase === 'planning' ? 'Bought' : ''}</span></button>`;
       const def = catalog[id];
-      const disabled = !canPlan() || p.gold < def.cost;
+      const disabled = !canPlan() || p.coins < def.cost;
       return `<button class="card${slot === buying ? ' buying' : ''}" data-slot="${slot}" data-type="${def.type}" ${disabled ? 'disabled' : 'draggable="true"'}>
         ${def.sprite
           ? `<span class="portrait" data-facing="down"><span class="sprite" ${spriteStyle(def)}></span></span>`
           : `<span class="emoji">${def.emoji}</span>`}
         <span class="name">${esc(def.name)}</span>
         <span class="type">${def.type}</span>
-        <span class="cost c${def.cost}">${def.cost}g</span>
+        <span class="cost c${def.cost}">${def.cost} 🪙</span>
         <span class="left">${p.pool[id]} left in pool</span>
       </button>`;
     }).join('');
-    rerollBtn.textContent = `Reroll (${REROLL_COST}g)`;
-    rerollBtn.disabled = !canPlan() || p.gold < REROLL_COST;
+    rerollBtn.textContent = p.rerolls > 0 ? `Reroll (${p.rerolls} left)` : 'No rerolls left';
+    rerollBtn.disabled = !canPlan() || p.rerolls <= 0;
     readyBtn.disabled = !canPlan();
     readyBtn.textContent = state.phase === 'planning' && p.ready ? 'Waiting for opponent…' : 'Fight!';
   }
@@ -385,7 +385,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
           <li>The row nearest the middle is your front line. Put melee troops there.</li>
           <li>Drag a troop onto the shop (or press Sell) to sell it. Its copies go back to your pool.</li>
           <li>Press <b>Fight!</b> to watch the battle play out by itself.</li>
-          <li>Interest: +1 gold per 10 you hold (max +${MAX_INTEREST}).</li>
+          <li>Coins: you start with 6. After each battle the winner gets +${WIN_COINS} and the loser +${LOSS_COINS}. Coins carry over.</li>
+          <li>Rerolls are free: you get ${MAX_REROLLS}, plus 1 more each round (max ${MAX_REROLLS}). The shop refreshes by itself after every battle.</li>
         </ul>
         <p class="keys">Keys: <kbd>D</kbd> reroll · <kbd>F</kbd> fight · <kbd>E</kbd> sell · <kbd>Space</kbd> skip</p>
         ${poolList()}`;
@@ -401,7 +402,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
       <div class="info-head" data-type="${def.type}">
         ${portrait(def)}
         <div><h2>${esc(def.name)} ${def.leader ? '' : `<span class="stars s${star}">${'★'.repeat(star)}</span>`}</h2>
-        <span class="sub">${def.leader ? `Leader · ${def.type}` : `${def.type} · ${def.cost} gold · ${copies}/${COPIES_PER_TROOP} copies`}</span></div>
+        <span class="sub">${def.leader ? `Leader · ${def.type}` : `${def.type} · ${def.cost} coins · ${copies}/${COPIES_PER_TROOP} copies`}</span></div>
       </div>
       ${hint}
       <dl class="stats">
@@ -415,7 +416,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
       <p class="ability"><b>${esc(def.ability.name)}:</b> ${describeAbility(def, star)}</p>
       ${def.leader ? '<p class="muted">Your leader is always on the field and doesn\'t count toward the board limit. It can\'t be sold.</p>' : ''}
       ${inst && !inst.leader && canPlan()
-        ? `<button id="sell" class="danger">Sell for ${sellValue(catalog, inst)}g (${copies} ${copies === 1 ? 'copy' : 'copies'} back to pool)</button>` : ''}`;
+        ? `<button id="sell" class="danger">Sell for ${sellValue(catalog, inst)} coins (${copies} ${copies === 1 ? 'copy' : 'copies'} back to pool)</button>` : ''}`;
   }
 
   // ---- combat playback -----------------------------------------------------
@@ -670,7 +671,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     showOverlay(`
       <h1 class="${draw ? '' : won ? 'win' : 'loss'}">${title}</h1>
       <p>${detail}</p>
-      <p class="muted">Round ${round} · Your HP ${me().hp} → ${hpAfter}${won ? ' · +1 bonus gold' : ''}</p>
+      <p class="muted">Round ${round} · Your HP ${me().hp} → ${hpAfter} · +${won ? WIN_COINS : LOSS_COINS} coins</p>
       ${me().ready
         ? '<button disabled>Waiting for opponent…</button>'
         : '<button id="continue" class="primary" autofocus>Continue</button>'}`);
@@ -683,7 +684,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     return `<button class="leader-card${picked ? ' chosen' : ''}" data-pick-${kind}="${id}" data-type="${def.type}" ${me().ready ? 'disabled' : ''}>
       ${portrait(def)}
       <b>${esc(def.name)}</b>
-      <span class="muted">${def.leader ? 'Leader' : `${def.cost} gold`} · ${def.range > 1 ? `Ranged (${def.range})` : 'Melee'} · ${show(stats.hp)} HP · ${show(stats.atk)} dmg × ${hitsPerSec(stats).toFixed(1)}/s</span>
+      <span class="muted">${def.leader ? 'Leader' : `${def.cost} coins`} · ${def.range > 1 ? `Ranged (${def.range})` : 'Melee'} · ${show(stats.hp)} HP · ${show(stats.atk)} dmg × ${hitsPerSec(stats).toFixed(1)}/s</span>
       <small><b>${esc(def.ability.name)}:</b> ${describeAbility(def, 0)} (every ${stats.energy} attacks)</small>
     </button>`;
   }

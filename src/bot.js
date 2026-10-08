@@ -1,7 +1,7 @@
 // Dummy opponent. It plays through the exact same intent API as a human, so
 // in Phase 3 a remote guest can take its seat without touching the rules.
 
-import { MAX_STAR, REROLL_COST, boardCap, fieldCount, leaderIds, teamSize, troopIds } from './game.js';
+import { MAX_STAR, boardCap, fieldCount, leaderIds, teamSize, troopIds } from './game.js';
 import { COLS, HALF } from './combat.js';
 
 // Columns ordered from the centre outwards, e.g. [2, 1, 3, 0, 4] for 5 columns.
@@ -18,10 +18,10 @@ export function botTurn(state, catalog, p, send) {
     return;
   }
   shop(state, catalog, p, send);
-  if (state.round >= 3 && state.players[p].gold >= REROLL_COST + 3) {
-    send({ type: 'reroll' });
-    shop(state, catalog, p, send);
-  }
+  // Rerolls are free but limited; keep rerolling while there are coins left to
+  // spend (at least the price of the dearest troop).
+  const me = state.players[p];
+  while (me.rerolls > 0 && me.coins >= 3 && send({ type: 'reroll' }).ok) shop(state, catalog, p, send);
   send({ type: 'ready' });
 }
 
@@ -33,7 +33,7 @@ function shop(state, catalog, p, send) {
   for (;;) {
     let best = null;
     me.shop.forEach((id, slot) => {
-      if (!id || catalog[id].cost > me.gold) return;
+      if (!id || catalog[id].cost > me.coins) return;
       const stack = me.board.find((u) => !u.leader && u.unitId === id && u.star < MAX_STAR);
       const cell = stack ?? (fieldCount(me) < boardCap(state.round) ? freeCell(me, catalog[id].range <= 1) : null);
       if (!cell) return;

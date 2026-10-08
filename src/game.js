@@ -16,7 +16,7 @@
 //   { type: 'chooseTeam', leader, troops }    before round 1; troops = TEAM_SIZE distinct troop ids
 //   { type: 'buy', slot, x, y }               buy shop slot onto own square (x, y); same troop = combine
 //   { type: 'sell', uid }                     sell a troop; its copies go back to the pool
-//   { type: 'reroll' }                        new shop for REROLL_COST gold
+//   { type: 'reroll' }                        new shop; uses one of the player's free rerolls
 //   { type: 'move', uid, x, y }               move on the board; same troop = combine, other = swap
 //   { type: 'ready' }                         lock in planning; combat starts when all are ready
 //   { type: 'continue' }                      done watching combat; next round starts when all continue
@@ -28,14 +28,17 @@ export const TEAM_SIZE = 5;
 export const COPIES_PER_TROOP = 4;
 export const SHOP_SIZE = 3;
 export const START_HP = 100;
-export const REROLL_COST = 2;
-export const BASE_INCOME = 5;
-export const WIN_BONUS = 1;
-export const MAX_INTEREST = 5;
+// Economy: coins carry over between rounds with no cap. After each battle the
+// winner earns WIN_COINS and the loser LOSS_COINS (a draw pays both LOSS_COINS).
+export const START_COINS = 6;
+export const WIN_COINS = 6;
+export const LOSS_COINS = 9;
+// Rerolls are free but limited: start with MAX_REROLLS, +1 each new round, capped.
+export const MAX_REROLLS = 3;
+export const REROLLS_PER_ROUND = 1;
 export const MAX_STAR = COPIES_PER_TROOP - 1; // stars = copies - 1
 
 export const boardCap = (round) => Math.min(8, 3 + Math.floor((round - 1) / 2));
-export const interest = (gold) => Math.min(MAX_INTEREST, Math.floor(gold / 10));
 export const copiesOf = (inst) => inst.star + 1;
 export const sellValue = (catalog, inst) => catalog[inst.unitId].cost * copiesOf(inst);
 export const leaderIds = (catalog) => Object.keys(catalog).filter((id) => catalog[id].leader).sort();
@@ -63,7 +66,8 @@ export function createGame({ seed, catalog, names, featured = null }) {
     players: names.map((name, i) => ({
       name,
       hp: START_HP,
-      gold: 0,
+      coins: START_COINS,
+      rerolls: MAX_REROLLS,
       leader: null, // unitId of the chosen leader
       team: [], // chosen troop ids
       pool: {}, // troop id -> copies left to buy
@@ -112,7 +116,7 @@ const HANDLERS = {
     if (!isIndex(slot, SHOP_SIZE) || !player.shop[slot]) return fail('Nothing to buy there');
     const unitId = player.shop[slot];
     const { cost } = catalog[unitId];
-    if (player.gold < cost) return fail('Not enough gold');
+    if (player.coins < cost) return fail('Not enough coins');
     if (!(player.pool[unitId] > 0)) return fail('No copies left in your pool');
     if (!isIndex(x, COLS) || !isIndex(y, HALF)) return fail('Place troops on your half of the board');
 
@@ -124,7 +128,7 @@ const HANDLERS = {
       if (fieldCount(player) >= boardCap(state.round)) return fail(`Board is full (${boardCap(state.round)} troops this round)`);
       player.board.push({ uid: state.nextUid++, unitId, star: 0, x, y });
     }
-    player.gold -= cost;
+    player.coins -= cost;
     player.pool[unitId]--;
     player.shop[slot] = null;
     return OK;
@@ -137,7 +141,7 @@ const HANDLERS = {
     if (!inst) return fail('You do not own that unit');
     if (inst.leader) return fail('Your leader cannot be sold');
     player.board.splice(player.board.indexOf(inst), 1);
-    player.gold += sellValue(catalog, inst);
+    player.coins += sellValue(catalog, inst);
     player.pool[inst.unitId] += copiesOf(inst);
     return OK;
   },
@@ -145,8 +149,8 @@ const HANDLERS = {
   reroll(state, catalog, player) {
     const blocked = planningGuard(state, player);
     if (blocked) return blocked;
-    if (player.gold < REROLL_COST) return fail('Not enough gold');
-    player.gold -= REROLL_COST;
+    if (player.rerolls <= 0) return fail('No rerolls left this round');
+    player.rerolls--;
     rollShop(player, state.featured);
     return OK;
   },
@@ -212,7 +216,7 @@ function startRound(state, catalog) {
   state.phase = 'planning';
   state.combat = null;
   for (const p of state.players) {
-    p.gold += BASE_INCOME + interest(p.gold);
+    if (state.round > 1) p.rerolls = Math.min(MAX_REROLLS, p.rerolls + REROLLS_PER_ROUND);
     p.ready = false;
     rollShop(p, state.featured);
   }
@@ -240,7 +244,7 @@ function endRound(state, catalog) {
   const { result, damage } = state.combat;
   state.players.forEach((p, i) => {
     p.hp = Math.max(0, p.hp - damage[i]);
-    if (result.winner === i) p.gold += WIN_BONUS;
+    p.coins += result.winner === i ? WIN_COINS : LOSS_COINS;
   });
   const alive = state.players.map((p, i) => (p.hp > 0 ? i : -1)).filter((i) => i !== -1);
   if (alive.length < state.players.length) {

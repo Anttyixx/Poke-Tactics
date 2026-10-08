@@ -35,14 +35,17 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
 - **Team:** before round 1, each player picks 1 leader and 5 Pokémon troops. The leader starts on the
   field, fights every round, doesn't count toward the board cap and can't be sold. Each troop puts
   4 copies into that player's own pool.
-- **Shop:** 3 slots, drawn from your pool (never more copies than the pool holds). A new shop is
-  rolled each round; rerolling costs 2 gold. You get 5 gold per round, plus 1 gold of interest per 10
-  banked (max +5), plus 1 gold for a win. Troops cost 1–3 gold per copy.
+- **Coins:** you start with 6. After each battle the winner gets 6 coins and the loser 9 (a draw pays
+  both 9). Coins carry over between rounds with no cap. Troops cost 3–4 coins per copy.
+- **Shop:** 3 slots, drawn from your pool (never more copies than the pool holds). The shop refreshes
+  by itself after every battle.
+- **Rerolls:** free, but limited. You start with 3 and get 1 more each round, up to a maximum of 3.
+  When you're out, you can't reroll until the next round.
 - **Buying:** click a shop troop, then a square on your half (or drag the card onto the board). A copy
   you buy leaves your pool. There is no bench.
 - **Stars:** copies only combine when placed on top of the same troop (buying onto it, or moving one
   onto another): 1 copy = 0★, 2 = ★ (×1.5 stats), 3 = ★★ (×2.2), 4 = ★★★ (×3.2).
-- **Selling:** drag a troop onto the shop (or press Sell) for its cost per copy; all its copies go back
+- **Selling:** drag a troop onto the shop (or press Sell) for its cost in coins per copy; all its copies go back
   to your pool.
 - **Board:** your half is 5×4 (the board is 5 wide by 8 tall); the row next to the centre line is the
   front. You can field 3 troops at first, and the cap rises by 1 every 2 rounds up to 8.

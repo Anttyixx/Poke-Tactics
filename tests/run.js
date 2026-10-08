@@ -6,7 +6,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import {
   createGame, applyIntent, boardCap, fieldCount, leaderIds, troopIds, teamSize, poolSize,
-  COPIES_PER_TROOP, MAX_STAR, SHOP_SIZE,
+  COPIES_PER_TROOP, MAX_STAR, SHOP_SIZE, START_COINS, WIN_COINS, LOSS_COINS, MAX_REROLLS,
 } from '../src/game.js';
 import { simulate, MAX_TICKS, COLS, HALF } from '../src/combat.js';
 import { botTurn } from '../src/bot.js';
@@ -125,7 +125,7 @@ test('shop only offers troops from your own pool, never more copies than it hold
   const s = startedGame();
   const p = s.players[0];
   for (let i = 0; i < 300; i++) {
-    p.gold = 99;
+    p.rerolls = 1;
     assert.ok(applyIntent(s, catalog, 0, { type: 'reroll' }).ok);
     const counts = {};
     for (const id of p.shop.filter(Boolean)) counts[id] = (counts[id] ?? 0) + 1;
@@ -137,7 +137,7 @@ test('shop only offers troops from your own pool, never more copies than it hold
   // Nearly empty pool: shop shows only what's left.
   p.pool = Object.fromEntries(p.team.map((t) => [t, 0]));
   p.pool[p.team[0]] = 1;
-  p.gold = 99;
+  p.rerolls = 1;
   applyIntent(s, catalog, 0, { type: 'reroll' });
   assert.deepEqual(p.shop, [p.team[0], null, null]);
 });
@@ -145,7 +145,7 @@ test('shop only offers troops from your own pool, never more copies than it hold
 test('buying places onto the chosen square and removes the copy from the pool', () => {
   const s = startedGame();
   const p = s.players[0];
-  p.gold = 99;
+  p.coins = 99;
   const id = p.shop[0];
   const before = p.pool[id];
   assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: 0, y: 1 }).ok);
@@ -153,7 +153,7 @@ test('buying places onto the chosen square and removes the copy from the pool', 
   assert.deepEqual([placed.unitId, placed.star], [id, 0]);
   assert.equal(p.pool[id], before - 1);
   assert.equal(p.shop[0], null);
-  assert.equal(p.gold, 99 - catalog[id].cost);
+  assert.equal(p.coins, 99 - catalog[id].cost);
   assertCopiesConserved(p);
   assert.equal(applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: 1, y: 1 }).ok, false, 'slot is now empty');
 });
@@ -163,7 +163,7 @@ test('copies combine only when placed on the same troop: 1-4 copies = 0-3 stars'
   const p = s.players[0];
   const id = 'mawile';
   const other = TROOPS.find((t) => t !== id);
-  p.gold = 99;
+  p.coins = 99;
   p.shop = [id, id, other];
   assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: 0, y: 0 }).ok);
   assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 1, x: 1, y: 0 }).ok, 'an empty square makes a separate troop');
@@ -184,18 +184,18 @@ test('copies combine only when placed on the same troop: 1-4 copies = 0-3 stars'
   assertCopiesConserved(p);
 });
 
-test('selling refunds gold per copy and returns every copy to the pool', () => {
+test('selling refunds coins per copy and returns every copy to the pool', () => {
   const s = startedGame();
   const p = s.players[0];
-  p.gold = 99;
+  p.coins = 99;
   p.shop = ['beheeyem', 'beheeyem', null];
   applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: 0, y: 3 });
   applyIntent(s, catalog, 0, { type: 'buy', slot: 1, x: 0, y: 3 });
   const unit = p.board.find((u) => u.unitId === 'beheeyem');
   assert.equal(unit.star, 1);
-  const gold = p.gold;
+  const coins = p.coins;
   assert.ok(applyIntent(s, catalog, 0, { type: 'sell', uid: unit.uid }).ok);
-  assert.equal(p.gold, gold + 2 * catalog.beheeyem.cost);
+  assert.equal(p.coins, coins + 2 * catalog.beheeyem.cost);
   assert.equal(p.pool.beheeyem, COPIES_PER_TROOP);
   assertCopiesConserved(p);
 });
@@ -204,7 +204,7 @@ test('board cap counts troops (not copies or the leader); enemy half is off limi
   const s = startedGame();
   const p = s.players[0];
   const cap = boardCap(s.round);
-  p.gold = 999;
+  p.coins = 999;
   let placed = 0;
   for (let i = 0; placed < cap + 2 && i < 40; i++) {
     p.shop = [p.team[i % p.team.length], null, null];
@@ -226,7 +226,7 @@ test('leader cannot be sold or combined, but can move and swap', () => {
   const s = startedGame();
   const p = s.players[0];
   const leader = p.board[0];
-  p.gold = 99;
+  p.coins = 99;
   p.shop = ['mawile', null, null];
   applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: 0, y: 0 });
   const troop = p.board.find((u) => !u.leader);
@@ -259,6 +259,45 @@ test('rejects invalid and out-of-phase intents without changing state', () => {
   }
 });
 
+test('economy: start with 6 coins; winner +6, loser +9; coins carry over uncapped', () => {
+  const s = startedGame();
+  assert.deepEqual(s.players.map((p) => p.coins), [START_COINS, START_COINS]);
+  const p = s.players[0];
+  p.shop = ['mawile', null, null];
+  p.coins = 50; // whatever isn't spent carries over to the next round
+  assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: 2, y: 0 }).ok); // player 0 has a troop, player 1 only a leader
+  const before = s.players.map((q) => q.coins);
+  for (const i of [0, 1]) applyIntent(s, catalog, i, { type: 'ready' });
+  const { winner } = s.combat.result;
+  for (const i of [0, 1]) applyIntent(s, catalog, i, { type: 'continue' });
+  assert.equal(s.round, 2);
+  s.players.forEach((q, i) => assert.equal(q.coins, before[i] + (winner === i ? WIN_COINS : LOSS_COINS), `player ${i} (winner ${winner})`));
+  assert.ok(s.players[0].coins > 50, 'no cap on coins');
+});
+
+test('rerolls: 3 free to start, none left means none, +1 per round capped at 3, shop refreshes each round', () => {
+  const s = startedGame();
+  const p = s.players[0];
+  assert.equal(p.rerolls, MAX_REROLLS);
+  const coins = p.coins;
+  for (let i = 0; i < MAX_REROLLS; i++) assert.ok(applyIntent(s, catalog, 0, { type: 'reroll' }).ok);
+  assert.equal(p.coins, coins, 'rerolls are free');
+  assert.equal(p.rerolls, 0);
+  assert.equal(applyIntent(s, catalog, 0, { type: 'reroll' }).ok, false, 'out of rerolls');
+  const nextRound = () => {
+    for (const i of [0, 1]) applyIntent(s, catalog, i, { type: 'ready' });
+    for (const i of [0, 1]) applyIntent(s, catalog, i, { type: 'continue' });
+  };
+  p.shop = [null, null, null];
+  nextRound();
+  assert.equal(p.rerolls, 1, '+1 reroll for the new round');
+  assert.ok(p.shop.some(Boolean), 'shop is refreshed automatically after the battle');
+  nextRound();
+  nextRound();
+  nextRound();
+  assert.equal(p.rerolls, MAX_REROLLS, 'capped');
+});
+
 test('locked-in players cannot act; combat starts when both are ready', () => {
   const s = startedGame();
   assert.ok(applyIntent(s, catalog, 0, { type: 'ready' }).ok);
@@ -273,8 +312,8 @@ test('featured troop leads the shop while its pool has copies; bad ids are ignor
   const s = startedGame(3, ['greninja', 'greninja'], { featured: 'beheeyem' });
   for (const p of s.players) assert.equal(p.shop[0], 'beheeyem');
   const p = s.players[0];
-  p.gold = 50;
   for (let i = 0; i < 5; i++) {
+    p.rerolls = 1;
     assert.ok(applyIntent(s, catalog, 0, { type: 'reroll' }).ok);
     assert.equal(p.shop[0], 'beheeyem');
   }
