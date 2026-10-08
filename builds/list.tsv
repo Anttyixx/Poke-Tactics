@@ -1,3 +1,4 @@
+9b1cd34	dev	2026-10-08 22:15 UTC	Give every Pokémon a power from the power sheet
 4d013b2	dev	2026-10-08 21:17 UTC	Apply round 2 stats from the stat sheet
 587f64a	dev	2026-10-08 21:10 UTC	Remove leaders: pick 6 Pokémon, start with an empty board; new stat model
 6eb1d69	dev	2026-10-08 19:48 UTC	Troops move 1 tile per 0.5s; add a Pokédex
