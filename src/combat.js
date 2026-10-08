@@ -49,6 +49,8 @@ export function toCombatPos(side, x, y) {
 // Units walk one square at a time, up/down/left/right only (no diagonal steps).
 const NEIGHBORS = [[0, -1], [0, 1], [-1, 0], [1, 0]];
 const DIAGONALS = [[-1, -1], [1, -1], [-1, 1], [1, 1]];
+// Psywave's wind-up before the wave leaves Beheeyem, in ticks.
+const WAVE_WINDUP = 3;
 
 // Deterministic hash (no Math.random: combat must replay identically).
 function hash(seed, t, salt = 0) {
@@ -85,6 +87,7 @@ function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, in
     pendingMana: 0, pendingStun: 0, // applied at the end of the tick
     atkTimer: stats.attackCd, moveTimer: 0,
     hasteUntil: 0, hastePct: 0, stealthFrom: 0, stealthUntil: 0,
+    hold: 0, // ticks it can't move or attack (riding a Psywave); cooldowns still run
     target: null, alive: true, summoned: Boolean(inst.summoned),
   };
 }
@@ -301,17 +304,21 @@ export function simulate(catalog, boards, seed = 0) {
     }
     emit('cast', { id: u.id, target: target?.id ?? null, x: u.x, y: end });
     if (!target) return;
+    // The wave takes time to cross the board: whoever it moves is out of action
+    // until it lands (wind-up plus about a tick per square).
+    const travel = WAVE_WINDUP + Math.abs(end - u.y);
     damage(target, Math.floor((u.atk * p.damagePct) / 100), u);
     if (!standing(target) || target.y === end) return;
     const blocker = unitAt(u.x, end);
     if (blocker) {
       const side = dirs(u, [[-1, 0], [1, 0]]).map(([dx]) => ({ x: u.x + dx, y: end })).find((c) => inside(c.x, c.y) && !occupied(c.x, c.y));
-      if (side) relocate(blocker, side, 'knock');
+      if (side) { relocate(blocker, side, 'knock'); blocker.hold = travel; }
     }
     // If the end square is still taken, land as close to it as possible in the column.
     let y = end;
     while (y !== target.y && occupied(u.x, y)) y -= dy;
     relocate(target, { x: u.x, y }, 'knock');
+    target.hold = travel;
   }
 
   const cooldown = (u) => (u.hasteUntil > t ? Math.max(1, Math.round((u.attackCd * 100) / (100 + u.hastePct))) : u.attackCd);
@@ -379,6 +386,7 @@ export function simulate(catalog, boards, seed = 0) {
     if (u.stun > 0) { u.stun--; return; }
     if (u.atkTimer > 0) u.atkTimer--;
     if (u.moveTimer > 0) u.moveTimer--;
+    if (u.hold > 0) { u.hold--; return; }
 
     let target = u.target === null ? null : units[u.target];
     if (!target || !visible(target) || target.side === u.side || dist(u, at(target)) > u.range) target = nearestEnemy(u);

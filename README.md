@@ -57,8 +57,9 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
 - **Powers:** every Pokémon has one. Most count attacks (the purple bar). Every fight starts with the bar
   empty and a full attack cooldown before anyone's first hit, and progress is never lost mid-fight:
   - Mawile, **Jaw Lock**: after 8 attacks, the next hits for 130% and stuns for 1s.
-  - Beheeyem, **Psywave**: at the start of battle, a wave down its column hits the first enemy for 50% and
-    knocks it to the far end of the column; anyone already there is pushed to the side.
+  - Beheeyem, **Psywave**: at the start of battle, a wave flies down its column to the other end of the
+    board. The first enemy it hits takes 50% and is carried to that end; anyone already there is pushed to
+    the side. Both sit out until the wave lands.
   - Toxtricity, **Thunderbolt**: every 8th attack also zaps the farthest enemy for 80%.
   - Vespiquen, **Attack Order**: every 7 attacks, summons a Combee next to it (same star level). Combee
     fight but never count as survivors for round damage. With no free square, the power stays charged

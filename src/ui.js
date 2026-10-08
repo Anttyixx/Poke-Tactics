@@ -48,7 +48,7 @@ export function describePower(def, star, catalog) {
     case 'summon': return `${every}, it summons a ${catalog?.[p.unit]?.name ?? p.unit} next to it, at the same star level.`;
     case 'stealth': return `${every}, it turns invisible for ${secs(p.duration)}s${p.hastePct ? ` and attacks ${p.hastePct}% faster` : ''}. Enemies can't target or follow it while it's invisible.`;
     case 'haste': return `${every}, it's enraged: ${p.hastePct}% faster attacks for ${secs(p.duration)}s.`;
-    case 'opening': return `When the battle starts, it fires a wave down its column. The first enemy hit takes ${p.damagePct}% damage (${show(dmg)}) and is knocked to the far end of the column. Anyone already there is pushed to the side.`;
+    case 'opening': return `When the battle starts, it fires a wave down its column. The first enemy hit takes ${p.damagePct}% damage (${show(dmg)}) and is carried all the way to the other end of the board. Anyone already there is pushed to the side.`;
     default: return '';
   }
 }
@@ -695,8 +695,21 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         // Ranged powers launch their orb at the peak of the wind-up; melee ones
         // hit at the moment of contact.
         const windup = motion.impact / speed;
-        const shot = p.kind === 'snipe' || p.kind === 'opening';
-        const flight = shot ? flightMs(from, to) : 0;
+        if (p.kind === 'opening') {
+          // The wave flies the whole column to the far end of the board. The
+          // Pokémon it hits rides it there, and anyone at the end is pushed
+          // aside as it arrives.
+          const end = viewPos(ev.x, ev.y);
+          const arrive = windup + flightMs(from, end);
+          const hit = t ? windup + flightMs(from, to) : arrive;
+          later(windup, () => projectile(from, end, color, true));
+          ctx.srcDelay.set(a.id, hit);
+          if (t) later(hit, () => fx(to.x, to.y, 'burst', color, 1.6));
+          later(arrive, () => fx(end.x, end.y, 'ring', color, 1.4));
+          ctx.wave = { target: ev.target, hit, arrive };
+          break;
+        }
+        const flight = p.kind === 'snipe' ? flightMs(from, to) : 0;
         if (flight) later(windup, () => projectile(from, to, color, true));
         ctx.srcDelay.set(a.id, windup + flight);
         if (t) later(windup + flight, () => fx(to.x, to.y, p.kind === 'snipe' ? 'zap' : 'burst', color, 1.6));
@@ -708,11 +721,23 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         break;
       }
       case 'knock': {
-        // Thrown by a hit: lands when the hit does.
-        const delay = animate ? ctx.hitDelay.get(a.id) ?? 0 : 0;
         a.x = ev.x;
         a.y = ev.y;
-        later(delay, () => { const p = viewPos(ev.x, ev.y); place(a.el, p.x, p.y); if (animate) play(a.el, 'knocked', 350 / speed); });
+        const p = viewPos(ev.x, ev.y);
+        const wave = animate && ev.t === 1 ? ctx.wave : null;
+        if (wave && wave.target === a.id) {
+          // Carried by Psywave: slides with the wave from the hit to the far end.
+          later(wave.hit, () => {
+            a.el.style.transition = `left ${wave.arrive - wave.hit}ms linear, top ${wave.arrive - wave.hit}ms linear`;
+            place(a.el, p.x, p.y);
+            play(a.el, 'knocked', wave.arrive - wave.hit);
+            setTimeout(() => { a.el.style.transition = ''; }, wave.arrive - wave.hit);
+          });
+          break;
+        }
+        // Thrown by a hit: lands when the hit does (or, pushed aside by the wave, when it arrives).
+        const delay = !animate ? 0 : wave ? wave.arrive : ctx.hitDelay.get(a.id) ?? 0;
+        later(delay, () => { place(a.el, p.x, p.y); if (animate) play(a.el, 'knocked', 350 / speed); });
         break;
       }
       case 'teleport': {

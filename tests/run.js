@@ -405,6 +405,11 @@ test('Psywave (Beheeyem): at the start, the first enemy in its column is knocked
   assert.deepEqual(evs(r, 'knock', blocker).map((e) => [e.x, e.y]), [[1, 0]], 'pushed to the side');
   assert.deepEqual(evs(r, 'knock', first).map((e) => [e.x, e.y]), [[2, 0]], 'knocked to the end of the column');
   assert.equal(evs(r, 'cast', b).length, 1, 'only once per battle');
+  // Riding the wave: neither moved unit does anything until it has landed.
+  const landed = 1 + 3 + 7; // wind-up + a tick per square from row 7 to row 0
+  for (const id of [first, blocker]) {
+    assert.ok(!r.events.some((e) => e.id === id && ['move', 'attack'].includes(e.type) && e.t <= landed), `unit ${id} acted mid-air`);
+  }
 });
 
 test('Thunderbolt (Toxtricity): every 8th attack also zaps the farthest enemy for 80%', () => {
