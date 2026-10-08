@@ -51,6 +51,11 @@
     "ability": { "name": "Restore", "kind": "heal", "target": "lowest", "amount": 280 }
   },
 
+  "toxtricity": {
+    "name": "Toxtricity", "sprite": "assets/sprites/toxtricity.png", "type": "ranger", "cost": 2,
+    "hp": 520, "atk": 60, "armor": 10, "range": 5, "attackCd": 10, "moveCd": 5, "mana": 70,
+    "ability": { "name": "Thunderbolt", "kind": "stun", "damage": 200, "duration": 10 }
+  },
   "beheeyem": {
     "name": "Beheeyem", "sprite": "assets/sprites/beheeyem.png", "type": "mage", "cost": 2,
     "hp": 560, "atk": 55, "armor": 10, "range": 3, "attackCd": 10, "moveCd": 5, "mana": 65,
