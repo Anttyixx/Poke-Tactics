@@ -325,3 +325,14 @@ kbd { background: var(--panel-2); border: 1px solid var(--line); border-radius: 
   #shop .card .emoji { font-size: 20px; }
   #shop-actions { flex-direction: row; width: 100%; }
 }
+
+/* Added by the Pages deploy so you can tell which build you're on. */
+.build-badge {
+  position: fixed; right: 8px; bottom: 8px;
+  font: 600 11px/1 ui-monospace, monospace;
+  padding: 4px 8px; border-radius: 6px;
+  text-decoration: none; color: #fff; opacity: 0.75;
+  background: #2b6a3f;
+}
+.build-badge.dev { background: #a8601c; }
+.build-badge:hover { opacity: 1; }

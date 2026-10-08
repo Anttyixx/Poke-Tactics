@@ -56,18 +56,32 @@ src/bot.js          dummy opponent. Uses the same intents as a human
 src/ui.js           DOM rendering, input -> intents, replays combat from the event log
 src/main.js         wires game + bot + UI together (single player)
 tests/run.js        Node test runner
+.github/workflows/pages.yml   deploys main -> / and dev -> /dev/
 ```
 
 `src/network.js` will arrive in Phase 2.
 
-## Deploy to GitHub Pages
+## Hosting and branches
 
-1. Merge to `main`.
-2. In the repo on GitHub, open **Settings → Pages → Build and deployment**. Set Source to *Deploy from a branch*,
-   Branch to `main`, and folder to `/ (root)`.
-3. The site will be at `https://<user>.github.io/<repo>/`. All paths are relative, so the project-site subpath works.
+| Branch | Purpose | URL |
+| --- | --- | --- |
+| `main` | Stable. Only merge into it from `dev` when a version is ready. | `https://<user>.github.io/<repo>/` |
+| `dev`  | Day-to-day work. Merge feature branches here. | `https://<user>.github.io/<repo>/dev/` |
 
-`.nojekyll` turns off Jekyll processing so files are served exactly as committed.
+`.github/workflows/pages.yml` runs on every push to `main` or `dev`. It runs the tests, then
+copies that branch's files into its own folder on the `gh-pages` branch, which is what Pages
+serves. A failing test blocks the deploy. A small badge in the corner of each build shows
+`stable` or `dev` plus the commit it came from.
+
+Until `main` has a release, the root page links to the dev build.
+
+**One-time setup** (after the first workflow run has created the `gh-pages` branch):
+in **Settings → Pages → Build and deployment**, set Source to *Deploy from a branch*,
+Branch to `gh-pages`, and folder to `/ (root)`.
+
+**Releasing:** open a PR from `dev` to `main` and merge it. The stable site updates a minute later.
+
+All asset paths are relative, so the game works at both the site root and `/dev/`.
 
 ## Architecture notes for Phase 3 (host-authoritative)
 

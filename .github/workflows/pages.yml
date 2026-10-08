@@ -1,0 +1,84 @@
+# Publishes both versions of the game into one GitHub Pages site:
+#   main -> https://<user>.github.io/<repo>/       (stable)
+#   dev  -> https://<user>.github.io/<repo>/dev/   (dev)
+# Each push runs the tests, then updates only its own folder on the
+# `gh-pages` branch, so a dev deploy never touches stable and vice versa.
+# One-time setup: Settings -> Pages -> Deploy from a branch -> gh-pages, / (root).
+
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gh-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: app
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run tests
+        working-directory: app
+        run: node tests/run.js
+
+      - name: Publish to gh-pages
+        env:
+          REPO_URL: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
+          BRANCH: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$BRANCH" = "main" ]; then TARGET=.; LABEL=stable; else TARGET=dev; LABEL=dev; fi
+
+          if git ls-remote --exit-code --heads "$REPO_URL" gh-pages >/dev/null; then
+            git clone --quiet --depth 1 --branch gh-pages "$REPO_URL" site
+          else
+            git init --quiet -b gh-pages site
+            git -C site remote add origin "$REPO_URL"
+          fi
+          cd site
+
+          # Clear only this branch's folder (stable owns everything except dev/).
+          if [ "$TARGET" = "." ]; then
+            find . -mindepth 1 -maxdepth 1 ! -name .git ! -name dev -exec rm -rf {} +
+          else
+            rm -rf dev && mkdir dev
+          fi
+          tar -C "$GITHUB_WORKSPACE/app" --exclude=.git --exclude=.github --exclude=tests --exclude=node_modules -cf - . \
+            | tar -C "$TARGET" -xf -
+
+          # Stamp the build so it's obvious which version you're testing.
+          if [ -f "$TARGET/index.html" ]; then
+            sed -i "s|</body>|  <a class=\"build-badge $LABEL\" href=\"https://github.com/${{ github.repository }}/commit/$SHA\">$LABEL · ${SHA:0:7}</a>\n</body>|" "$TARGET/index.html"
+          fi
+
+          # Until main has a release, the root points people at the dev build.
+          if [ ! -f index.html ]; then
+            cat > index.html <<'HTML'
+          <!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>Auto Battler</title>
+          <body style="font-family:system-ui;background:#12141a;color:#e9eaf0;display:grid;place-items:center;min-height:100vh;margin:0">
+          <p>No stable release yet. <a style="color:#4ea1ff" href="dev/">Play the dev build →</a></p>
+          HTML
+          fi
+          touch .nojekyll
+
+          git add -A
+          if git diff --cached --quiet; then echo "Nothing changed."; exit 0; fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit --quiet -m "Deploy $BRANCH @ ${SHA:0:7}"
+          git push --quiet origin gh-pages
