@@ -4,7 +4,7 @@
 
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { createGame, applyIntent, boardCap, BENCH_SIZE } from '../src/game.js';
+import { createGame, applyIntent, boardCap, fieldCount, leaderIds, BENCH_SIZE } from '../src/game.js';
 import { simulate, MAX_TICKS } from '../src/combat.js';
 import { botTurn } from '../src/bot.js';
 
@@ -13,6 +13,13 @@ const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
+// A game that is past leader selection and in round 1 planning.
+function startedGame(seed = 7, leaders = ['decidueye', 'decidueye']) {
+  const s = createGame({ seed, catalog, names: ['A', 'B'] });
+  leaders.forEach((leader, p) => assert.ok(applyIntent(s, catalog, p, { type: 'chooseLeader', leader }).ok));
+  return s;
+}
+
 // Two bots play a full match. If `roundTrip` is set, state is JSON-cloned
 // between every turn, as if each snapshot had been sent over the network.
 function playMatch(seed, { roundTrip = false, maxRounds = 60 } = {}) {
@@ -20,8 +27,8 @@ function playMatch(seed, { roundTrip = false, maxRounds = 60 } = {}) {
   const send = (p) => (intent) => applyIntent(state, catalog, p, intent);
   while (state.phase !== 'gameover' && state.round <= maxRounds) {
     for (const p of [0, 1]) {
-      if (state.phase === 'planning') botTurn(state, catalog, p, send(p));
-      else send(p)({ type: 'continue' });
+      if (state.phase === 'combat') send(p)({ type: 'continue' });
+      else botTurn(state, catalog, p, send(p));
       if (roundTrip) state = clone(state);
     }
   }
@@ -34,7 +41,7 @@ test('unit catalog is well formed', () => {
     for (const k of ['hp', 'atk', 'armor', 'range', 'attackCd', 'moveCd', 'mana', 'cost']) {
       assert.ok(Number.isInteger(u[k]) && u[k] >= 0, `${id}.${k} must be a non-negative integer`);
     }
-    assert.ok([1, 2, 3].includes(u.cost), `${id} cost`);
+    assert.ok(u.leader ? u.cost === 0 && u.sprite : [1, 2, 3].includes(u.cost), `${id} cost`);
     assert.ok(kinds.has(u.ability.kind), `${id} ability kind`);
   }
 });
@@ -82,7 +89,7 @@ test('mirrored boards are fair-ish (no first-mover blowout)', () => {
 });
 
 test('rejects invalid and out-of-phase intents', () => {
-  const s = createGame({ seed: 7, catalog, names: ['A', 'B'] });
+  const s = startedGame();
   const bad = [
     [5, { type: 'reroll' }],
     [0, null],
@@ -101,7 +108,7 @@ test('rejects invalid and out-of-phase intents', () => {
 });
 
 test('cannot place on the enemy half or exceed the board cap', () => {
-  const s = createGame({ seed: 7, catalog, names: ['A', 'B'] });
+  const s = startedGame();
   const p = s.players[0];
   p.gold = 50;
   for (let i = 0; i < 5; i++) applyIntent(s, catalog, 0, { type: 'buy', slot: i });
@@ -112,11 +119,12 @@ test('cannot place on the enemy half or exceed the board cap', () => {
   const placed = p.bench.filter(Boolean).map((u, i) =>
     applyIntent(s, catalog, 0, { type: 'move', uid: u.uid, to: { area: 'board', x: i, y: 0 } }).ok);
   assert.equal(placed.filter(Boolean).length, Math.min(cap, placed.length));
-  assert.ok(p.board.length <= cap);
+  assert.equal(fieldCount(p), Math.min(cap, placed.length));
+  assert.equal(p.board.length, fieldCount(p) + 1, 'leader is on the board but outside the cap');
 });
 
 test('three copies merge into a 2-star, even with a full bench', () => {
-  const s = createGame({ seed: 7, catalog, names: ['A', 'B'] });
+  const s = startedGame();
   const p = s.players[0];
   p.gold = 100;
   p.bench = Array(BENCH_SIZE).fill(null).map((_, i) => ({ uid: 1000 + i, unitId: i < 2 ? 'squire' : 'scout', star: 1 }));
@@ -129,13 +137,57 @@ test('three copies merge into a 2-star, even with a full bench', () => {
 });
 
 test('locked-in players cannot act; combat starts when both are ready', () => {
-  const s = createGame({ seed: 7, catalog, names: ['A', 'B'] });
+  const s = startedGame();
   assert.ok(applyIntent(s, catalog, 0, { type: 'ready' }).ok);
   assert.equal(applyIntent(s, catalog, 0, { type: 'reroll' }).ok, false);
   assert.equal(s.phase, 'planning');
   assert.ok(applyIntent(s, catalog, 1, { type: 'ready' }).ok);
   assert.equal(s.phase, 'combat');
   assert.ok(s.combat.result.events.length > 0);
+});
+
+test('leader phase: valid picks only, then round 1 starts with leaders on the board', () => {
+  const s = createGame({ seed: 7, catalog, names: ['A', 'B'] });
+  assert.equal(s.phase, 'leader');
+  assert.deepEqual(leaderIds(catalog), ['decidueye', 'greninja', 'infernape']);
+  for (const bad of [{ type: 'buy', slot: 0 }, { type: 'ready' }, { type: 'chooseLeader', leader: 'squire' },
+    { type: 'chooseLeader', leader: 'toString' }, { type: 'chooseLeader' }]) {
+    assert.equal(applyIntent(s, catalog, 0, bad).ok, false, JSON.stringify(bad));
+  }
+  assert.ok(applyIntent(s, catalog, 0, { type: 'chooseLeader', leader: 'infernape' }).ok);
+  assert.equal(applyIntent(s, catalog, 0, { type: 'chooseLeader', leader: 'greninja' }).ok, false);
+  assert.equal(s.phase, 'leader');
+  assert.ok(applyIntent(s, catalog, 1, { type: 'chooseLeader', leader: 'decidueye' }).ok);
+  assert.equal(s.phase, 'planning');
+  assert.equal(s.round, 1);
+  assert.deepEqual(s.players.map((p) => p.board.map((u) => [u.unitId, u.leader, u.y])),
+    [[['infernape', true, 0]], [['decidueye', true, 3]]], 'melee leaders start in front, ranged at the back');
+});
+
+test('leaders never appear in the shop', () => {
+  const s = startedGame();
+  for (let i = 0; i < 200; i++) {
+    s.players[0].gold = 99;
+    applyIntent(s, catalog, 0, { type: 'reroll' });
+    for (const id of s.players[0].shop) assert.ok(!catalog[id].leader, id);
+  }
+});
+
+test('leader cannot be sold or benched, but can move around the board', () => {
+  const s = startedGame();
+  const p = s.players[0];
+  const leader = p.board[0];
+  p.bench[0] = { uid: 500, unitId: 'squire', star: 1 };
+  assert.equal(applyIntent(s, catalog, 0, { type: 'sell', uid: leader.uid }).ok, false);
+  assert.equal(applyIntent(s, catalog, 0, { type: 'move', uid: leader.uid, to: { area: 'bench', index: 1 } }).ok, false);
+  assert.equal(applyIntent(s, catalog, 0, { type: 'move', uid: leader.uid, to: { area: 'bench', index: 0 } }).ok, false);
+  assert.equal(applyIntent(s, catalog, 0, { type: 'move', uid: 500, to: { area: 'board', x: leader.x, y: leader.y } }).ok, false,
+    'a bench unit cannot swap the leader off the board');
+  assert.ok(applyIntent(s, catalog, 0, { type: 'move', uid: leader.uid, to: { area: 'board', x: 0, y: 0 } }).ok);
+  assert.deepEqual([leader.x, leader.y], [0, 0]);
+  assert.ok(applyIntent(s, catalog, 0, { type: 'move', uid: 500, to: { area: 'board', x: 1, y: 0 } }).ok);
+  assert.ok(applyIntent(s, catalog, 0, { type: 'move', uid: leader.uid, to: { area: 'board', x: 1, y: 0 } }).ok, 'board-to-board swap is fine');
+  assert.equal(p.board.find((u) => u.uid === 500).x, 0);
 });
 
 let failed = 0;

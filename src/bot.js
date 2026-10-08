@@ -1,12 +1,18 @@
 // Dummy opponent. It plays through the exact same intent API as a human, so
 // in Phase 3 a remote guest can take its seat without touching the rules.
 
-import { REROLL_COST, boardCap, ownedUnits, sellValue } from './game.js';
+import { REROLL_COST, boardCap, leaderIds, ownedUnits, sellValue } from './game.js';
 import { COLS, HALF } from './combat.js';
 
 const CENTER_OUT = [3, 4, 2, 5, 1, 6, 0, 7].filter((x) => x < COLS);
 
 export function botTurn(state, catalog, p, send) {
+  if (state.phase === 'leader') {
+    // Deterministic per seed and seat, so seeded matches replay identically.
+    const ids = leaderIds(catalog);
+    send({ type: 'chooseLeader', leader: ids[(state.seed + p) % ids.length] });
+    return;
+  }
   shop(state, catalog, p, send);
   if (state.round >= 3 && state.players[p].gold >= REROLL_COST + 4) {
     send({ type: 'reroll' });
@@ -20,7 +26,7 @@ function shop(state, catalog, p, send) {
   const me = state.players[p];
   const cap = boardCap(state.round);
   for (;;) {
-    const owned = ownedUnits(me);
+    const owned = ownedUnits(me).filter((u) => !u.leader);
     let best = -1;
     let bestScore = -Infinity;
     me.shop.forEach((id, slot) => {
@@ -39,11 +45,11 @@ function shop(state, catalog, p, send) {
 
 function arrange(state, catalog, p, send) {
   const me = state.players[p];
-  const all = ownedUnits(me).sort((a, b) => sellValue(catalog, b) - sellValue(catalog, a) || a.uid - b.uid);
+  const all = ownedUnits(me).filter((u) => !u.leader).sort((a, b) => sellValue(catalog, b) - sellValue(catalog, a) || a.uid - b.uid);
   const keep = new Set(all.slice(0, boardCap(state.round)));
 
   for (const u of [...me.board]) {
-    if (keep.has(u)) continue;
+    if (u.leader || keep.has(u)) continue;
     const free = me.bench.indexOf(null);
     send(free === -1 ? { type: 'sell', uid: u.uid } : { type: 'move', uid: u.uid, to: { area: 'bench', index: free } });
   }

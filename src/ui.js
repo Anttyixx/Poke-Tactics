@@ -3,9 +3,14 @@
 // replaying the event log from the combat result, never by re-simulating.
 
 import { COLS, ROWS, HALF, TICK_SECONDS, scale } from './combat.js';
-import { BASE_INCOME, BENCH_SIZE, MAX_INTEREST, REROLL_COST, boardCap, interest, sellValue } from './game.js';
+import { BASE_INCOME, BENCH_SIZE, MAX_INTEREST, REROLL_COST, boardCap, fieldCount, interest, leaderIds, sellValue } from './game.js';
 
 const TICK_MS = 50; // playback speed at 1x (sim tick is 100ms, so 1x plays at double speed)
+
+// Sprite sheets are 4x4 grids of 64px frames: one row per facing direction,
+// four walk-cycle frames per row. CSS picks the row from data-facing.
+const facingFor = (dx, dy, fallback) => (dx < 0 ? 'left' : dx > 0 ? 'right' : dy < 0 ? 'up' : dy > 0 ? 'down' : fallback);
+const WANDER = [[0, -1], [0, 1], [-1, 0], [1, 0]];
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const secs = (ticks) => +(ticks * TICK_SECONDS).toFixed(1);
@@ -72,6 +77,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   function place(el, vx, vy) {
     el.style.left = `${(vx * 100) / COLS}%`;
     el.style.top = `${(vy * 100) / ROWS}%`;
+    el.style.zIndex = vy + 1;
   }
 
   function cellAt(e) {
@@ -82,17 +88,38 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     return { vx, vy };
   }
 
-  function unitEl(unitId, star, side = 'ally') {
+  const spriteStyle = (def) => `style="background-image:url('${def.sprite}')"`;
+
+  function unitEl(unitId, star, side = 'ally', facing = 'down') {
     const def = catalog[unitId];
     const el = document.createElement('div');
-    el.className = `unit ${side}`;
+    el.className = `unit ${side}${def.sprite ? ' leader' : ''}`;
     el.dataset.type = def.type;
-    el.innerHTML = `
-      <div class="token"><span>${def.emoji}</span></div>
-      <div class="stars s${star}">${'★'.repeat(star)}</div>
-      <div class="bars"><div class="hp"><i></i><b></b></div><div class="mana"><i></i></div></div>`;
+    const bars = '<div class="bars"><div class="hp"><i></i><b></b></div><div class="mana"><i></i></div></div>';
+    if (def.sprite) {
+      el.dataset.facing = facing;
+      el.innerHTML = `<div class="shadow"></div><div class="sprite" ${spriteStyle(def)}></div>${bars}`;
+    } else {
+      el.innerHTML = `
+        <div class="token"><span>${def.emoji}</span></div>
+        <div class="stars s${star}">${'★'.repeat(star)}</div>${bars}`;
+    }
     return el;
   }
+
+  // Planning-phase idle: leaders stroll out of their square and back, turning to
+  // face where they walk. Purely cosmetic; the real position never changes.
+  setInterval(() => {
+    if (state?.phase !== 'planning' || document.hidden) return;
+    for (const el of layer.querySelectorAll('.unit.leader')) {
+      if (el.classList.contains('selected') || Math.random() < 0.3) continue;
+      const [ox, oy] = (el.dataset.off ?? '0,0').split(',').map(Number);
+      const [nx, ny] = ox || oy ? [0, 0] : WANDER[Math.floor(Math.random() * WANDER.length)];
+      el.dataset.off = `${nx},${ny}`;
+      el.dataset.facing = facingFor(nx - ox, ny - oy, el.dataset.facing);
+      el.querySelector('.sprite').style.translate = `${nx * 22}% ${ny * 22}%`;
+    }
+  }, 1000);
 
   function toast(msg) {
     toastEl.textContent = msg;
@@ -193,12 +220,15 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   overlay.addEventListener('click', (e) => {
     if (e.target.id === 'continue') { e.target.disabled = true; onIntent({ type: 'continue' }); }
     if (e.target.id === 'play-again') onNewGame();
+    const pick = e.target.closest('[data-leader]');
+    if (pick && !pick.disabled) onIntent({ type: 'chooseLeader', leader: pick.dataset.leader });
   });
   controls.addEventListener('click', (e) => {
     if (e.target.id === 'skip') return playback?.skip();
     const s = +e.target.dataset.speed;
     if (!s) return;
     speed = s;
+    arena.style.setProperty('--speed', s);
     controls.querySelectorAll('[data-speed]').forEach((b) => b.classList.toggle('active', +b.dataset.speed === s));
   });
   document.addEventListener('keydown', (e) => {
@@ -234,6 +264,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     }
     overlay.hidden = true;
     renderPlanning();
+    if (state.phase === 'leader') showLeaderPick();
     if (state.phase === 'gameover') showGameOver();
   }
 
@@ -252,7 +283,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     hudEl.innerHTML = `
       <div class="stat"><span class="label">Round</span><b>${state.round}</b></div>
       <div class="stat"><span class="label">Gold</span><b class="gold">${p.gold}</b><small>+${income}/round</small></div>
-      <div class="stat"><span class="label">Board</span><b>${p.board.length}/${boardCap(state.round)}</b></div>
+      <div class="stat"><span class="label">Board</span><b>${fieldCount(p)}/${boardCap(Math.max(1, state.round))}</b></div>
       ${hpBox(p, 'ally')}
       ${hpBox(foe(), 'enemy')}
       <button id="new-game" class="ghost" title="Start a new match">New game</button>`;
@@ -325,9 +356,11 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     const star = inst?.star ?? 1;
     infoEl.innerHTML = `
       <div class="info-head" data-type="${def.type}">
-        <span class="emoji">${def.emoji}</span>
-        <div><h2>${esc(def.name)} <span class="stars s${star}">${'★'.repeat(star)}</span></h2>
-        <span class="sub">${def.type} · ${def.cost} gold</span></div>
+        ${def.sprite
+          ? `<span class="portrait" data-facing="down"><span class="sprite" ${spriteStyle(def)}></span></span>`
+          : `<span class="emoji">${def.emoji}</span>`}
+        <div><h2>${esc(def.name)} ${def.leader ? '' : `<span class="stars s${star}">${'★'.repeat(star)}</span>`}</h2>
+        <span class="sub">${def.leader ? `Leader · ${def.type}` : `${def.type} · ${def.cost} gold`}</span></div>
       </div>
       <dl class="stats">
         <dt>HP</dt><dd>${scale(def.hp, star)}</dd>
@@ -338,7 +371,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         <dt>Mana</dt><dd>${def.mana}</dd>
       </dl>
       <p class="ability"><b>${esc(def.ability.name)}:</b> ${describeAbility(def.ability, star)}</p>
-      ${inst && canPlan() ? `<button id="sell" class="danger">Sell for ${sellValue(catalog, inst)}g</button>` : ''}`;
+      ${def.leader ? '<p class="muted">Your leader is always on the field and doesn\'t count toward the board limit. It can\'t be sold or benched.</p>' : ''}
+      ${inst && !inst.leader && canPlan() ? `<button id="sell" class="danger">Sell for ${sellValue(catalog, inst)}g</button>` : ''}`;
   }
 
   // ---- combat playback -----------------------------------------------------
@@ -355,7 +389,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     const actors = new Map();
     layer.replaceChildren();
     for (const u of result.initial) {
-      const a = { ...u, shield: 0, stunUntil: 0, el: unitEl(u.unitId, u.star, u.side === viewer ? 'ally' : 'enemy') };
+      const ally = u.side === viewer;
+      const a = { ...u, shield: 0, stunUntil: 0, el: unitEl(u.unitId, u.star, ally ? 'ally' : 'enemy', ally ? 'up' : 'down') };
       const p = viewPos(u.x, u.y);
       place(a.el, p.x, p.y);
       layer.append(a.el);
@@ -420,6 +455,13 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     layer.append(el);
   }
 
+  // Sprites face along the dominant axis of movement or attack.
+  function face(a, dx, dy) {
+    if (!a.el.dataset.facing) return;
+    const horizontal = Math.abs(dx) >= Math.abs(dy);
+    a.el.dataset.facing = facingFor(horizontal ? dx : 0, horizontal ? 0 : dy, a.el.dataset.facing);
+  }
+
   function pulse(el, cls) {
     el.classList.remove(cls);
     void el.offsetWidth; // restart the CSS animation
@@ -431,9 +473,11 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     if (!a) return;
     switch (ev.type) {
       case 'move': {
+        const from = viewPos(a.x, a.y);
         a.x = ev.x;
         a.y = ev.y;
         const p = viewPos(a.x, a.y);
+        face(a, p.x - from.x, p.y - from.y);
         place(a.el, p.x, p.y);
         break;
       }
@@ -446,6 +490,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         const to = viewPos(t.x, t.y);
         a.el.style.setProperty('--dx', Math.sign(to.x - from.x));
         a.el.style.setProperty('--dy', Math.sign(to.y - from.y));
+        face(a, to.x - from.x, to.y - from.y);
         pulse(a.el, a.range > 1 ? 'shoot' : 'lunge');
         break;
       }
@@ -502,6 +547,26 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         ? '<button disabled>Waiting for opponent…</button>'
         : '<button id="continue" class="primary" autofocus>Continue</button>'}`);
     overlay.querySelector('#continue')?.focus();
+  }
+
+  function showLeaderPick() {
+    const waiting = me().ready;
+    showOverlay(`
+      <h1>Choose your leader</h1>
+      <p class="muted">Your leader starts on the field and fights every round for free.</p>
+      <div class="leader-pick">
+        ${leaderIds(catalog).map((id) => {
+          const def = catalog[id];
+          const chosen = me().leader === id;
+          return `<button class="leader-card${chosen ? ' chosen' : ''}" data-leader="${id}" data-type="${def.type}" ${waiting ? 'disabled' : ''}>
+            <span class="portrait" data-facing="down"><span class="sprite" ${spriteStyle(def)}></span></span>
+            <b>${esc(def.name)}</b>
+            <span class="muted">${def.range > 1 ? `Ranged (${def.range})` : 'Melee'} · ${def.hp} HP · ${def.atk} ATK</span>
+            <small><b>${esc(def.ability.name)}:</b> ${describeAbility(def.ability, 1)}</small>
+          </button>`;
+        }).join('')}
+      </div>
+      ${waiting ? '<p class="muted">Waiting for opponent…</p>' : ''}`);
   }
 
   function showGameOver() {
