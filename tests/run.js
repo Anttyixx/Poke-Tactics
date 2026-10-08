@@ -330,6 +330,25 @@ test('combat is fair: identical mirrored armies never favour a side', () => {
   assert.ok(Math.abs(wins[0] - wins[1]) <= 10, `mirror wins split ${wins}`);
 });
 
+test("a Super with its own reach (Decidueye's) hits enemies beyond basic range without moving", () => {
+  // Test-only catalog: Decidueye supers after 1 attack; two dummies that never move.
+  const cat = clone(catalog);
+  cat.decidueye.energy = 1;
+  cat.dummy = { ...clone(catalog.mawile), hp: [0.1, 1, 2, 3], hitsPerSec: 0.01, moveCd: 10000 };
+  cat.far = { ...cat.dummy, hp: [500, 501, 502, 503] };
+  const r = simulate(cat, [
+    [{ uid: 1, unitId: 'decidueye', star: 0, leader: true, x: 0, y: HALF - 1 }], // back row
+    [{ uid: 2, unitId: 'dummy', star: 0, x: COLS - 1, y: 0 }, { uid: 3, unitId: 'far', star: 0, x: COLS - 1, y: HALF - 1 }],
+  ]);
+  const cast = r.events.find((e) => e.type === 'cast' && e.id === 0);
+  assert.ok(cast, 'Decidueye should cast');
+  assert.equal(r.initial.find((u) => u.id === cast.target).unitId, 'far');
+  assert.ok(!r.events.some((e) => e.type === 'move' && e.id === 0 && e.t <= cast.t), 'cast without walking');
+  const d = r.initial.find((u) => u.id === 0);
+  const f = r.initial.find((u) => u.unitId === 'far');
+  assert.ok(Math.max(Math.abs(d.x - f.x), Math.abs(d.y - f.y)) > catalog.decidueye.range, 'target was out of basic range');
+});
+
 test('more copies make a troop stronger', () => {
   const fight = (a, b) => simulate(catalog, [[{ uid: 1, unitId: 'mawile', star: a, x: 2, y: 0 }], [{ uid: 2, unitId: 'mawile', star: b, x: 2, y: 0 }]]).winner;
   for (let s = 1; s <= MAX_STAR; s++) assert.equal(fight(s, s - 1), 0, `${s}★ beats ${s - 1}★`);

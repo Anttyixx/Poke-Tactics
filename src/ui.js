@@ -28,9 +28,10 @@ export function describeAbility(def, star) {
   const ratio = unitStats(def, star).ratio;
   const p = (v) => show(abilityPower(v, ratio));
   const stunText = ab.duration ? ` and stuns for ${secs(ab.duration)}s` : '';
+  const anywhere = (text) => (ab.range >= ROWS ? `${text} Reaches any enemy on the board.` : text);
   switch (ab.kind) {
-    case 'strike': return `Strikes its target for ${p(ab.damage)} damage.`;
-    case 'stun': return `Hits its target for ${p(ab.damage)} damage${stunText}.`;
+    case 'strike': return anywhere(`Strikes its target for ${p(ab.damage)} damage.`);
+    case 'stun': return anywhere(`Hits its target for ${p(ab.damage)} damage${stunText}.`);
     case 'blast': return `Blasts the target and adjacent enemies for ${p(ab.damage)} damage${stunText}.`;
     case 'heal': return ab.target === 'all' ? `Heals all allies for ${p(ab.amount)}.` : `Heals the most injured ally for ${p(ab.amount)}.`;
     case 'shield': return ab.target === 'allies' ? `Shields all allies for ${p(ab.amount)}.` : `Shields itself for ${p(ab.amount)}.`;

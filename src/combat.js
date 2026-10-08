@@ -223,9 +223,13 @@ export function simulate(catalog, boards, seed = 0) {
     if (!target) return;
     u.target = target.id;
 
-    if (dist(u, at(target)) <= u.range) {
+    // A Super can have its own reach (ability.range), e.g. Decidueye's hits from
+    // anywhere on the board; basic attacks always use the unit's range.
+    const superReady = u.mana >= u.maxMana;
+    const reach = superReady ? Math.max(u.range, u.ability.range ?? 0) : u.range;
+    if (dist(u, at(target)) <= reach) {
       if (u.atkTimer > 0) return;
-      if (u.mana >= u.maxMana) {
+      if (superReady) {
         cast(u, target);
       } else {
         u.mana = Math.min(u.maxMana, u.mana + MANA_PER_ATTACK);

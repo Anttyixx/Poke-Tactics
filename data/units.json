@@ -6,7 +6,7 @@
   },
   "beheeyem": {
     "name": "Beheeyem", "sprite": "assets/sprites/beheeyem.png", "fx": "#ff7ad9", "type": "mage", "cost": 3,
-    "hp": [14, 22, 30, 38], "atk": 1, "hitsPerSec": 0.6, "energy": 4, "range": 3, "moveCd": 5,
+    "hp": [14, 22, 30, 38], "atk": 1, "hitsPerSec": 0.6, "energy": 4, "range": 5, "moveCd": 5,
     "ability": {"name": "Psyshock", "kind": "strike", "damage": 5}
   },
   "toxtricity": {
@@ -16,7 +16,7 @@
   },
   "vespiquen": {
     "name": "Vespiquen", "sprite": "assets/sprites/vespiquen.png", "fx": "#ffc23d", "type": "ranger", "cost": 3,
-    "hp": [15, 25, 35, 45], "atk": 2, "hitsPerSec": 0.5, "energy": 4, "range": 2, "moveCd": 4,
+    "hp": [15, 25, 35, 45], "atk": 2, "hitsPerSec": 0.5, "energy": 4, "range": 5, "moveCd": 4,
     "ability": {"name": "Attack Order", "kind": "strike", "damage": 8}
   },
   "coalossal": {
@@ -27,8 +27,8 @@
 
   "decidueye": {
     "name": "Decidueye", "leader": true, "sprite": "assets/sprites/decidueye.png", "fx": "#8ee07a", "type": "ranger", "cost": 0,
-    "hp": 36, "atk": 2, "hitsPerSec": 1.2, "energy": 5, "range": 4, "moveCd": 5,
-    "ability": {"name": "Spirit Shackle", "kind": "stun", "damage": 7, "duration": 15}
+    "hp": 36, "atk": 2, "hitsPerSec": 1.2, "energy": 5, "range": 5, "moveCd": 5,
+    "ability": {"name": "Spirit Shackle", "kind": "stun", "damage": 7, "duration": 15, "range": 99}
   },
   "greninja": {
     "name": "Greninja", "leader": true, "sprite": "assets/sprites/greninja.png", "fx": "#5ab8ff", "type": "rogue", "cost": 0,
