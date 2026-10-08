@@ -16,6 +16,7 @@ python3 -m http.server 8000      # or: npm start
 # open http://localhost:8000
 ```
 
+Add `?unit=<id>` (e.g. `?unit=beheeyem`) to put that unit in the first slot of every shop from round 1, for testing new units.
 Add `?seed=anything` to the URL to make the first match reproducible, which helps with bug reports.
 In the browser console, `game.state` shows the live game state.
 

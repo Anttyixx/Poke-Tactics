@@ -23,11 +23,15 @@ const ui = createUI({
 });
 
 function newGame() {
+  const params = new URLSearchParams(location.search);
   // ?seed=anything makes the first match reproducible (handy for bug reports).
-  const param = new URLSearchParams(location.search).get('seed');
+  const param = params.get('seed');
   const seed = firstGame && param ? hashSeed(param) : crypto.getRandomValues(new Uint32Array(1))[0];
   firstGame = false;
-  state = createGame({ seed, catalog, names: ['You', 'Bot'] });
+  // ?unit=<id> puts that unit in the first slot of every shop (for testing new units).
+  const featured = params.get('unit')?.toLowerCase() || null;
+  state = createGame({ seed, catalog, names: ['You', 'Bot'], featured });
+  if (featured && !state.featured) setTimeout(() => ui.toast(`Unknown unit "${featured}" in ?unit=`), 0);
   runBot();
   ui.render(state);
 }

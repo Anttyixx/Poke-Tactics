@@ -48,10 +48,13 @@ const OK = Object.freeze({ ok: true });
 const fail = (error) => ({ ok: false, error });
 const isIndex = (v, n) => Number.isInteger(v) && v >= 0 && v < n;
 
-export function createGame({ seed, catalog, names }) {
+// `featured` (optional, for testing): a buyable unit id that is put in the first
+// slot of every shop roll for every player, from round 1. Invalid ids are ignored.
+export function createGame({ seed, catalog, names, featured = null }) {
   const state = {
     version: 1,
     seed: seed >>> 0,
+    featured: Object.hasOwn(catalog, featured ?? '') && !catalog[featured].leader ? featured : null,
     round: 0,
     phase: 'leader', // leader -> planning -> combat -> planning ... -> gameover
     nextUid: 1,
@@ -134,7 +137,7 @@ const HANDLERS = {
     if (blocked) return blocked;
     if (player.gold < REROLL_COST) return fail('Not enough gold');
     player.gold -= REROLL_COST;
-    rollShop(player, catalog, state.round);
+    rollShop(player, catalog, state.round, state.featured);
     return OK;
   },
 
@@ -250,7 +253,7 @@ function combine(player, group) {
   tryMerge(player, keeper);
 }
 
-function rollShop(player, catalog, round) {
+function rollShop(player, catalog, round, featured) {
   const odds = tierOdds(round);
   const total = odds.reduce((a, b) => a + b, 0);
   const ids = Object.keys(catalog).filter((id) => !catalog[id].leader).sort();
@@ -261,6 +264,7 @@ function rollShop(player, catalog, round) {
     const pool = ids.filter((id) => catalog[id].cost === tier + 1);
     return pool[randInt(player, pool.length)];
   });
+  if (featured) player.shop[0] = featured;
 }
 
 function startRound(state, catalog) {
@@ -270,7 +274,7 @@ function startRound(state, catalog) {
   for (const p of state.players) {
     p.gold += BASE_INCOME + interest(p.gold);
     p.ready = false;
-    rollShop(p, catalog, state.round);
+    rollShop(p, catalog, state.round, state.featured);
   }
 }
 

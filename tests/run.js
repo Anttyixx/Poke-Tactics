@@ -206,6 +206,23 @@ test('leader cannot be sold or benched, but can move around the board', () => {
   assert.equal(p.board.find((u) => u.uid === 500).x, 0);
 });
 
+test('featured unit is in slot 0 of every shop, including rerolls; bad ids are ignored', () => {
+  const s = createGame({ seed: 3, catalog, names: ['A', 'B'], featured: 'beheeyem' });
+  for (const p of [0, 1]) applyIntent(s, catalog, p, { type: 'chooseLeader', leader: 'greninja' });
+  assert.equal(s.round, 1);
+  for (const p of s.players) assert.equal(p.shop[0], 'beheeyem');
+  s.players[0].gold = 50;
+  for (let i = 0; i < 5; i++) {
+    assert.ok(applyIntent(s, catalog, 0, { type: 'reroll' }).ok);
+    assert.equal(s.players[0].shop[0], 'beheeyem');
+  }
+  for (const bad of ['greninja', 'nope', 'toString', '', null]) {
+    assert.equal(createGame({ seed: 3, catalog, names: ['A', 'B'], featured: bad }).featured, null, String(bad));
+  }
+  // Without the option, shops are unchanged from before.
+  assert.equal(createGame({ seed: 3, catalog, names: ['A', 'B'] }).featured, null);
+});
+
 let failed = 0;
 for (const { name, fn } of tests) {
   try {
