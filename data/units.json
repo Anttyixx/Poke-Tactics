@@ -1,43 +1,43 @@
 {
   "mawile": {
-    "name": "Mawile", "sprite": "assets/sprites/mawile.png", "fx": "#d4dae6", "type": "warrior", "cost": 1,
-    "hp": 500, "atk": 46, "armor": 18, "range": 1, "attackCd": 8, "moveCd": 5, "mana": 50,
-    "ability": {"name": "Crunch", "kind": "strike", "damage": 170}
+    "name": "Mawile", "sprite": "assets/sprites/mawile.png", "fx": "#d4dae6", "type": "warrior", "cost": 3,
+    "hp": [25, 37, 49, 61], "atk": 3, "hitsPerSec": 0.6, "energy": 5, "range": 1, "moveCd": 5,
+    "ability": {"name": "Crunch", "kind": "strike", "damage": 11}
   },
   "beheeyem": {
-    "name": "Beheeyem", "sprite": "assets/sprites/beheeyem.png", "fx": "#ff7ad9", "type": "mage", "cost": 2,
-    "hp": 560, "atk": 55, "armor": 10, "range": 3, "attackCd": 10, "moveCd": 5, "mana": 65,
-    "ability": {"name": "Psyshock", "kind": "strike", "damage": 260}
+    "name": "Beheeyem", "sprite": "assets/sprites/beheeyem.png", "fx": "#ff7ad9", "type": "mage", "cost": 3,
+    "hp": [14, 22, 30, 38], "atk": 1, "hitsPerSec": 0.6, "energy": 4, "range": 3, "moveCd": 5,
+    "ability": {"name": "Psyshock", "kind": "strike", "damage": 5}
   },
   "toxtricity": {
-    "name": "Toxtricity", "sprite": "assets/sprites/toxtricity.png", "fx": "#ffe14d", "type": "ranger", "cost": 2,
-    "hp": 520, "atk": 60, "armor": 10, "range": 5, "attackCd": 10, "moveCd": 5, "mana": 70,
-    "ability": {"name": "Thunderbolt", "kind": "stun", "damage": 200, "duration": 10}
+    "name": "Toxtricity", "sprite": "assets/sprites/toxtricity.png", "fx": "#ffe14d", "type": "ranger", "cost": 4,
+    "hp": [18, 28, 38, 48], "atk": 2, "hitsPerSec": 0.7, "energy": 5, "range": 5, "moveCd": 5,
+    "ability": {"name": "Thunderbolt", "kind": "stun", "damage": 7, "duration": 10}
   },
   "vespiquen": {
-    "name": "Vespiquen", "sprite": "assets/sprites/vespiquen.png", "fx": "#ffc23d", "type": "ranger", "cost": 2,
-    "hp": 600, "atk": 62, "armor": 15, "range": 2, "attackCd": 9, "moveCd": 4, "mana": 60,
-    "ability": {"name": "Attack Order", "kind": "strike", "damage": 240}
+    "name": "Vespiquen", "sprite": "assets/sprites/vespiquen.png", "fx": "#ffc23d", "type": "ranger", "cost": 3,
+    "hp": [15, 25, 35, 45], "atk": 2, "hitsPerSec": 0.5, "energy": 4, "range": 2, "moveCd": 4,
+    "ability": {"name": "Attack Order", "kind": "strike", "damage": 8}
   },
   "coalossal": {
-    "name": "Coalossal", "sprite": "assets/sprites/coalossal.png", "fx": "#ff7a2f", "type": "warrior", "cost": 3,
-    "hp": 1000, "atk": 130, "armor": 30, "range": 1, "attackCd": 16, "moveCd": 10, "mana": 80,
-    "ability": {"name": "Heat Crash", "kind": "strike", "damage": 450}
+    "name": "Coalossal", "sprite": "assets/sprites/coalossal.png", "fx": "#ff7a2f", "type": "warrior", "cost": 4,
+    "hp": [35, 55, 75, 95], "atk": 12, "hitsPerSec": 0.3, "energy": 8, "range": 1, "moveCd": 10,
+    "ability": {"name": "Heat Crash", "kind": "strike", "damage": 42}
   },
 
   "decidueye": {
     "name": "Decidueye", "leader": true, "sprite": "assets/sprites/decidueye.png", "fx": "#8ee07a", "type": "ranger", "cost": 0,
-    "hp": 900, "atk": 80, "armor": 20, "range": 4, "attackCd": 10, "moveCd": 5, "mana": 70,
-    "ability": {"name": "Spirit Shackle", "kind": "stun", "damage": 260, "duration": 15}
+    "hp": 36, "atk": 2, "hitsPerSec": 1.2, "energy": 5, "range": 4, "moveCd": 5,
+    "ability": {"name": "Spirit Shackle", "kind": "stun", "damage": 7, "duration": 15}
   },
   "greninja": {
     "name": "Greninja", "leader": true, "sprite": "assets/sprites/greninja.png", "fx": "#5ab8ff", "type": "rogue", "cost": 0,
-    "hp": 960, "atk": 86, "armor": 15, "range": 1, "attackCd": 7, "moveCd": 3, "mana": 60,
-    "ability": {"name": "Water Shuriken", "kind": "strike", "damage": 330}
+    "hp": 42, "atk": 3, "hitsPerSec": 1.7, "energy": 5, "range": 1, "moveCd": 3,
+    "ability": {"name": "Water Shuriken", "kind": "strike", "damage": 12}
   },
   "infernape": {
     "name": "Infernape", "leader": true, "sprite": "assets/sprites/infernape.png", "fx": "#ff8a2a", "type": "warrior", "cost": 0,
-    "hp": 1150, "atk": 84, "armor": 25, "range": 1, "attackCd": 8, "moveCd": 4, "mana": 90,
-    "ability": {"name": "Flare Blitz", "kind": "blast", "damage": 220, "radius": 1}
+    "hp": 60, "atk": 2, "hitsPerSec": 1.2, "energy": 9, "range": 1, "moveCd": 4,
+    "ability": {"name": "Flare Blitz", "kind": "blast", "damage": 5, "radius": 1}
   }
 }

@@ -2,7 +2,7 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, ROWS, HALF, TICK_SECONDS, scale } from './combat.js';
+import { COLS, ROWS, HALF, STAT_SCALE, TICK_SECONDS, abilityPower, unitStats } from './combat.js';
 import {
   BASE_INCOME, COPIES_PER_TROOP, MAX_INTEREST, REROLL_COST,
   boardCap, copiesOf, fieldCount, interest, leaderIds, poolSize, sellValue, teamSize, troopIds,
@@ -18,9 +18,15 @@ const facingFor = (dx, dy, fallback) => (dx < 0 ? 'left' : dx > 0 ? 'right' : dy
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const secs = (ticks) => +(ticks * TICK_SECONDS).toFixed(1);
+const hitsPerSec = (stats) => 1 / (stats.attackCd * TICK_SECONDS);
 
-export function describeAbility(ab, star) {
-  const p = (v) => scale(v, star);
+// Internal combat numbers -> the design sheet's units (HP 25, damage 3, ...).
+const show = (v) => +(v / STAT_SCALE).toFixed(1);
+
+export function describeAbility(def, star) {
+  const ab = def.ability;
+  const ratio = unitStats(def, star).ratio;
+  const p = (v) => show(abilityPower(v, ratio));
   const stunText = ab.duration ? ` and stuns for ${secs(ab.duration)}s` : '';
   switch (ab.kind) {
     case 'strike': return `Strikes its target for ${p(ab.damage)} damage.`;
@@ -386,6 +392,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     }
     const def = catalog[unitId];
     const star = inst?.star ?? 0;
+    const stats = unitStats(def, star);
     const copies = inst ? copiesOf(inst) : 1;
     const hint = shopId && !inst
       ? `<p class="hint">Click an empty square to place it, or a ${esc(def.name)} on the board to combine.</p>` : '';
@@ -397,14 +404,14 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
       </div>
       ${hint}
       <dl class="stats">
-        <dt>HP</dt><dd>${scale(def.hp, star)}</dd>
-        <dt>Attack</dt><dd>${scale(def.atk, star)}</dd>
-        <dt>Armor</dt><dd>${def.armor}</dd>
+        <dt>HP</dt><dd>${show(stats.hp)}</dd>
+        <dt>Damage per hit</dt><dd>${show(stats.atk)}</dd>
+        <dt>Hits/s</dt><dd>${hitsPerSec(stats).toFixed(2)}</dd>
+        <dt>DPS</dt><dd>${(show(stats.atk) * hitsPerSec(stats)).toFixed(1)}</dd>
         <dt>Range</dt><dd>${def.range}</dd>
-        <dt>Attacks/s</dt><dd>${(1 / (def.attackCd * TICK_SECONDS)).toFixed(2)}</dd>
-        <dt>Mana</dt><dd>${def.mana}</dd>
+        <dt>Super energy</dt><dd>${stats.energy}</dd>
       </dl>
-      <p class="ability"><b>${esc(def.ability.name)}:</b> ${describeAbility(def.ability, star)}</p>
+      <p class="ability"><b>${esc(def.ability.name)}:</b> ${describeAbility(def, star)}</p>
       ${def.leader ? '<p class="muted">Your leader is always on the field and doesn\'t count toward the board limit. It can\'t be sold.</p>' : ''}
       ${inst && !inst.leader && canPlan()
         ? `<button id="sell" class="danger">Sell for ${sellValue(catalog, inst)}g (${copies} ${copies === 1 ? 'copy' : 'copies'} back to pool)</button>` : ''}`;
@@ -620,7 +627,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
             bars(a);
           }
           if (!animate) return;
-          floatText(a, `-${ev.amount}`, 'dmg');
+          floatText(a, `-${show(ev.amount)}`, 'dmg');
           pulse(a.el, 'hit');
           if (src && rangeOf(src) <= 1 && ctx.action.get(src.id) === 'attack') fx(at().x, at().y, 'slash', fxColor(src.unitId));
         });
@@ -628,12 +635,12 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
       }
       case 'heal':
         if (newest()) { a.hp = ev.hp; bars(a); }
-        if (animate && ev.amount) { floatText(a, `+${ev.amount}`, 'heal'); fx(at().x, at().y, 'heal', '#5be38a', 1.3); }
+        if (animate && ev.amount) { floatText(a, `+${show(ev.amount)}`, 'heal'); fx(at().x, at().y, 'heal', '#5be38a', 1.3); }
         break;
       case 'shield':
         a.shield = ev.shield;
         bars(a);
-        if (animate) { floatText(a, `+${ev.amount}`, 'shield'); fx(at().x, at().y, 'shield', '#ffffff', 1.3); }
+        if (animate) { floatText(a, `+${show(ev.amount)}`, 'shield'); fx(at().x, at().y, 'shield', '#ffffff', 1.3); }
         break;
       case 'stun':
         a.stunUntil = ev.t + ev.duration;
@@ -671,11 +678,12 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
 
   function teamCard(id, kind, picked) {
     const def = catalog[id];
+    const stats = unitStats(def, 0);
     return `<button class="leader-card${picked ? ' chosen' : ''}" data-pick-${kind}="${id}" data-type="${def.type}" ${me().ready ? 'disabled' : ''}>
       ${portrait(def)}
       <b>${esc(def.name)}</b>
-      <span class="muted">${def.leader ? 'Leader' : `${def.cost} gold`} · ${def.range > 1 ? `Ranged (${def.range})` : 'Melee'} · ${def.hp} HP · ${def.atk} ATK</span>
-      <small><b>${esc(def.ability.name)}:</b> ${describeAbility(def.ability, 0)}</small>
+      <span class="muted">${def.leader ? 'Leader' : `${def.cost} gold`} · ${def.range > 1 ? `Ranged (${def.range})` : 'Melee'} · ${show(stats.hp)} HP · ${show(stats.atk)} dmg × ${hitsPerSec(stats).toFixed(1)}/s</span>
+      <small><b>${esc(def.ability.name)}:</b> ${describeAbility(def, 0)} (every ${stats.energy} attacks)</small>
     </button>`;
   }
 

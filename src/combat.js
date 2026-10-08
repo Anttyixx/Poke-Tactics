@@ -9,13 +9,36 @@ export const ROWS = 8;
 export const HALF = ROWS / 2; // each player owns HALF rows
 export const MAX_TICKS = 300; // 1 tick = 0.1s of game time -> 30s cap, then draw
 export const TICK_SECONDS = 0.1;
-export const MANA_PER_ATTACK = 10;
-export const MANA_PER_HIT = 5;
+export const MANA_PER_ATTACK = 1; // 1 energy per attack; a unit supers once it has `energy`
+export const MANA_PER_HIT = 0; // taking hits gives no energy
 const FIRST_ATTACK_DELAY = 3;
-// Stat multiplier (%) by star level; stars = copies - 1, so 1 copy (0★) is the base unit.
+// units.json uses the design sheet's numbers (HP 25, damage 3, ...). Combat runs
+// in tenths of those so star scaling keeps precision with integer math; the UI
+// divides by STAT_SCALE again for display.
+export const STAT_SCALE = 10;
+// Star multipliers for units that only give base HP; stars = copies - 1.
 const STAR_PCT = [100, 150, 220, 320];
 
-export const scale = (value, star) => Math.floor((value * STAR_PCT[star]) / 100);
+// Multiplier for a star level: from the unit's per-star HP list when it has one
+// (damage and ability power scale with HP), otherwise the default table.
+export function starRatio(def, star) {
+  return Array.isArray(def.hp) ? def.hp[star] / def.hp[0] : STAR_PCT[star] / 100;
+}
+
+// A unit's combat stats at a star level, in internal units (integers).
+export function unitStats(def, star) {
+  const ratio = starRatio(def, star);
+  const hp = Array.isArray(def.hp) ? def.hp[star] : def.hp * ratio;
+  return {
+    hp: Math.round(hp * STAT_SCALE),
+    atk: Math.round(def.atk * ratio * STAT_SCALE),
+    attackCd: Math.max(1, Math.round(1 / (def.hitsPerSec * TICK_SECONDS))),
+    energy: def.energy,
+    ratio,
+  };
+}
+// Ability damage/heal/shield amounts are in sheet units too.
+export const abilityPower = (value, ratio) => Math.round(value * ratio * STAT_SCALE);
 
 // Board positions are stored in "own" coordinates: x 0..COLS-1, y 0..HALF-1
 // with y = 0 being the front line. Side 1 is point-mirrored so both players
@@ -42,15 +65,15 @@ const manhattan = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 function spawn(catalog, inst, side, id) {
   const def = catalog[inst.unitId];
   const pos = toCombatPos(side, inst.x, inst.y);
-  const hp = scale(def.hp, inst.star);
+  const stats = unitStats(def, inst.star);
   return {
     id, side, uid: inst.uid, unitId: inst.unitId, star: inst.star,
     x: pos.x, y: pos.y,
-    hp, maxHp: hp,
-    atk: scale(def.atk, inst.star),
-    armor: def.armor, range: def.range,
-    attackCd: def.attackCd, moveCd: def.moveCd,
-    mana: 0, maxMana: def.mana,
+    hp: stats.hp, maxHp: stats.hp,
+    atk: stats.atk, ratio: stats.ratio,
+    armor: def.armor ?? 0, range: def.range,
+    attackCd: stats.attackCd, moveCd: def.moveCd,
+    mana: 0, maxMana: stats.energy,
     ability: def.ability,
     shield: 0, stun: 0,
     pendingMana: 0, pendingStun: 0, // applied at the end of the tick
@@ -135,7 +158,7 @@ export function simulate(catalog, boards, seed = 0) {
 
   function cast(u, target) {
     const ab = u.ability;
-    const power = (v) => scale(v, u.star);
+    const power = (v) => abilityPower(v, u.ratio);
     const allies = units.filter((a) => standing(a) && a.side === u.side);
     u.mana = 0;
     emit('cast', { id: u.id, target: target.id });

@@ -53,10 +53,12 @@ function assertCopiesConserved(player) {
 test('unit catalog is well formed, and every unit has a sprite that exists', () => {
   const kinds = new Set(['strike', 'stun', 'blast', 'heal', 'shield']);
   for (const [id, u] of Object.entries(catalog)) {
-    for (const k of ['hp', 'atk', 'armor', 'range', 'attackCd', 'moveCd', 'mana', 'cost']) {
-      assert.ok(Number.isInteger(u[k]) && u[k] >= 0, `${id}.${k} must be a non-negative integer`);
-    }
-    assert.ok(u.leader ? u.cost === 0 : [1, 2, 3].includes(u.cost), `${id} cost`);
+    const hp = Array.isArray(u.hp) ? u.hp : [u.hp];
+    assert.ok(hp.every((h) => h > 0), `${id}.hp must be positive`);
+    if (!u.leader) assert.ok(hp.length === COPIES_PER_TROOP && hp.every((h, i) => !i || h > hp[i - 1]), `${id}: troops list HP for 0-${MAX_STAR}★, increasing`);
+    for (const k of ['atk', 'hitsPerSec']) assert.ok(u[k] > 0, `${id}.${k} must be positive`);
+    for (const k of ['energy', 'range', 'moveCd']) assert.ok(Number.isInteger(u[k]) && u[k] > 0, `${id}.${k} must be a positive integer`);
+    assert.ok(u.leader ? u.cost === 0 : Number.isInteger(u.cost) && u.cost > 0, `${id} cost`);
     assert.ok(kinds.has(u.ability.kind), `${id} ability kind`);
     assert.ok(u.sprite && existsSync(new URL(`../${u.sprite}`, import.meta.url)), `${id}: missing sprite ${u.sprite}`);
   }
