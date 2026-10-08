@@ -6,15 +6,15 @@
 //   - the host runs applyIntent, which validates everything (guest input is untrusted)
 //   - the host then broadcasts the resulting state to both clients
 //
-// Flow: each player builds a team (1 leader + TEAM_SIZE troops). Every troop puts
+// Flow: each player builds a team of TEAM_SIZE troops. Every troop puts
 // COPIES_PER_TROOP copies into that player's own pool. The shop shows SHOP_SIZE
 // copies drawn from the pool; buying one places it straight onto the board and
 // removes that copy from the pool. There is no bench and no limit on how many
-// troops are on the board, but each troop can only be there once: buying a troop
+// troops are on the board (which starts empty), but each troop can only be there once: buying a troop
 // you already field levels that one up instead (1 copy = 0★, 2 = 1★, 3 = 2★, 4 = 3★).
 //
 // Intents:
-//   { type: 'chooseTeam', leader, troops }    before round 1; troops = TEAM_SIZE distinct troop ids
+//   { type: 'chooseTeam', troops }            before round 1; troops = TEAM_SIZE distinct troop ids
 //   { type: 'buy', slot, x, y }               buy shop slot onto empty own square (x, y); if that troop is
 //                                             already on the board it levels up instead (x, y ignored)
 //   { type: 'sell', uid }                     sell a troop; its copies go back to the pool
@@ -26,7 +26,7 @@
 import { randInt } from './rng.js';
 import { simulate, COLS, HALF } from './combat.js';
 
-export const TEAM_SIZE = 5;
+export const TEAM_SIZE = 6;
 export const COPIES_PER_TROOP = 4;
 export const SHOP_SIZE = 3;
 export const START_HP = 100;
@@ -42,12 +42,11 @@ export const MAX_STAR = COPIES_PER_TROOP - 1; // stars = copies - 1
 
 export const copiesOf = (inst) => inst.star + 1;
 export const sellValue = (catalog, inst) => catalog[inst.unitId].cost * copiesOf(inst);
-export const leaderIds = (catalog) => Object.keys(catalog).filter((id) => catalog[id].leader).sort();
-export const troopIds = (catalog) => Object.keys(catalog).filter((id) => !catalog[id].leader).sort();
+export const troopIds = (catalog) => Object.keys(catalog).sort();
 // How many troops a team needs (fewer only if the catalog doesn't have enough).
 export const teamSize = (catalog) => Math.min(TEAM_SIZE, troopIds(catalog).length);
 // The troop of this species already on the board, if any (never more than one).
-export const fielded = (player, unitId) => player.board.find((u) => !u.leader && u.unitId === unitId);
+export const fielded = (player, unitId) => player.board.find((u) => u.unitId === unitId);
 export const poolSize = (player) => Object.values(player.pool).reduce((a, b) => a + b, 0);
 
 const OK = Object.freeze({ ok: true });
@@ -58,7 +57,7 @@ const isIndex = (v, n) => Number.isInteger(v) && v >= 0 && v < n;
 // slot whenever the player's pool still has a copy of it. Invalid ids are ignored.
 export function createGame({ seed, catalog, names, featured = null }) {
   return {
-    version: 2,
+    version: 3,
     seed: seed >>> 0,
     featured: troopIds(catalog).includes(featured) ? featured : null,
     round: 0,
@@ -69,7 +68,6 @@ export function createGame({ seed, catalog, names, featured = null }) {
       hp: START_HP,
       coins: START_COINS,
       rerolls: MAX_REROLLS,
-      leader: null, // unitId of the chosen leader
       team: [], // chosen troop ids
       pool: {}, // troop id -> copies left to buy
       shop: [],
@@ -92,20 +90,17 @@ export function applyIntent(state, catalog, playerIndex, intent) {
 }
 
 const HANDLERS = {
-  chooseTeam(state, catalog, player, { leader, troops }) {
+  chooseTeam(state, catalog, player, { troops }) {
     if (state.phase !== 'team') return fail('Teams have already been chosen');
     if (player.ready) return fail('You already chose your team');
-    if (!leaderIds(catalog).includes(leader)) return fail('Pick a leader');
     const available = troopIds(catalog);
     const need = teamSize(catalog);
     if (!Array.isArray(troops) || troops.length !== need || new Set(troops).size !== need
       || !troops.every((t) => available.includes(t))) return fail(`Pick ${need} different troops`);
 
-    player.leader = leader;
     player.team = [...troops].sort();
     player.pool = Object.fromEntries(player.team.map((t) => [t, COPIES_PER_TROOP]));
-    // Melee leaders start on the front line, ranged ones at the back, both centred.
-    player.board = [{ uid: state.nextUid++, unitId: leader, star: 0, leader: true, x: Math.floor((COLS - 1) / 2), y: catalog[leader].range > 1 ? HALF - 1 : 0 }];
+    player.board = [];
     player.ready = true;
     if (state.players.every((p) => p.ready)) startRound(state, catalog);
     return OK;
@@ -140,7 +135,6 @@ const HANDLERS = {
     if (blocked) return blocked;
     const inst = player.board.find((u) => u.uid === uid);
     if (!inst) return fail('You do not own that unit');
-    if (inst.leader) return fail('Your leader cannot be sold');
     player.board.splice(player.board.indexOf(inst), 1);
     player.coins += sellValue(catalog, inst);
     player.pool[inst.unitId] += copiesOf(inst);

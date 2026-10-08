@@ -2,10 +2,10 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, TICK_SECONDS, abilityPower, unitStats } from './combat.js';
+import { COLS, CRIT_PCT, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, TICK_SECONDS, abilityPower, unitStats } from './combat.js';
 import {
   COPIES_PER_TROOP, LOSS_COINS, MAX_REROLLS, WIN_COINS,
-  copiesOf, fielded, leaderIds, poolSize, sellValue, teamSize, troopIds,
+  copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
 } from './game.js';
 
 const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
@@ -18,9 +18,13 @@ const facingFor = (dx, dy, fallback) => (dx < 0 ? 'left' : dx > 0 ? 'right' : dy
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const secs = (ticks) => +(ticks * TICK_SECONDS).toFixed(1);
-const hitsPerSec = (stats) => 1 / (stats.attackCd * TICK_SECONDS);
+// Seconds between attacks, as the game actually plays it (cooldowns are whole 0.1s ticks).
+const attackTime = (stats) => secs(stats.attackCd);
+const dps = (stats) => (show(stats.atk) / attackTime(stats)).toFixed(1);
+const SPEED_NAME = { fast: 'Fast', medium: 'Medium', slow: 'Slow', 'very slow': 'Very slow' };
+const moveText = (def) => `${SPEED_NAME[def.moveSpeed]} (${MOVE_SPEEDS[def.moveSpeed]}s per tile)`;
 
-// Internal combat numbers -> the design sheet's units (HP 25, damage 3, ...).
+// Internal combat numbers -> the design sheet's units.
 const show = (v) => +(v / STAT_SCALE).toFixed(1);
 
 export function describeAbility(def, star) {
@@ -59,7 +63,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   let selected = null; // uid of selected own unit
   let buying = null; // shop slot picked to buy; the next board click places it
   let hovered = null; // unitId hovered in the shop
-  let draft = { leader: null, troops: [] }; // team builder picks
+  let draft = { troops: [] }; // team builder picks
   let playedRound = 0; // last combat round we started animating
   let playback = null;
   let speed = 1;
@@ -106,12 +110,12 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   function unitEl(unitId, star, side = 'ally', facing = 'down') {
     const def = catalog[unitId];
     const el = document.createElement('div');
-    el.className = `unit ${side}${def.sprite ? ' sprite-unit' : ''}${def.leader ? ' leader' : ''}`;
+    el.className = `unit ${side}${def.sprite ? ' sprite-unit' : ''}`;
     el.dataset.type = def.type;
     // Animation pacing follows movement speed (--step 1 = 0.5s per square).
     el.style.setProperty('--step', unitStats(def, 0).moveCd / 5);
     const bars = '<div class="bars"><div class="hp"><i></i><b></b></div><div class="mana"><i></i></div></div>';
-    const stars = def.leader ? '' : `<div class="stars s${star}">${'★'.repeat(star)}</div>`;
+    const stars = `<div class="stars s${star}">${'★'.repeat(star)}</div>`;
     if (def.sprite) {
       el.dataset.facing = facing;
       el.style.setProperty('--fx', fxColor(unitId));
@@ -234,20 +238,18 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     if (e.target.id === 'continue') { e.target.disabled = true; onIntent({ type: 'continue' }); }
     if (e.target.id === 'play-again') onNewGame();
     if (state?.phase !== 'team' || me().ready) return;
-    const leader = e.target.closest('[data-pick-leader]');
     const troop = e.target.closest('[data-pick-troop]');
-    if (leader) draft.leader = leader.dataset.pickLeader;
     if (troop) {
       const id = troop.dataset.pickTroop;
       if (draft.troops.includes(id)) draft.troops = draft.troops.filter((t) => t !== id);
       else if (draft.troops.length < teamSize(catalog)) draft.troops = [...draft.troops, id];
-      else toast(`Your team is full. Remove a troop first.`);
+      else toast(`Your team is full. Remove a Pokémon first.`);
     }
     if (e.target.id === 'start-team') {
-      const res = onIntent({ type: 'chooseTeam', leader: draft.leader, troops: draft.troops });
+      const res = onIntent({ type: 'chooseTeam', troops: draft.troops });
       if (res?.ok) return;
     }
-    if (leader || troop) showTeamBuilder();
+    if (troop) showTeamBuilder();
   });
   controls.addEventListener('click', (e) => {
     if (e.target.id === 'skip') return playback?.skip();
@@ -281,7 +283,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
       selected = null;
       buying = null;
       // With exactly a team's worth of troops available, start with all of them picked.
-      draft = { leader: null, troops: troopIds(catalog).length === teamSize(catalog) ? troopIds(catalog) : [] };
+      draft = { troops: troopIds(catalog).length === teamSize(catalog) ? troopIds(catalog) : [] };
     }
     state = next;
     if (selected !== null && !owned(selected)) selected = null;
@@ -335,7 +337,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
       el.draggable = draggable;
       el.classList.toggle('selected', u.uid === selected);
       // Highlight the troop the picked shop copy would level up.
-      el.classList.toggle('combine-target', !u.leader && u.unitId === buyingId);
+      el.classList.toggle('combine-target', u.unitId === buyingId);
       place(el, u.x, u.y + HALF);
       return el;
     }));
@@ -413,21 +415,22 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     infoEl.innerHTML = `
       <div class="info-head" data-type="${def.type}">
         ${portrait(def)}
-        <div><h2>${esc(def.name)} ${def.leader ? '' : `<span class="stars s${star}">${'★'.repeat(star)}</span>`}</h2>
-        <span class="sub">${def.leader ? `Leader · ${def.type}` : `${def.type} · ${def.cost} coins · ${copies}/${COPIES_PER_TROOP} copies`}</span></div>
+        <div><h2>${esc(def.name)} <span class="stars s${star}">${'★'.repeat(star)}</span></h2>
+        <span class="sub">${def.type} · ${def.cost} coins · ${copies}/${COPIES_PER_TROOP} copies</span></div>
       </div>
       ${hint}
       <dl class="stats">
         <dt>HP</dt><dd>${show(stats.hp)}</dd>
         <dt>Damage per hit</dt><dd>${show(stats.atk)}</dd>
-        <dt>Hits/s</dt><dd>${hitsPerSec(stats).toFixed(2)}</dd>
-        <dt>DPS</dt><dd>${(show(stats.atk) * hitsPerSec(stats)).toFixed(1)}</dd>
+        <dt>Attacks every</dt><dd>${attackTime(stats)}s</dd>
+        <dt>Crit chance</dt><dd>${stats.crit}%</dd>
+        <dt>DPS</dt><dd>${dps(stats)}</dd>
         <dt>Range</dt><dd>${def.range}</dd>
+        <dt>Movement</dt><dd>${SPEED_NAME[def.moveSpeed]}</dd>
         <dt>Super energy</dt><dd>${stats.energy}</dd>
       </dl>
       <p class="ability"><b>${esc(def.ability.name)}:</b> ${describeAbility(def, star)}</p>
-      ${def.leader ? '<p class="muted">Your leader is always on the field and doesn\'t count toward the board limit. It can\'t be sold.</p>' : ''}
-      ${inst && !inst.leader && canPlan()
+      ${inst && canPlan()
         ? `<button id="sell" class="danger">Sell for ${sellValue(catalog, inst)} coins (${copies} ${copies === 1 ? 'copy' : 'copies'} back to pool)</button>` : ''}`;
   }
 
@@ -625,7 +628,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         place(a.el, p.x, p.y);
         if (animate) {
           // Hop to the next square; the walk cycle plays only during the hop.
-          const hopMs = Math.min(catalog[a.unitId].secPerTile * 1000, 360) / speed;
+          const hopMs = Math.min(MOVE_SPEEDS[catalog[a.unitId].moveSpeed] * 1000, 360) / speed;
           play(a.el, 'hop', hopMs);
           play(a.el, 'moving', hopMs);
         }
@@ -693,7 +696,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
             bars(a);
           }
           if (!animate) return;
-          floatText(a, `-${show(ev.amount)}`, 'dmg');
+          floatText(a, ev.crit ? `-${show(ev.amount)}!` : `-${show(ev.amount)}`, ev.crit ? 'dmg crit' : 'dmg');
           play(a.el, 'hit', 120);
           if (src && rangeOf(src) <= 1 && ctx.action.get(src.id) === 'attack') fx(at().x, at().y, 'slash', fxColor(src.unitId));
         });
@@ -745,13 +748,13 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     overlay.querySelector('#continue')?.focus();
   }
 
-  function teamCard(id, kind, picked) {
+  function teamCard(id, picked) {
     const def = catalog[id];
     const stats = unitStats(def, 0);
-    return `<button class="leader-card${picked ? ' chosen' : ''}" data-pick-${kind}="${id}" data-type="${def.type}" ${me().ready ? 'disabled' : ''}>
+    return `<button class="leader-card${picked ? ' chosen' : ''}" data-pick-troop="${id}" data-type="${def.type}" ${me().ready ? 'disabled' : ''}>
       ${portrait(def)}
       <b>${esc(def.name)}</b>
-      <span class="muted">${def.leader ? 'Leader' : `${def.cost} coins`} · ${def.range > 1 ? `Ranged (${def.range})` : 'Melee'} · ${show(stats.hp)} HP · ${show(stats.atk)} dmg × ${hitsPerSec(stats).toFixed(1)}/s</span>
+      <span class="muted">${def.cost} coins · ${def.range > 1 ? `Ranged (${def.range})` : 'Melee'} · ${show(stats.hp)} HP · ${show(stats.atk)} dmg every ${attackTime(stats)}s</span>
       <small><b>${esc(def.ability.name)}:</b> ${describeAbility(def, 0)} (every ${stats.energy} attacks)</small>
     </button>`;
   }
@@ -759,17 +762,15 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   function showTeamBuilder() {
     const need = teamSize(catalog);
     const waiting = me().ready;
-    const ready = draft.leader && draft.troops.length === need;
+    const ready = draft.troops.length === need;
     showOverlay(`
       <h1>Build your team</h1>
-      <p class="muted">Pick 1 leader and ${need} troops. Your leader starts on the field. Each troop adds ${COPIES_PER_TROOP} copies to your pool, and your shop draws from it. <button id="open-dex" class="linkish">Compare them in the Pokédex</button></p>
-      <h2 class="pick-title">Leader ${draft.leader ? '✓' : ''}</h2>
-      <div class="pick-grid">${leaderIds(catalog).map((id) => teamCard(id, 'leader', draft.leader === id)).join('')}</div>
-      <h2 class="pick-title">Troops ${draft.troops.length}/${need}</h2>
-      <div class="pick-grid">${troopIds(catalog).map((id) => teamCard(id, 'troop', draft.troops.includes(id))).join('')}</div>
+      <p class="muted">Pick ${need} Pokémon. Each one adds ${COPIES_PER_TROOP} copies to your pool, and your shop draws from it. Your board starts empty. <button id="open-dex" class="linkish">Compare them in the Pokédex</button></p>
+      <h2 class="pick-title">Team ${draft.troops.length}/${need}</h2>
+      <div class="pick-grid">${troopIds(catalog).map((id) => teamCard(id, draft.troops.includes(id))).join('')}</div>
       ${waiting
         ? '<p class="muted">Waiting for opponent…</p>'
-        : `<button id="start-team" class="primary" ${ready ? '' : 'disabled'}>${ready ? 'Start match' : !draft.leader ? 'Pick a leader' : `Pick ${need - draft.troops.length} more`}</button>`}`);
+        : `<button id="start-team" class="primary" ${ready ? '' : 'disabled'}>${ready ? 'Start match' : `Pick ${need - draft.troops.length} more`}</button>`}`);
   }
 
   function showGameOver() {
@@ -791,7 +792,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   });
 
   function openDex(id) {
-    dexPick = id ?? dexPick ?? leaderIds(catalog)[0];
+    dexPick = id ?? dexPick ?? troopIds(catalog)[0];
     renderDex();
     dexEl.hidden = false;
   }
@@ -804,14 +805,15 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     const list = (ids, title) => `<h3>${title}</h3><div class="dex-list">${ids.map((id) => {
       const def = catalog[id];
       return `<button class="dex-entry${id === dexPick ? ' active' : ''}" data-dex="${id}" data-type="${def.type}">
-        ${portrait(def)}<span>${esc(def.name)}</span><small>${def.leader ? '' : `${def.cost} 🪙`}</small></button>`;
+        ${portrait(def)}<span>${esc(def.name)}</span><small>${def.cost} 🪙</small></button>`;
     }).join('')}</div>`;
     const def = catalog[dexPick];
-    const stars = def.leader ? [0] : [0, 1, 2, 3];
-    const rows = stars.map((star) => {
+    const rows = [0, 1, 2, 3].map((star) => {
       const st = unitStats(def, star);
-      const hps = hitsPerSec(st);
-      return { star, hp: show(st.hp), dmg: show(st.atk), hps: hps.toFixed(2), dps: (show(st.atk) * hps).toFixed(1), sup: show(abilityPower(def.ability.damage ?? def.ability.amount ?? 0, st.ratio)) };
+      return {
+        star, hp: show(st.hp), dmg: show(st.atk), crit: show(Math.floor((st.atk * CRIT_PCT) / 100)), dps: dps(st),
+        sup: show(abilityPower(def.ability.damage ?? def.ability.amount ?? 0, st.ratio)),
+      };
     });
     const col = (label, key) => `<tr><th>${label}</th>${rows.map((r) => `<td>${r[key]}</td>`).join('')}</tr>`;
     const stats0 = unitStats(def, 0);
@@ -819,31 +821,33 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
       <button id="dex-close" class="ghost" aria-label="Close">✕</button>
       <h1>Pokédex</h1>
       <div class="dex-body">
-        <nav class="dex-nav">${list(leaderIds(catalog), 'Leaders')}${list(troopIds(catalog), 'Troops')}</nav>
+        <nav class="dex-nav">${list(troopIds(catalog), 'Pokémon')}</nav>
         <section class="dex-detail" data-type="${def.type}">
           <div class="dex-hero">
             <span class="portrait dex-portrait" data-facing="down"><span class="sprite" ${spriteStyle(def)}></span></span>
             <div>
               <h2>${esc(def.name)}</h2>
               <p class="dex-tags">
-                <span>${def.leader ? 'Leader' : `Troop · ${def.cost} coins`}</span>
+                <span>${def.cost} coins</span>
                 <span>${def.range > 1 ? `Ranged · ${def.range} tiles` : 'Melee · 1 tile'}</span>
-                <span>Moves 1 tile / ${def.secPerTile}s</span>
+                <span>Moves: ${moveText(def)}</span>
+                <span>Attacks every ${attackTime(stats0)}s</span>
+                <span>Crit ${stats0.crit}%</span>
                 <span>Super every ${stats0.energy} attacks</span>
               </p>
             </div>
           </div>
           <table class="dex-table">
-            <thead><tr><th></th>${rows.map((r) => `<th>${def.leader ? 'Base' : r.star ? '★'.repeat(r.star) : '0★'}</th>`).join('')}</tr></thead>
+            <thead><tr><th></th>${rows.map((r) => `<th>${r.star ? '★'.repeat(r.star) : '0★'}</th>`).join('')}</tr></thead>
             <tbody>
               ${col('HP', 'hp')}
               ${col('Damage per hit', 'dmg')}
-              ${col('Hits per second', 'hps')}
+              ${col('Crit damage', 'crit')}
               ${col('DPS', 'dps')}
               ${col(`${esc(def.ability.name)} damage`, 'sup')}
             </tbody>
           </table>
-          ${def.leader ? '' : `<p class="muted">Copies on the board: 1 = 0★, 2 = ★, 3 = ★★, 4 = ★★★.</p>`}
+          <p class="muted">Copies on the board: 1 = 0★, 2 = ★, 3 = ★★, 4 = ★★★. A crit deals 50% more damage.</p>
           <h3>Super: ${esc(def.ability.name)}</h3>
           <p>${describeAbility(def, 0)}</p>
         </section>

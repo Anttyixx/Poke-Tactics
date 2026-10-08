@@ -5,10 +5,12 @@
 import { existsSync, readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import {
-  createGame, applyIntent, fielded, leaderIds, troopIds, teamSize, poolSize,
+  createGame, applyIntent, fielded, troopIds, teamSize, poolSize, TEAM_SIZE,
   COPIES_PER_TROOP, MAX_STAR, SHOP_SIZE, START_COINS, WIN_COINS, LOSS_COINS, MAX_REROLLS,
 } from '../src/game.js';
-import { simulate, MAX_TICKS, COLS, HALF, SUDDEN_DEATH_TICK, SUDDEN_DEATH_HP_PER_SECOND } from '../src/combat.js';
+import {
+  simulate, MAX_TICKS, COLS, HALF, SUDDEN_DEATH_TICK, SUDDEN_DEATH_HP_PER_SECOND, MOVE_SPEEDS, CRIT_PCT, STAT_SCALE, TICK_SECONDS,
+} from '../src/combat.js';
 import { botTurn } from '../src/bot.js';
 
 const catalog = JSON.parse(readFileSync(new URL('../data/units.json', import.meta.url), 'utf8'));
@@ -16,12 +18,14 @@ const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const TROOPS = troopIds(catalog);
-const team = (leader = 'decidueye', troops = TROOPS.slice(0, teamSize(catalog))) => ({ type: 'chooseTeam', leader, troops });
+const team = (troops = TROOPS.slice(0, teamSize(catalog))) => ({ type: 'chooseTeam', troops });
+// Test-only movement tier for units that must never move.
+MOVE_SPEEDS.statue = 1000;
 
 // A game past team building, in round 1 planning.
-function startedGame(seed = 7, leaders = ['decidueye', 'decidueye'], opts = {}) {
+function startedGame(seed = 7, opts = {}) {
   const s = createGame({ seed, catalog, names: ['A', 'B'], ...opts });
-  leaders.forEach((leader, p) => assert.ok(applyIntent(s, catalog, p, team(leader)).ok));
+  for (const p of [0, 1]) assert.ok(applyIntent(s, catalog, p, team()).ok);
   return s;
 }
 
@@ -53,18 +57,21 @@ function assertCopiesConserved(player) {
 test('unit catalog is well formed, and every unit has a sprite that exists', () => {
   const kinds = new Set(['strike', 'stun', 'blast', 'heal', 'shield']);
   for (const [id, u] of Object.entries(catalog)) {
-    const hp = Array.isArray(u.hp) ? u.hp : [u.hp];
-    assert.ok(hp.every((h) => h > 0), `${id}.hp must be positive`);
-    if (!u.leader) assert.ok(hp.length === COPIES_PER_TROOP && hp.every((h, i) => !i || h > hp[i - 1]), `${id}: troops list HP for 0-${MAX_STAR}★, increasing`);
-    for (const k of ['atk', 'hitsPerSec']) assert.ok(u[k] > 0, `${id}.${k} must be positive`);
-    for (const k of ['energy', 'range']) assert.ok(Number.isInteger(u[k]) && u[k] > 0, `${id}.${k} must be a positive integer`);
-    assert.ok(u.secPerTile > 0, `${id}.secPerTile must be positive`);
-    assert.ok(u.leader ? u.cost === 0 : Number.isInteger(u.cost) && u.cost > 0, `${id} cost`);
+    for (const k of ['hp', 'damage']) {
+      const v = u[k];
+      assert.ok(Array.isArray(v) && v.length === COPIES_PER_TROOP, `${id}.${k} lists 0-${MAX_STAR}★`);
+      assert.ok(v.every((n, i) => n > 0 && (!i || n > v[i - 1])), `${id}.${k} must be positive and increase with stars`);
+    }
+    assert.ok(u.secPerHit > 0, `${id}.secPerHit must be positive`);
+    assert.ok(Object.hasOwn(MOVE_SPEEDS, u.moveSpeed) && u.moveSpeed !== 'statue', `${id}.moveSpeed "${u.moveSpeed}"`);
+    assert.ok(u.critChance >= 0 && u.critChance <= 100, `${id}.critChance is a percent`);
+    for (const k of ['energy', 'range', 'cost']) assert.ok(Number.isInteger(u[k]) && u[k] > 0, `${id}.${k} must be a positive integer`);
+    assert.ok(!('leader' in u), `${id}: there are no leaders any more`);
     assert.ok(kinds.has(u.ability.kind), `${id} ability kind`);
     assert.ok(u.sprite && existsSync(new URL(`../${u.sprite}`, import.meta.url)), `${id}: missing sprite ${u.sprite}`);
   }
-  assert.equal(new Set(TROOPS.map((id) => catalog[id].secPerTile)).size, 1, 'all troops move at the same speed');
-  assert.ok(TROOPS.length >= teamSize(catalog) && teamSize(catalog) > 0);
+  assert.equal(teamSize(catalog), TEAM_SIZE);
+  assert.ok(TROOPS.length >= TEAM_SIZE);
 });
 
 // ---- whole matches ----------------------------------------------------------
@@ -87,32 +94,32 @@ test('matches finish, and copies are conserved throughout', () => {
 
 // ---- team building ----------------------------------------------------------
 
-test('team phase: only valid teams; round 1 starts with leaders placed and pools filled', () => {
+test('team phase: pick 6 different Pokémon; round 1 starts with an empty board and full pools', () => {
   const s = createGame({ seed: 7, catalog, names: ['A', 'B'] });
   assert.equal(s.phase, 'team');
   const need = teamSize(catalog);
   const bad = [
     { type: 'buy', slot: 0, x: 0, y: 0 }, { type: 'ready' },
-    team('mawile'), team('toString'), team(null),
-    team('decidueye', TROOPS.slice(0, need - 1)), // too few
-    team('decidueye', [...TROOPS.slice(0, need - 1), TROOPS[0]]), // duplicate
-    team('decidueye', [...TROOPS.slice(0, need - 1), 'greninja']), // a leader as a troop
-    team('decidueye', 'mawile'),
+    team(TROOPS.slice(0, need - 1)), // too few
+    team(TROOPS.slice(0, need + 1)), // too many
+    team([...TROOPS.slice(0, need - 1), TROOPS[0]]), // duplicate
+    team([...TROOPS.slice(0, need - 1), 'toString']), // not a Pokémon
+    team('mawile'), team(null),
   ];
   for (const intent of bad) {
     const before = clone(s);
     assert.equal(applyIntent(s, catalog, 0, intent).ok, false, JSON.stringify(intent));
     assert.deepEqual(s, before);
   }
-  assert.ok(applyIntent(s, catalog, 0, team('infernape')).ok);
-  assert.equal(applyIntent(s, catalog, 0, team('greninja')).ok, false, 'cannot choose twice');
+  assert.ok(applyIntent(s, catalog, 0, team()).ok);
+  assert.equal(applyIntent(s, catalog, 0, team()).ok, false, 'cannot choose twice');
   assert.equal(s.phase, 'team');
-  assert.ok(applyIntent(s, catalog, 1, team('decidueye')).ok);
+  assert.ok(applyIntent(s, catalog, 1, team(TROOPS.slice(-need))).ok);
   assert.equal(s.phase, 'planning');
   assert.equal(s.round, 1);
-  assert.deepEqual(s.players.map((p) => p.board.map((u) => [u.unitId, u.leader, u.y, u.star])),
-    [[['infernape', true, 0, 0]], [['decidueye', true, 3, 0]]], 'melee leaders in front, ranged at the back');
   for (const p of s.players) {
+    assert.deepEqual(p.board, [], 'nobody starts on the board');
+    assert.equal(p.team.length, need);
     assert.equal(poolSize(p), need * COPIES_PER_TROOP);
     assert.ok(p.team.every((t) => p.pool[t] === COPIES_PER_TROOP));
     assert.equal(p.shop.length, SHOP_SIZE);
@@ -130,7 +137,7 @@ test('shop only offers troops from your own pool, never more copies than it hold
     const counts = {};
     for (const id of p.shop.filter(Boolean)) counts[id] = (counts[id] ?? 0) + 1;
     for (const [id, n] of Object.entries(counts)) {
-      assert.ok(p.team.includes(id) && !catalog[id].leader, id);
+      assert.ok(p.team.includes(id), id);
       assert.ok(n <= p.pool[id], `${id} offered ${n}x with ${p.pool[id]} in pool`);
     }
   }
@@ -170,7 +177,6 @@ test('no duplicates on the field: buying a troop you already have levels it up (
   assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 1, x: 4, y: 2 }).ok);
   assert.deepEqual(p.board.filter((u) => u.unitId === id).map((u) => [u.star, u.x, u.y]), [[1, 0, 0]]);
   assert.equal(applyIntent(s, catalog, 0, { type: 'buy', slot: 2, x: 0, y: 0 }).ok, false, 'a new troop cannot go on a taken square');
-  assert.equal(applyIntent(s, catalog, 0, { type: 'buy', slot: 2, x: 2, y: 3 }).ok, false, 'nor onto the leader');
   assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 2, x: 1, y: 0 }).ok, 'a different troop gets its own square');
   // Two more copies, even without coordinates: 3★ (all 4 copies), still one Mawile.
   for (let i = 0; i < 2; i++) {
@@ -210,26 +216,12 @@ test('no troop limit: every troop of the team can be on the board; enemy half is
   p.coins = 999;
   p.team.forEach((id, i) => {
     p.shop = [id, null, null];
-    assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: i, y: 1 }).ok, `${id} placed`);
+    assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: i % COLS, y: Math.floor(i / COLS) }).ok, `${id} placed`);
   });
-  assert.equal(p.board.length, p.team.length + 1, 'all troops plus the leader');
-  const someone = p.board.find((u) => !u.leader);
+  assert.equal(p.board.length, p.team.length, 'the whole team');
+  const someone = p.board[0];
   assert.equal(applyIntent(s, catalog, 0, { type: 'move', uid: someone.uid, x: 0, y: HALF }).ok, false);
   assert.equal(applyIntent(s, catalog, 0, { type: 'move', uid: someone.uid, x: -1, y: 0 }).ok, false);
-});
-
-test('leader cannot be sold or combined, but can move and swap', () => {
-  const s = startedGame();
-  const p = s.players[0];
-  const leader = p.board[0];
-  p.coins = 99;
-  p.shop = ['mawile', null, null];
-  applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: 0, y: 0 });
-  const troop = p.board.find((u) => !u.leader);
-  assert.equal(applyIntent(s, catalog, 0, { type: 'sell', uid: leader.uid }).ok, false);
-  assert.ok(applyIntent(s, catalog, 0, { type: 'move', uid: leader.uid, x: 0, y: 0 }).ok, 'swap with a troop');
-  assert.deepEqual([leader.x, leader.y, troop.x, troop.y], [0, 0, 2, 3]);
-  assert.equal(p.board.length, 2);
 });
 
 test('rejects invalid and out-of-phase intents without changing state', () => {
@@ -261,7 +253,7 @@ test('economy: start with 6 coins; winner +6, loser +9; coins carry over uncappe
   const p = s.players[0];
   p.shop = ['mawile', null, null];
   p.coins = 50; // whatever isn't spent carries over to the next round
-  assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: 2, y: 0 }).ok); // player 0 has a troop, player 1 only a leader
+  assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: 2, y: 0 }).ok); // player 0 has a troop, player 1 an empty board
   const before = s.players.map((q) => q.coins);
   for (const i of [0, 1]) applyIntent(s, catalog, i, { type: 'ready' });
   const { winner } = s.combat.result;
@@ -305,7 +297,7 @@ test('locked-in players cannot act; combat starts when both are ready', () => {
 });
 
 test('featured troop leads the shop while its pool has copies; bad ids are ignored', () => {
-  const s = startedGame(3, ['greninja', 'greninja'], { featured: 'beheeyem' });
+  const s = startedGame(3, { featured: 'beheeyem' });
   for (const p of s.players) assert.equal(p.shop[0], 'beheeyem');
   const p = s.players[0];
   for (let i = 0; i < 5; i++) {
@@ -313,7 +305,7 @@ test('featured troop leads the shop while its pool has copies; bad ids are ignor
     assert.ok(applyIntent(s, catalog, 0, { type: 'reroll' }).ok);
     assert.equal(p.shop[0], 'beheeyem');
   }
-  for (const bad of ['greninja', 'nope', 'toString', '', null]) {
+  for (const bad of ['nope', 'toString', '', null]) {
     assert.equal(createGame({ seed: 3, catalog, names: ['A', 'B'], featured: bad }).featured, null, String(bad));
   }
 });
@@ -371,10 +363,10 @@ test("a Super with its own reach (Decidueye's) hits enemies beyond basic range w
   // Test-only catalog: Decidueye supers after 1 attack; two dummies that never move.
   const cat = clone(catalog);
   cat.decidueye.energy = 1;
-  cat.dummy = { ...clone(catalog.mawile), hp: [0.1, 1, 2, 3], hitsPerSec: 0.01, secPerTile: 1000 };
+  cat.dummy = { ...clone(catalog.mawile), hp: [1, 2, 3, 4], secPerHit: 100, moveSpeed: 'statue' };
   cat.far = { ...cat.dummy, hp: [500, 501, 502, 503] };
   const r = simulate(cat, [
-    [{ uid: 1, unitId: 'decidueye', star: 0, leader: true, x: 0, y: HALF - 1 }], // back row
+    [{ uid: 1, unitId: 'decidueye', star: 0, x: 0, y: HALF - 1 }], // back row
     [{ uid: 2, unitId: 'dummy', star: 0, x: COLS - 1, y: 0 }, { uid: 3, unitId: 'far', star: 0, x: COLS - 1, y: HALF - 1 }],
   ]);
   const cast = r.events.find((e) => e.type === 'cast' && e.id === 0);
@@ -388,8 +380,8 @@ test("a Super with its own reach (Decidueye's) hits enemies beyond basic range w
 
 test('units walk one square at a time (no diagonal steps), at their own pace', () => {
   const boards = [
-    [{ uid: 1, unitId: 'decidueye', star: 0, leader: true, x: 0, y: 3 }, { uid: 3, unitId: 'mawile', star: 1, x: 4, y: 0 }, { uid: 5, unitId: 'coalossal', star: 0, x: 2, y: 1 }],
-    [{ uid: 2, unitId: 'greninja', star: 0, leader: true, x: 1, y: 0 }, { uid: 4, unitId: 'vespiquen', star: 2, x: 3, y: 3 }],
+    [{ uid: 1, unitId: 'decidueye', star: 0, x: 0, y: 3 }, { uid: 3, unitId: 'mawile', star: 1, x: 4, y: 0 }, { uid: 5, unitId: 'coalossal', star: 0, x: 2, y: 1 }],
+    [{ uid: 2, unitId: 'greninja', star: 0, x: 1, y: 0 }, { uid: 4, unitId: 'vespiquen', star: 2, x: 3, y: 3 }],
   ];
   const r = simulate(catalog, boards, 5);
   const pos = new Map(r.initial.map((u) => [u.id, { x: u.x, y: u.y, t: -Infinity }]));
@@ -398,7 +390,8 @@ test('units walk one square at a time (no diagonal steps), at their own pace', (
     const p = pos.get(e.id);
     assert.equal(Math.abs(e.x - p.x) + Math.abs(e.y - p.y), 1, 'one orthogonal square per step');
     const def = catalog[r.initial.find((u) => u.id === e.id).unitId];
-    assert.ok(e.t - p.t >= Math.round(def.secPerTile * 10), `${def.name} stepped faster than ${def.secPerTile}s per square`);
+    const pace = MOVE_SPEEDS[def.moveSpeed];
+    assert.ok(e.t - p.t >= Math.round(pace / TICK_SECONDS), `${def.name} stepped faster than ${pace}s per square`);
     pos.set(e.id, { x: e.x, y: e.y, t: e.t });
     moves++;
   }
@@ -409,18 +402,19 @@ test('after 30s, sudden death drains everyone equally until one side is knocked 
   // Two armies that never reach each other (opposite back corners, can't move):
   // without sudden death this would sit at a draw forever.
   const cat = clone(catalog);
-  cat.statue = { ...clone(catalog.mawile), secPerTile: 1000 };
+  cat.statue = { ...clone(catalog.mawile), moveSpeed: 'statue' };
+  const [hp0, hp1] = cat.statue.hp;
   const r = simulate(cat, [
-    [{ uid: 1, unitId: 'statue', star: 1, x: 0, y: HALF - 1 }], // 37 HP
-    [{ uid: 2, unitId: 'statue', star: 0, x: 0, y: HALF - 1 }], // 25 HP
+    [{ uid: 1, unitId: 'statue', star: 1, x: 0, y: HALF - 1 }],
+    [{ uid: 2, unitId: 'statue', star: 0, x: 0, y: HALF - 1 }],
   ]);
   assert.equal(r.events.find((e) => e.type === 'suddenDeath')?.t, SUDDEN_DEATH_TICK);
   assert.ok(!r.events.some((e) => e.type === 'drain' && e.t < SUDDEN_DEATH_TICK), 'no drain before the timer');
-  const perTick = (SUDDEN_DEATH_HP_PER_SECOND * 10) / 10; // sheet HP/s -> internal HP per tick
+  const perTick = SUDDEN_DEATH_HP_PER_SECOND * STAT_SCALE * TICK_SECONDS; // internal HP per tick
   for (const e of r.events.filter((ev) => ev.type === 'drain')) assert.equal(e.amount, perTick, 'same drain for everyone');
   assert.equal(r.winner, 0, 'the unit with more HP outlasts the other');
-  assert.equal(r.ticks, SUDDEN_DEATH_TICK + 250 / perTick - 1, '25 HP lasts 2.5s');
-  assert.equal(r.survivors[0].hp, 370 - 250);
+  assert.equal(r.ticks, SUDDEN_DEATH_TICK + Math.ceil((hp0 * STAT_SCALE) / perTick) - 1, 'the weaker one lasts hp / drain ticks');
+  assert.equal(r.survivors[0].hp, (hp1 - hp0) * STAT_SCALE);
 });
 
 test('every fight ends with a winner unless both sides fall at the same moment', () => {
@@ -441,7 +435,7 @@ test('a unit boxed in by its allies paths around them to reach an enemy', () => 
   // corners: the only way out is backwards. The enemy is a stationary target in
   // the far corner. Allies and the enemy are immobile and harmless.
   const cat = clone(catalog);
-  cat.wall = { ...clone(catalog.mawile), secPerTile: 1000, hitsPerSec: 0.01, hp: [999, 999, 999, 999] };
+  cat.wall = { ...clone(catalog.mawile), moveSpeed: 'statue', secPerHit: 100, hp: [99999, 99999, 99999, 99999] };
   const wall = [[1, 1], [3, 1], [2, 0], [1, 0], [3, 0]].map(([x, y], i) => ({ uid: 10 + i, unitId: 'wall', star: 0, x, y }));
   const r = simulate(cat, [
     [{ uid: 1, unitId: 'mawile', star: 0, x: 2, y: 1 }, ...wall],
@@ -459,6 +453,29 @@ test('a unit boxed in by its allies paths around them to reach an enemy', () => 
 test('more copies make a troop stronger', () => {
   const fight = (a, b) => simulate(catalog, [[{ uid: 1, unitId: 'mawile', star: a, x: 2, y: 0 }], [{ uid: 2, unitId: 'mawile', star: b, x: 2, y: 0 }]]).winner;
   for (let s = 1; s <= MAX_STAR; s++) assert.equal(fight(s, s - 1), 0, `${s}★ beats ${s - 1}★`);
+});
+
+test('basic attacks crit at the unit\'s crit chance for 50% more damage; mirrored units share luck', () => {
+  const cat = clone(catalog);
+  cat.wall = { ...clone(catalog.mawile), moveSpeed: 'statue', secPerHit: 100, hp: [1e6, 1e6, 1e6, 1e6] };
+  const base = catalog.mawile.damage[0] * STAT_SCALE;
+  let hits = 0;
+  let crits = 0;
+  for (let seed = 0; seed < 40; seed++) {
+    const r = simulate(cat, [[{ uid: 1, unitId: 'mawile', star: 0, x: 2, y: 0 }], [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }]], seed);
+    for (const e of r.events.filter((ev) => ev.type === 'damage' && ev.src === 0)) {
+      const prev = r.events[r.events.indexOf(e) - 1];
+      if (prev.type !== 'attack') continue; // skip Supers: they never crit
+      hits++;
+      if (e.crit) { crits++; assert.equal(e.amount, Math.floor((base * CRIT_PCT) / 100)); } else assert.equal(e.amount, base);
+    }
+  }
+  const rate = (100 * crits) / hits;
+  assert.ok(hits > 500 && Math.abs(rate - catalog.mawile.critChance) < 4, `crit rate ${rate.toFixed(1)}% over ${hits} hits`);
+  // No crits at 0%.
+  cat.calm = { ...clone(catalog.mawile), critChance: 0 };
+  const r = simulate(cat, [[{ uid: 1, unitId: 'calm', star: 0, x: 2, y: 0 }], [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }]], 1);
+  assert.ok(!r.events.some((e) => e.crit));
 });
 
 let failed = 0;

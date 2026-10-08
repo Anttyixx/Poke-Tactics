@@ -32,9 +32,8 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
 
 ## How to play
 
-- **Team:** before round 1, each player picks 1 leader and 5 Pokémon troops. The leader starts on the
-  field, fights every round, doesn't count toward the board cap and can't be sold. Each troop puts
-  4 copies into that player's own pool.
+- **Team:** before round 1, each player picks 6 Pokémon. Each one puts 4 copies into that player's own
+  pool. The board starts empty: everything you field, you buy.
 - **Coins:** you start with 6. After each battle the winner gets 6 coins and the loser 9 (a draw pays
   both 9). Coins carry over between rounds with no cap. Troops cost 3–4 coins per copy.
 - **Shop:** 3 slots, drawn from your pool (never more copies than the pool holds). The shop refreshes
@@ -44,18 +43,20 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
 - **Buying:** click a shop troop, then a square on your half (or drag the card onto the board). A copy
   you buy leaves your pool. There is no bench.
 - **Stars:** each troop can be on the board only once. Buying a copy of a troop you already field levels
-  that troop up instead (click anywhere on your side): 1 copy = 0★, 2 = ★ (×1.5 stats), 3 = ★★ (×2.2),
-  4 = ★★★ (×3.2). Moving a troop onto another unit swaps them.
+  that troop up instead (click anywhere on your side): 1 copy = 0★, 2 = ★, 3 = ★★, 4 = ★★★. Each
+  Pokémon lists its own HP and damage for every star level. Moving a troop onto another unit swaps them.
 - **Selling:** drag a troop onto the shop (or press Sell) for its cost in coins per copy; all its copies go back
   to your pool.
 - **Board:** your half is 5×4 (the board is 5 wide by 8 tall); the row next to the centre line is the
-  front. There is no limit on how many troops you field; the leader is always there too.
-- **Combat:** units target the nearest enemy they can reach and walk (pathing around anyone in the way) into range one square at a time (up/down/left/right, at
-  their `secPerTile` pace: every troop takes 0.5s per square; leaders have their own pace) and attack. Each attack builds mana,
-  and so does taking a hit. At full mana a unit casts its ability instead of attacking. Each tick
-  resolves simultaneously, so neither side gets a first-mover advantage.
+  front. There is no limit on how many troops you field.
+- **Combat:** units target the nearest enemy they can reach and walk (pathing around anyone in the way)
+  into range one square at a time (up/down/left/right). Movement speed is a tier: fast 0.5s per square,
+  medium 0.8s, slow 1.0s, very slow 1.3s. A unit attacks every `secPerHit` seconds; each basic attack
+  has a `critChance`% chance to crit for 50% more damage (Supers never crit). Each attack builds energy,
+  and at full energy a unit casts its Super instead of attacking. Each tick resolves simultaneously, and
+  crit luck is shared slot for slot between the sides, so neither side gets an edge.
 - **Sudden death:** fights have a 30-second timer. When it runs out, every Pokémon still standing loses
-  10 HP per second (the same for everyone, ignoring shields) while the fight carries on, so the weakest
+  300 HP per second (the same for everyone, ignoring shields) while the fight carries on, so the weakest
   fall first until one side is knocked out.
 - **Damage:** the loser takes `round + 2 × (copies in the winner's surviving troops)`. A draw (the last
   Pokémon on both sides fall at the same moment) costs each player `ceil(round / 2)`. Everyone starts at 100 HP.
@@ -66,11 +67,11 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
 ```
 index.html          page shell
 styles.css
-assets/sprites/     leader walk sheets: 256x256, 4x4 grid of 64px frames;
+assets/sprites/     walk sheets: 256x256, 4x4 grid of 64px frames;
                     rows = facing down, left, right, up; columns = walk cycle
-data/units.json     unit catalog (stats + ability). Add units here; no code change needed
-                    unless you add a new ability "kind". Leaders have
-                    "leader": true and a "sprite" path, and never show up in the shop
+data/units.json     unit catalog: cost, hp and damage per star, range, moveSpeed tier,
+                    secPerHit, critChance, energy and Super. Add units here; no code
+                    change needed unless you add a new ability "kind"
 src/rng.js          seeded PRNG whose state is stored in game state
 src/combat.js       simulate(catalog, boards). Pure and deterministic, returns an event log
 src/game.js         rules: createGame(), applyIntent(). The only thing that changes state

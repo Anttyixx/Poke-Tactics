@@ -10,40 +10,39 @@ export const HALF = ROWS / 2; // each player owns HALF rows
 // 1 tick = 0.1s of game time. After the 30s timer, sudden death: every unit
 // still standing loses the same HP each tick until one side is knocked out.
 export const SUDDEN_DEATH_TICK = 300;
-export const SUDDEN_DEATH_HP_PER_SECOND = 10; // in sheet HP units
+export const SUDDEN_DEATH_HP_PER_SECOND = 300;
 // Safety net only: with the drain, every fight ends well before this.
 export const MAX_TICKS = 900;
 export const TICK_SECONDS = 0.1;
 export const MANA_PER_ATTACK = 1; // 1 energy per attack; a unit supers once it has `energy`
 export const MANA_PER_HIT = 0; // taking hits gives no energy
 const FIRST_ATTACK_DELAY = 3;
-// units.json uses the design sheet's numbers (HP 25, damage 3, ...). Combat runs
-// in tenths of those so star scaling keeps precision with integer math; the UI
-// divides by STAT_SCALE again for display.
-export const STAT_SCALE = 10;
-// Star multipliers for units that only give base HP; stars = copies - 1.
-const STAR_PCT = [100, 150, 220, 320];
+// units.json uses the design sheet's numbers directly (HP, damage per hit, ...).
+// The UI divides by STAT_SCALE for display; 1 = combat runs in sheet units.
+export const STAT_SCALE = 1;
+// A critical hit deals 50% more damage. Only basic attacks can crit.
+export const CRIT_PCT = 150;
+// Movement speed tiers, in seconds per square.
+export const MOVE_SPEEDS = { fast: 0.5, medium: 0.8, slow: 1.0, 'very slow': 1.3 };
 
-// Multiplier for a star level: from the unit's per-star HP list when it has one
-// (damage and ability power scale with HP), otherwise the default table.
+// How much stronger a star level hits than 0★: Supers scale by the same amount.
 export function starRatio(def, star) {
-  return Array.isArray(def.hp) ? def.hp[star] / def.hp[0] : STAR_PCT[star] / 100;
+  return def.damage[star] / def.damage[0];
 }
 
 // A unit's combat stats at a star level, in internal units (integers).
 export function unitStats(def, star) {
-  const ratio = starRatio(def, star);
-  const hp = Array.isArray(def.hp) ? def.hp[star] : def.hp * ratio;
   return {
-    hp: Math.round(hp * STAT_SCALE),
-    atk: Math.round(def.atk * ratio * STAT_SCALE),
-    attackCd: Math.max(1, Math.round(1 / (def.hitsPerSec * TICK_SECONDS))),
-    moveCd: Math.max(1, Math.round(def.secPerTile / TICK_SECONDS)), // ticks per square
+    hp: Math.round(def.hp[star] * STAT_SCALE),
+    atk: Math.round(def.damage[star] * STAT_SCALE),
+    attackCd: Math.max(1, Math.round(def.secPerHit / TICK_SECONDS)), // ticks per attack
+    moveCd: Math.max(1, Math.round(MOVE_SPEEDS[def.moveSpeed] / TICK_SECONDS)), // ticks per square
+    crit: def.critChance ?? 0, // percent
     energy: def.energy,
-    ratio,
+    ratio: starRatio(def, star),
   };
 }
-// Ability damage/heal/shield amounts are in sheet units too.
+// Ability damage/heal/shield amounts are given for 0★ in sheet units.
 export const abilityPower = (value, ratio) => Math.round(value * ratio * STAT_SCALE);
 
 // Board positions are stored in "own" coordinates: x 0..COLS-1, y 0..HALF-1
@@ -57,27 +56,32 @@ export function toCombatPos(side, x, y) {
 // Units walk one square at a time, up/down/left/right only (no diagonal steps).
 const NEIGHBORS = [[0, -1], [0, 1], [-1, 0], [1, 0]];
 
-// Deterministic hash -> 0 or 1 (no Math.random: combat must replay identically).
-function coin(seed, t) {
-  let h = Math.imul((seed ^ t) >>> 0, 0x85ebca6b);
+// Deterministic hash (no Math.random: combat must replay identically).
+function hash(seed, t, salt = 0) {
+  let h = Math.imul((seed ^ t ^ Math.imul(salt, 0x27d4eb2f)) >>> 0, 0x85ebca6b);
   h ^= h >>> 13;
   h = Math.imul(h, 0xc2b2ae35);
   h ^= h >>> 16;
-  return h & 1;
+  return h >>> 0;
 }
+const coin = (seed, t) => hash(seed, t) & 1;
+// Crit roll (0-99) for an attack on tick `t` by the unit in position `slot` of
+// its side's list. It never depends on the order units act in, and both sides
+// share the same rolls slot for slot, so luck never favours a side.
+const critRoll = (seed, t, slot) => hash(seed, t, slot + 1) % 100;
 
 const dist = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 const manhattan = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 
-function spawn(catalog, inst, side, id) {
+function spawn(catalog, inst, side, id, slot) {
   const def = catalog[inst.unitId];
   const pos = toCombatPos(side, inst.x, inst.y);
   const stats = unitStats(def, inst.star);
   return {
-    id, side, uid: inst.uid, unitId: inst.unitId, star: inst.star,
+    id, side, slot, uid: inst.uid, unitId: inst.unitId, star: inst.star,
     x: pos.x, y: pos.y,
     hp: stats.hp, maxHp: stats.hp,
-    atk: stats.atk, ratio: stats.ratio,
+    atk: stats.atk, ratio: stats.ratio, crit: stats.crit,
     armor: def.armor ?? 0, range: def.range,
     attackCd: stats.attackCd, moveCd: stats.moveCd,
     mana: 0, maxMana: stats.energy,
@@ -94,12 +98,12 @@ const snapshot = (u) => ({
   x: u.x, y: u.y, hp: u.hp, maxHp: u.maxHp, mana: u.mana, maxMana: u.maxMana,
 });
 
-// `seed` only decides which side acts first on each tick (see below).
+// `seed` decides crits and which side acts first on each tick (see below).
 export function simulate(catalog, boards, seed = 0) {
   const units = [];
   boards.forEach((board, side) => {
     [...board].sort((a, b) => a.uid - b.uid)
-      .forEach((inst) => units.push(spawn(catalog, inst, side, units.length)));
+      .forEach((inst, slot) => units.push(spawn(catalog, inst, side, units.length, slot)));
   });
   const initial = units.map(snapshot);
   const bySide = [0, 1].map((side) => units.filter((u) => u.side === side));
@@ -137,13 +141,13 @@ export function simulate(catalog, boards, seed = 0) {
     return allies.reduce((a, b) => (b.hp * a.maxHp < a.hp * b.maxHp ? b : a));
   }
 
-  function damage(target, amount, src) {
+  function damage(target, amount, src, crit = false) {
     if (!standing(target)) return;
     const absorbed = Math.min(target.shield, amount);
     target.shield -= absorbed;
     target.hp = Math.max(0, target.hp - (amount - absorbed));
     if (target.hp > 0) target.pendingMana += MANA_PER_HIT;
-    emit('damage', { id: target.id, src: src.id, amount, hp: target.hp, shield: target.shield, mana: shownMana(target) });
+    emit('damage', { id: target.id, src: src.id, amount, hp: target.hp, shield: target.shield, mana: shownMana(target), ...(crit && { crit }) });
     if (target.hp === 0) emit('death', { id: target.id });
   }
 
@@ -282,7 +286,9 @@ export function simulate(catalog, boards, seed = 0) {
       } else {
         u.mana = Math.min(u.maxMana, u.mana + MANA_PER_ATTACK);
         emit('attack', { id: u.id, target: target.id, mana: shownMana(u) });
-        damage(target, Math.max(1, Math.floor((u.atk * 100) / (100 + target.armor))), u);
+        const crit = critRoll(seed, t, u.slot) < u.crit;
+        const hit = crit ? Math.floor((u.atk * CRIT_PCT) / 100) : u.atk;
+        damage(target, Math.max(1, Math.floor((hit * 100) / (100 + target.armor))), u, crit);
       }
       u.atkTimer = u.attackCd;
     } else if (u.moveTimer === 0) {

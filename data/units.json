@@ -1,43 +1,42 @@
 {
   "mawile": {
     "name": "Mawile", "sprite": "assets/sprites/mawile.png", "fx": "#d4dae6", "type": "warrior", "cost": 3,
-    "hp": [25, 37, 49, 61], "atk": 3, "hitsPerSec": 0.6, "energy": 5, "range": 1, "secPerTile": 0.5,
-    "ability": {"name": "Crunch", "kind": "strike", "damage": 11}
+    "hp": [450, 815, 1470, 2650], "damage": [113, 200, 365, 655], "range": 1, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 5,
+    "ability": {"name": "Crunch", "kind": "strike", "damage": 414}
   },
   "beheeyem": {
     "name": "Beheeyem", "sprite": "assets/sprites/beheeyem.png", "fx": "#ff7ad9", "type": "mage", "cost": 3,
-    "hp": [14, 22, 30, 38], "atk": 1, "hitsPerSec": 0.6, "energy": 4, "range": 5, "secPerTile": 0.5,
-    "ability": {"name": "Psyshock", "kind": "strike", "damage": 5}
+    "hp": [700, 1145, 1565, 2350], "damage": [116, 175, 261, 390], "range": 3, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 4,
+    "ability": {"name": "Psyshock", "kind": "strike", "damage": 580}
   },
   "toxtricity": {
     "name": "Toxtricity", "sprite": "assets/sprites/toxtricity.png", "fx": "#ffe14d", "type": "ranger", "cost": 4,
-    "hp": [18, 28, 38, 48], "atk": 2, "hitsPerSec": 0.7, "energy": 5, "range": 5, "secPerTile": 0.5,
-    "ability": {"name": "Thunderbolt", "kind": "stun", "damage": 7, "duration": 10}
+    "hp": [1000, 1700, 2890, 4900], "damage": [100, 170, 290, 490], "range": 1, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 5,
+    "ability": {"name": "Thunderbolt", "kind": "stun", "damage": 350, "duration": 10}
   },
   "vespiquen": {
     "name": "Vespiquen", "sprite": "assets/sprites/vespiquen.png", "fx": "#ffc23d", "type": "ranger", "cost": 3,
-    "hp": [15, 25, 35, 45], "atk": 2, "hitsPerSec": 0.5, "energy": 4, "range": 5, "secPerTile": 0.5,
-    "ability": {"name": "Attack Order", "kind": "strike", "damage": 8}
+    "hp": [840, 1350, 2155, 3450], "damage": [80, 125, 200, 320], "range": 3, "moveSpeed": "very slow", "secPerHit": 1.42, "critChance": 15, "energy": 4,
+    "ability": {"name": "Attack Order", "kind": "strike", "damage": 320}
   },
   "coalossal": {
     "name": "Coalossal", "sprite": "assets/sprites/coalossal.png", "fx": "#ff7a2f", "type": "warrior", "cost": 4,
-    "hp": [35, 55, 75, 95], "atk": 12, "hitsPerSec": 0.3, "energy": 8, "range": 1, "secPerTile": 0.5,
-    "ability": {"name": "Heat Crash", "kind": "strike", "damage": 42}
+    "hp": [1243, 2235, 4025, 7250], "damage": [155, 280, 500, 900], "range": 1, "moveSpeed": "very slow", "secPerHit": 2, "critChance": 15, "energy": 8,
+    "ability": {"name": "Heat Crash", "kind": "strike", "damage": 542}
   },
-
   "decidueye": {
-    "name": "Decidueye", "leader": true, "sprite": "assets/sprites/decidueye.png", "fx": "#8ee07a", "type": "ranger", "cost": 0,
-    "hp": 36, "atk": 2, "hitsPerSec": 1.2, "energy": 5, "range": 5, "secPerTile": 1.0,
-    "ability": {"name": "Spirit Shackle", "kind": "stun", "damage": 7, "duration": 15, "range": 99}
+    "name": "Decidueye", "sprite": "assets/sprites/decidueye.png", "fx": "#8ee07a", "type": "ranger", "cost": 4,
+    "hp": [800, 1440, 2600, 4680], "damage": [99, 178, 322, 579], "range": 4, "moveSpeed": "very slow", "secPerHit": 1.42, "critChance": 15, "energy": 5,
+    "ability": {"name": "Spirit Shackle", "kind": "stun", "damage": 346, "duration": 15, "range": 99}
   },
   "greninja": {
-    "name": "Greninja", "leader": true, "sprite": "assets/sprites/greninja.png", "fx": "#5ab8ff", "type": "rogue", "cost": 0,
-    "hp": 42, "atk": 3, "hitsPerSec": 1.7, "energy": 5, "range": 1, "secPerTile": 0.6,
-    "ability": {"name": "Water Shuriken", "kind": "strike", "damage": 12}
+    "name": "Greninja", "sprite": "assets/sprites/greninja.png", "fx": "#5ab8ff", "type": "rogue", "cost": 4,
+    "hp": [700, 1260, 2275, 4095], "damage": [75, 135, 244, 439], "range": 1, "moveSpeed": "medium", "secPerHit": 1.11, "critChance": 15, "energy": 5,
+    "ability": {"name": "Water Shuriken", "kind": "strike", "damage": 300}
   },
   "infernape": {
-    "name": "Infernape", "leader": true, "sprite": "assets/sprites/infernape.png", "fx": "#ff8a2a", "type": "warrior", "cost": 0,
-    "hp": 60, "atk": 2, "hitsPerSec": 1.2, "energy": 9, "range": 1, "secPerTile": 0.8,
-    "ability": {"name": "Flare Blitz", "kind": "blast", "damage": 5, "radius": 1}
+    "name": "Infernape", "sprite": "assets/sprites/infernape.png", "fx": "#ff8a2a", "type": "warrior", "cost": 4,
+    "hp": [800, 1440, 2600, 4680], "damage": [99, 178, 322, 579], "range": 1, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 9,
+    "ability": {"name": "Flare Blitz", "kind": "blast", "damage": 248, "radius": 1}
   }
 }

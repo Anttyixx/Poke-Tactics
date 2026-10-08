@@ -216,6 +216,7 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
   white-space: nowrap;
 }
 .float.dmg { color: #ffd2d2; }
+.float.crit { color: #ffd84a; font-size: calc(17cqi / var(--cols)); }
 .float.heal { color: var(--good); }
 .float.shield { color: #fff; }
 .float.cast { color: #e5b5ff; font-size: calc(17cqi / var(--cols)); }
@@ -224,7 +225,7 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
   to { transform: translateY(-90%); opacity: 0; }
 }
 
-/* ---- Sprite units (leaders and Pokémon troops) ----
+/* ---- Sprite units ----
    Sheets are 4x4 grids of 64px frames. Rows: down, left, right, up.
    background-size 400% makes one frame fill the box; stepping
    background-position-x through 0/33/67/100% plays the 4-frame walk. */
@@ -349,7 +350,7 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 #shop .card .portrait { width: 40px; height: 40px; margin: -4px 0 -6px; }
 .unit.sprite-unit .stars { z-index: 2; top: -6%; }
 
-/* Leader picker */
+/* Team picker */
 #overlay .card:has(.pick-grid) { max-width: 820px; }
 .pick-title { margin: 16px 0 8px; text-align: left; }
 .pick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
