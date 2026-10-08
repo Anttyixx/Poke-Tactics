@@ -1,0 +1,10 @@
+{
+  "name": "auto-battler",
+  "private": true,
+  "type": "module",
+  "description": "Browser-based 1v1 auto-battler. Static files, no build step.",
+  "scripts": {
+    "start": "python3 -m http.server 8000",
+    "test": "node tests/run.js"
+  }
+}
