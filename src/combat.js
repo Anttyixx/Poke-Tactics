@@ -4,7 +4,7 @@
 // integer math only. In multiplayer the host runs this and broadcasts the
 // result; clients only *replay* the event log, they never re-simulate.
 
-export const COLS = 8;
+export const COLS = 5;
 export const ROWS = 8;
 export const HALF = ROWS / 2; // each player owns HALF rows
 export const MAX_TICKS = 300; // 1 tick = 0.1s of game time -> 30s cap, then draw

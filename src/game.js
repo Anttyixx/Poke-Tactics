@@ -88,7 +88,7 @@ const HANDLERS = {
     if (typeof leader !== 'string' || !Object.hasOwn(catalog, leader) || !catalog[leader].leader) return fail('Unknown leader');
     player.leader = leader;
     // Melee leaders start on the front line, ranged ones at the back, both centred.
-    player.board = [{ uid: state.nextUid++, unitId: leader, star: 1, leader: true, x: 3, y: catalog[leader].range > 1 ? HALF - 1 : 0 }];
+    player.board = [{ uid: state.nextUid++, unitId: leader, star: 1, leader: true, x: Math.floor((COLS - 1) / 2), y: catalog[leader].range > 1 ? HALF - 1 : 0 }];
     player.ready = true;
     if (state.players.every((p) => p.ready)) startRound(state, catalog);
     return OK;

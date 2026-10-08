@@ -89,16 +89,16 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 #arena {
   position: relative;
   width: 100%;
-  max-width: 560px;
+  max-width: 360px;
   margin: 0 auto;
-  aspect-ratio: 1;
+  /* aspect-ratio, --cols and --rows are set from COLS/ROWS in ui.js */
   container-type: inline-size;
   border-radius: 10px;
   overflow: hidden;
   border: 1px solid var(--line);
   user-select: none;
 }
-#cells { position: absolute; inset: 0; display: grid; grid-template: repeat(8, 1fr) / repeat(8, 1fr); }
+#cells { position: absolute; inset: 0; display: grid; grid-template: repeat(var(--rows), 1fr) / repeat(var(--cols), 1fr); }
 .cell.own { background: #1e2b3d; }
 .cell.own.alt { background: #22314a; }
 .cell.enemy { background: #2b1e24; }
@@ -108,7 +108,7 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 #enemy-label {
   position: absolute; left: 0; right: 0; top: 0; height: 50%;
   display: grid; place-items: center;
-  color: #ffffff30; font-size: 6cqi; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  color: #ffffff30; font-size: 9cqi; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
   pointer-events: none;
 }
 #arena.in-combat #enemy-label { display: none; }
@@ -131,11 +131,12 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
   place-items: center;
   pointer-events: auto;
   cursor: pointer;
+  container-type: size; /* unit contents scale with the unit's own size */
 }
 #units .unit {
   position: absolute;
-  width: 12.5%;
-  height: 12.5%;
+  width: calc(100% / var(--cols));
+  height: calc(100% / var(--rows));
   transition: left 0.22s linear, top 0.22s linear, opacity 0.5s, transform 0.5s;
 }
 .token {
@@ -144,7 +145,7 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 5.2cqi;
+  font-size: 40cqi;
   background: radial-gradient(circle at 35% 30%, #ffffff40, transparent 60%), var(--type, #666);
   border: 3px solid var(--ally);
   box-shadow: 0 2px 6px #0008;
@@ -157,7 +158,7 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 [data-type="rogue"] { --type: var(--rogue); }
 [data-type="cleric"] { --type: var(--cleric); }
 
-.stars { position: absolute; top: -1px; font-size: 2cqi; color: var(--gold); text-shadow: 0 1px 2px #000; letter-spacing: -1px; }
+.stars { position: absolute; top: -1px; font-size: 16cqi; color: var(--gold); text-shadow: 0 1px 2px #000; letter-spacing: -1px; }
 .stars.s1 { color: #c9ccd6; }
 .stars.s3 { color: #ff9cf0; }
 
@@ -175,7 +176,7 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .unit.hit .token { animation: hit 0.2s; }
 .unit.casting .token { animation: cast 0.45s ease-out; }
 .unit.stunned .token { filter: grayscale(0.8) brightness(0.8); }
-.unit.stunned::after { content: "💫"; position: absolute; top: -8%; font-size: 3cqi; }
+.unit.stunned::after { content: "💫"; position: absolute; top: -8%; font-size: 24cqi; }
 .unit.dead { opacity: 0; transform: scale(0.4); pointer-events: none; }
 
 @keyframes lunge { 50% { transform: translate(calc(var(--dx) * 30%), calc(var(--dy) * 30%)); } }
@@ -190,10 +191,10 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .float {
   position: absolute;
   z-index: 20;
-  width: 12.5%;
+  width: calc(100% / var(--cols));
   text-align: center;
   font-weight: 800;
-  font-size: 2.6cqi;
+  font-size: calc(21cqi / var(--cols));
   pointer-events: none;
   text-shadow: 0 1px 2px #000, 0 0 4px #000;
   animation: float-up 0.9s ease-out forwards;
@@ -202,7 +203,7 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .float.dmg { color: #ffd2d2; }
 .float.heal { color: var(--good); }
 .float.shield { color: #fff; }
-.float.cast { color: #e5b5ff; font-size: 2.2cqi; }
+.float.cast { color: #e5b5ff; font-size: calc(17cqi / var(--cols)); }
 @keyframes float-up {
   from { transform: translateY(0); opacity: 1; }
   to { transform: translateY(-90%); opacity: 0; }
@@ -293,8 +294,6 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
   border-radius: 8px;
 }
 .slot:hover { border-color: #4a5165; }
-#bench .token { font-size: 5cqi; }
-#bench .stars { font-size: 2cqi; }
 
 /* ---- Info ---- */
 #info {
