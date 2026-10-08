@@ -209,7 +209,7 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
   to { transform: translateY(-90%); opacity: 0; }
 }
 
-/* ---- Sprite units (leaders) ----
+/* ---- Sprite units (leaders and Pokémon troops) ----
    Sheets are 4x4 grids of 64px frames. Rows: down, left, right, up.
    background-size 400% makes one frame fill the box; stepping
    background-position-x through 0/33/67/100% plays the 4-frame walk. */
@@ -236,7 +236,7 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
   to { background-position-x: 133.333%; }
 }
 
-.unit.leader .shadow {
+.unit.sprite-unit .shadow {
   position: absolute;
   bottom: 8%;
   width: 62%;
@@ -245,24 +245,26 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
   background: color-mix(in srgb, var(--ally) 45%, transparent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--ally) 70%, transparent);
 }
-.unit.leader.enemy .shadow {
+.unit.sprite-unit.enemy .shadow {
   background: color-mix(in srgb, var(--enemy) 45%, transparent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--enemy) 70%, transparent);
 }
-.unit.leader.selected .shadow { box-shadow: 0 0 0 3px #fff; }
-.unit.leader .bars { z-index: 1; }
+.unit.sprite-unit.selected .shadow { box-shadow: 0 0 0 3px #fff; }
+.unit.sprite-unit .bars { z-index: 1; }
 
-.unit.leader.lunge .sprite { animation: walk var(--walk) steps(4) infinite, lunge 0.2s ease-out; }
-.unit.leader.shoot .sprite { animation: walk var(--walk) steps(4) infinite, shoot 0.2s ease-out; }
-.unit.leader.hit .sprite { animation: walk var(--walk) steps(4) infinite, hit 0.2s; }
-.unit.leader.casting .sprite { animation: walk var(--walk) steps(4) infinite, sprite-cast 0.45s ease-out; }
-.unit.leader.stunned .sprite { filter: grayscale(0.8) brightness(0.8); animation-play-state: paused; }
+.unit.sprite-unit.lunge .sprite { animation: walk var(--walk) steps(4) infinite, lunge 0.2s ease-out; }
+.unit.sprite-unit.shoot .sprite { animation: walk var(--walk) steps(4) infinite, shoot 0.2s ease-out; }
+.unit.sprite-unit.hit .sprite { animation: walk var(--walk) steps(4) infinite, hit 0.2s; }
+.unit.sprite-unit.casting .sprite { animation: walk var(--walk) steps(4) infinite, sprite-cast 0.45s ease-out; }
+.unit.sprite-unit.stunned .sprite { filter: grayscale(0.8) brightness(0.8); animation-play-state: paused; }
 @keyframes sprite-cast {
   60% { filter: drop-shadow(0 0 4px #d58cff) drop-shadow(0 0 8px #d58cff); }
 }
 
 .portrait { position: relative; display: inline-block; width: 64px; height: 64px; flex: none; }
 .portrait .sprite { width: 100%; left: 0; bottom: 0; }
+#shop .card .portrait { width: 40px; height: 40px; margin: -4px 0 -6px; }
+.unit.sprite-unit .stars { z-index: 2; top: -6%; }
 
 /* Leader picker */
 #overlay .card:has(.leader-pick) { max-width: 760px; }

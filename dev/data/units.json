@@ -51,6 +51,12 @@
     "ability": { "name": "Restore", "kind": "heal", "target": "lowest", "amount": 280 }
   },
 
+  "beheeyem": {
+    "name": "Beheeyem", "sprite": "assets/sprites/beheeyem.png?v=e705ab1", "type": "mage", "cost": 2,
+    "hp": 560, "atk": 55, "armor": 10, "range": 3, "attackCd": 10, "moveCd": 5, "mana": 65,
+    "ability": { "name": "Psyshock", "kind": "strike", "damage": 260 }
+  },
+
   "paladin": {
     "name": "Paladin", "emoji": "🦁", "type": "warrior", "cost": 3,
     "hp": 1100, "atk": 70, "armor": 40, "range": 1, "attackCd": 9, "moveCd": 5, "mana": 90,
@@ -78,17 +84,17 @@
   },
 
   "decidueye": {
-    "name": "Decidueye", "leader": true, "sprite": "assets/sprites/decidueye.png?v=0de7310", "type": "ranger", "cost": 0,
+    "name": "Decidueye", "leader": true, "sprite": "assets/sprites/decidueye.png?v=e705ab1", "type": "ranger", "cost": 0,
     "hp": 1100, "atk": 100, "armor": 20, "range": 4, "attackCd": 10, "moveCd": 5, "mana": 70,
     "ability": { "name": "Spirit Shackle", "kind": "stun", "damage": 260, "duration": 15 }
   },
   "infernape": {
-    "name": "Infernape", "leader": true, "sprite": "assets/sprites/infernape.png?v=0de7310", "type": "warrior", "cost": 0,
+    "name": "Infernape", "leader": true, "sprite": "assets/sprites/infernape.png?v=e705ab1", "type": "warrior", "cost": 0,
     "hp": 1050, "atk": 78, "armor": 25, "range": 1, "attackCd": 8, "moveCd": 4, "mana": 90,
     "ability": { "name": "Flare Blitz", "kind": "blast", "damage": 220, "radius": 1 }
   },
   "greninja": {
-    "name": "Greninja", "leader": true, "sprite": "assets/sprites/greninja.png?v=0de7310", "type": "rogue", "cost": 0,
+    "name": "Greninja", "leader": true, "sprite": "assets/sprites/greninja.png?v=e705ab1", "type": "rogue", "cost": 0,
     "hp": 1000, "atk": 90, "armor": 15, "range": 1, "attackCd": 7, "moveCd": 3, "mana": 60,
     "ability": { "name": "Water Shuriken", "kind": "strike", "damage": 330 }
   }

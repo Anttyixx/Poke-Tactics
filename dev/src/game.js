@@ -15,8 +15,8 @@
 //   { type: 'ready' }                         lock in planning; combat starts when all are ready
 //   { type: 'continue' }                      done watching combat; next round starts when all continue
 
-import { randInt } from './rng.js?v=0de7310';
-import { simulate, COLS, HALF } from './combat.js?v=0de7310';
+import { randInt } from './rng.js?v=e705ab1';
+import { simulate, COLS, HALF } from './combat.js?v=e705ab1';
 
 export const SHOP_SIZE = 5;
 export const BENCH_SIZE = 8;
