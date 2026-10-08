@@ -8,7 +8,7 @@ import {
   createGame, applyIntent, boardCap, fieldCount, leaderIds, troopIds, teamSize, poolSize,
   COPIES_PER_TROOP, MAX_STAR, SHOP_SIZE, START_COINS, WIN_COINS, LOSS_COINS, MAX_REROLLS,
 } from '../src/game.js';
-import { simulate, MAX_TICKS, COLS, HALF } from '../src/combat.js';
+import { simulate, MAX_TICKS, COLS, HALF, SUDDEN_DEATH_TICK, SUDDEN_DEATH_HP_PER_SECOND } from '../src/combat.js';
 import { botTurn } from '../src/bot.js';
 
 const catalog = JSON.parse(readFileSync(new URL('../data/units.json', import.meta.url), 'utf8'));
@@ -407,6 +407,37 @@ test('units walk one square at a time (no diagonal steps), at their own pace', (
     moves++;
   }
   assert.ok(moves > 0);
+});
+
+test('after 30s, sudden death drains everyone equally until one side is knocked out', () => {
+  // Two armies that never reach each other (opposite back corners, can't move):
+  // without sudden death this would sit at a draw forever.
+  const cat = clone(catalog);
+  cat.statue = { ...clone(catalog.mawile), secPerTile: 1000 };
+  const r = simulate(cat, [
+    [{ uid: 1, unitId: 'statue', star: 1, x: 0, y: HALF - 1 }], // 37 HP
+    [{ uid: 2, unitId: 'statue', star: 0, x: 0, y: HALF - 1 }], // 25 HP
+  ]);
+  assert.equal(r.events.find((e) => e.type === 'suddenDeath')?.t, SUDDEN_DEATH_TICK);
+  assert.ok(!r.events.some((e) => e.type === 'drain' && e.t < SUDDEN_DEATH_TICK), 'no drain before the timer');
+  const perTick = (SUDDEN_DEATH_HP_PER_SECOND * 10) / 10; // sheet HP/s -> internal HP per tick
+  for (const e of r.events.filter((ev) => ev.type === 'drain')) assert.equal(e.amount, perTick, 'same drain for everyone');
+  assert.equal(r.winner, 0, 'the unit with more HP outlasts the other');
+  assert.equal(r.ticks, SUDDEN_DEATH_TICK + 250 / perTick - 1, '25 HP lasts 2.5s');
+  assert.equal(r.survivors[0].hp, 370 - 250);
+});
+
+test('every fight ends with a winner unless both sides fall at the same moment', () => {
+  for (let i = 0; i < 200; i++) {
+    const ids = Object.keys(catalog);
+    const army = (k) => [{ uid: k, unitId: ids[(i + k) % ids.length], star: (i * k) % 4, x: (i + k) % COLS, y: (i * 3 + k) % HALF }];
+    const r = simulate(catalog, [army(1), army(2)], i);
+    assert.ok(r.ticks < MAX_TICKS, 'sudden death ends the fight');
+    if (r.winner === null) {
+      const lastDeaths = r.events.filter((e) => e.type === 'death' && e.t === r.ticks);
+      assert.equal(lastDeaths.length, 2, 'a draw only when the last units of both sides fall together');
+    }
+  }
 });
 
 test('more copies make a troop stronger', () => {

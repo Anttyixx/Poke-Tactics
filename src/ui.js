@@ -2,7 +2,7 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, ROWS, HALF, STAT_SCALE, TICK_SECONDS, abilityPower, unitStats } from './combat.js';
+import { COLS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, TICK_SECONDS, abilityPower, unitStats } from './combat.js';
 import {
   COPIES_PER_TROOP, LOSS_COINS, MAX_REROLLS, WIN_COINS,
   boardCap, copiesOf, fieldCount, leaderIds, poolSize, sellValue, teamSize, troopIds,
@@ -51,6 +51,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   const rerollBtn = $('reroll');
   const readyBtn = $('ready');
   const toastEl = $('toast');
+  const clockEl = $('clock');
 
   let state = null;
   let selected = null; // uid of selected own unit
@@ -313,7 +314,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   }
 
   function renderPlanning() {
-    arena.classList.remove('in-combat');
+    arena.classList.remove('in-combat', 'sudden-death');
     controls.hidden = true;
     const draggable = canPlan();
     const buyingId = buying !== null ? me().shop[buying] : null;
@@ -427,6 +428,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     selected = null;
     overlay.hidden = true;
     arena.classList.add('in-combat');
+    arena.classList.remove('sudden-death');
+    setClock(0);
     controls.hidden = false;
     renderInfo();
 
@@ -463,6 +466,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
 
     const advance = (animate) => {
       tick++;
+      setClock(tick);
       ctx.srcDelay.clear();
       ctx.hitDelay.clear();
       while (next < events.length && events[next].t <= tick) { applyEvent(ctx, events[next], next, animate); next++; }
@@ -498,6 +502,13 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
       },
     };
     raf = requestAnimationFrame(frame);
+  }
+
+  // Countdown to sudden death, then a banner.
+  function setClock(tick) {
+    const left = Math.max(0, Math.ceil((SUDDEN_DEATH_TICK - tick) * TICK_SECONDS));
+    clockEl.textContent = tick >= SUDDEN_DEATH_TICK ? 'SUDDEN DEATH' : `0:${String(left).padStart(2, '0')}`;
+    clockEl.classList.toggle('sudden', tick >= SUDDEN_DEATH_TICK);
   }
 
   function bars(a) {
@@ -566,6 +577,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   // overwrite newer HP/mana, so state is only applied if it's the newest seen.
   function applyEvent(ctx, ev, idx, animate) {
     const { actors, later } = ctx;
+    if (ev.type === 'suddenDeath') { arena.classList.add('sudden-death'); return; }
     const a = actors.get(ev.id);
     if (!a) return;
     const newest = () => { if (idx < (a.seq ?? -1)) return false; a.seq = idx; return true; };
@@ -635,6 +647,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         });
         break;
       }
+      case 'drain': // sudden death: everyone loses the same HP each tick
+        if (newest()) { a.hp = ev.hp; bars(a); }
+        break;
       case 'heal':
         if (newest()) { a.hp = ev.hp; bars(a); }
         if (animate && ev.amount) { floatText(a, `+${show(ev.amount)}`, 'heal'); fx(at().x, at().y, 'heal', '#5be38a', 1.3); }
@@ -663,7 +678,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     const draw = result.winner === null;
     const title = draw ? 'Draw' : won ? 'Victory!' : 'Defeat';
     const detail = draw
-      ? `Nobody won in time. Both players take ${damage[viewer]} damage.`
+      ? `Both teams were knocked out at the same moment. Both players take ${damage[viewer]} damage.`
       : won
         ? `${result.survivors.length} of your units survived. ${esc(foe().name)} takes ${damage[1 - viewer]} damage.`
         : `${result.survivors.length} enemy units survived. You take ${damage[viewer]} damage.`;

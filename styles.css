@@ -119,6 +119,19 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 }
 #combat-controls[hidden] { display: none; }
 #combat-controls button { padding: 4px 10px; }
+#clock {
+  min-width: 64px; margin-right: 8px; padding: 3px 8px; border-radius: 6px;
+  font: 700 14px/1.2 ui-monospace, monospace; color: var(--text); background: var(--panel-2); text-align: center;
+}
+#clock.sudden { color: #fff; background: #b3263a; animation: sd-pulse 0.8s ease-in-out infinite alternate; }
+/* Sudden death: the board glows red and units pulse as they lose health. */
+#arena.sudden-death { box-shadow: 0 0 0 2px #e0354d, 0 0 28px #e0354d88; }
+#arena.sudden-death::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 30;
+  background: radial-gradient(ellipse at center, transparent 55%, #e0354d33 100%);
+  animation: sd-pulse 0.8s ease-in-out infinite alternate;
+}
+@keyframes sd-pulse { from { opacity: 0.55; } to { opacity: 1; } }
 #combat-controls button.active { background: #2f6fe0; border-color: #3d7df0; color: #fff; }
 
 /* ---- Units ---- */

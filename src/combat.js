@@ -7,7 +7,12 @@
 export const COLS = 5;
 export const ROWS = 8;
 export const HALF = ROWS / 2; // each player owns HALF rows
-export const MAX_TICKS = 300; // 1 tick = 0.1s of game time -> 30s cap, then draw
+// 1 tick = 0.1s of game time. After the 30s timer, sudden death: every unit
+// still standing loses the same HP each tick until one side is knocked out.
+export const SUDDEN_DEATH_TICK = 300;
+export const SUDDEN_DEATH_HP_PER_SECOND = 10; // in sheet HP units
+// Safety net only: with the drain, every fight ends well before this.
+export const MAX_TICKS = 900;
 export const TICK_SECONDS = 0.1;
 export const MANA_PER_ATTACK = 1; // 1 energy per attack; a unit supers once it has `energy`
 export const MANA_PER_HIT = 0; // taking hits gives no energy
@@ -262,6 +267,18 @@ export function simulate(catalog, boards, seed = 0) {
     // cooldowns and always favour the same side. Each side keeps its unit order.
     const order = coin(seed, t) ? units : [...bySide[1], ...bySide[0]];
     for (const u of order) if (u.alive) act(u);
+    if (t === SUDDEN_DEATH_TICK) emit('suddenDeath', {});
+    if (t >= SUDDEN_DEATH_TICK) {
+      // The drain lands at the end of the tick, after everyone has acted, and
+      // ignores shields. Same amount for everyone: the weakest fall first.
+      const drain = Math.round((SUDDEN_DEATH_HP_PER_SECOND * STAT_SCALE) * TICK_SECONDS);
+      for (const u of units) {
+        if (!standing(u)) continue;
+        u.hp = Math.max(0, u.hp - drain);
+        emit('drain', { id: u.id, amount: drain, hp: u.hp });
+        if (u.hp === 0) emit('death', { id: u.id });
+      }
+    }
     for (const u of units) {
       if (u.hp === 0) u.alive = false; // knocked out this tick
       u.mana = shownMana(u);
@@ -271,7 +288,7 @@ export function simulate(catalog, boards, seed = 0) {
     }
     winner = outcome();
   }
-  if (winner === undefined) winner = null; // timeout
+  if (winner === undefined) winner = null; // unreachable: sudden death always ends the fight
   emit('end', { winner });
 
   return {

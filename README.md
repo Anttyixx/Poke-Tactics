@@ -53,8 +53,11 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
   their `secPerTile` pace: every troop takes 1s per square; leaders have their own pace) and attack. Each attack builds mana,
   and so does taking a hit. At full mana a unit casts its ability instead of attacking. Each tick
   resolves simultaneously, so neither side gets a first-mover advantage.
-- **Damage:** the loser takes `round + 2 × (copies in the winner's surviving troops)`. A draw (both
-  sides wiped out, or the 30s timer runs out) costs each player `ceil(round / 2)`. Everyone starts at 100 HP.
+- **Sudden death:** fights have a 30-second timer. When it runs out, every Pokémon still standing loses
+  10 HP per second (the same for everyone, ignoring shields) while the fight carries on, so the weakest
+  fall first until one side is knocked out.
+- **Damage:** the loser takes `round + 2 × (copies in the winner's surviving troops)`. A draw (the last
+  Pokémon on both sides fall at the same moment) costs each player `ceil(round / 2)`. Everyone starts at 100 HP.
 - **Keys:** `D` reroll, `F` fight, `E` sell the selected troop, `Space` skip the combat replay, `Esc` deselect.
 
 ## Project layout
