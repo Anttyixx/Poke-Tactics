@@ -1,3 +1,4 @@
+587f64a	dev	2026-10-08 21:10 UTC	Remove leaders: pick 6 Pokémon, start with an empty board; new stat model
 6eb1d69	dev	2026-10-08 19:48 UTC	Troops move 1 tile per 0.5s; add a Pokédex
 cfa20aa	dev	2026-10-08 14:59 UTC	Units path around blockers to reach an enemy instead of standing still
 598d6a8	dev	2026-10-08 09:14 UTC	Polish combat animation: hops, idle, and attack-specific moves
