@@ -51,6 +51,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   const rerollBtn = $('reroll');
   const readyBtn = $('ready');
   const toastEl = $('toast');
+  const dexEl = $('dex');
+  let dexPick = null; // unit id shown in the Pokédex
   const clockEl = $('clock');
 
   let state = null;
@@ -225,8 +227,10 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   });
   hudEl.addEventListener('click', (e) => {
     if (e.target.id === 'new-game' && confirm('Abandon this match and start a new one?')) onNewGame();
+    if (e.target.id === 'open-dex') openDex();
   });
   overlay.addEventListener('click', (e) => {
+    if (e.target.id === 'open-dex') return openDex();
     if (e.target.id === 'continue') { e.target.disabled = true; onIntent({ type: 'continue' }); }
     if (e.target.id === 'play-again') onNewGame();
     if (state?.phase !== 'team' || me().ready) return;
@@ -256,7 +260,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   document.addEventListener('keydown', (e) => {
     if (!state || e.ctrlKey || e.metaKey || e.altKey || e.target.matches('input, textarea')) return;
     const key = e.key.toLowerCase();
-    if (key === 'd' && canPlan()) intent({ type: 'reroll' });
+    if (!dexEl.hidden) { if (key === 'escape' || key === 'p') closeDex(); return; }
+    if (key === 'p') openDex();
+    else if (key === 'd' && canPlan()) intent({ type: 'reroll' });
     else if (key === 'f' && canPlan()) intent({ type: 'ready' });
     else if (key === 'e' && canPlan() && selected !== null) intent({ type: 'sell', uid: selected });
     else if (key === 'escape' && state.phase === 'planning') select(null);
@@ -312,6 +318,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
       <div class="stat" title="Copies left to buy"><span class="label">Pool</span><b>${poolSize(p)}</b></div>
       ${hpBox(p, 'ally')}
       ${hpBox(foe(), 'enemy')}
+      <button id="open-dex" class="ghost dex-button" title="See every Pokémon's stats (P)">Pokédex</button>
       <button id="new-game" class="ghost" title="Start a new match">New game</button>`;
   }
 
@@ -755,7 +762,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     const ready = draft.leader && draft.troops.length === need;
     showOverlay(`
       <h1>Build your team</h1>
-      <p class="muted">Pick 1 leader and ${need} troops. Your leader starts on the field. Each troop adds ${COPIES_PER_TROOP} copies to your pool, and your shop draws from it.</p>
+      <p class="muted">Pick 1 leader and ${need} troops. Your leader starts on the field. Each troop adds ${COPIES_PER_TROOP} copies to your pool, and your shop draws from it. <button id="open-dex" class="linkish">Compare them in the Pokédex</button></p>
       <h2 class="pick-title">Leader ${draft.leader ? '✓' : ''}</h2>
       <div class="pick-grid">${leaderIds(catalog).map((id) => teamCard(id, 'leader', draft.leader === id)).join('')}</div>
       <h2 class="pick-title">Troops ${draft.troops.length}/${need}</h2>
@@ -771,6 +778,76 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
       <h1 class="${state.winner === viewer ? 'win' : 'loss'}">${title}</h1>
       <p>The match lasted ${state.round} rounds. Final HP: ${me().hp} vs ${foe().hp}.</p>
       <button id="play-again" class="primary">Play again</button>`);
+  }
+
+  // ---- Pokédex ---------------------------------------------------------------
+  // Every Pokémon's stats, read straight from units.json, so new Pokémon and
+  // stat changes show up here automatically.
+
+  dexEl.addEventListener('click', (e) => {
+    if (e.target === dexEl || e.target.closest('#dex-close')) return closeDex();
+    const pick = e.target.closest('[data-dex]');
+    if (pick) { dexPick = pick.dataset.dex; renderDex(); }
+  });
+
+  function openDex(id) {
+    dexPick = id ?? dexPick ?? leaderIds(catalog)[0];
+    renderDex();
+    dexEl.hidden = false;
+  }
+
+  function closeDex() {
+    dexEl.hidden = true;
+  }
+
+  function renderDex() {
+    const list = (ids, title) => `<h3>${title}</h3><div class="dex-list">${ids.map((id) => {
+      const def = catalog[id];
+      return `<button class="dex-entry${id === dexPick ? ' active' : ''}" data-dex="${id}" data-type="${def.type}">
+        ${portrait(def)}<span>${esc(def.name)}</span><small>${def.leader ? '' : `${def.cost} 🪙`}</small></button>`;
+    }).join('')}</div>`;
+    const def = catalog[dexPick];
+    const stars = def.leader ? [0] : [0, 1, 2, 3];
+    const rows = stars.map((star) => {
+      const st = unitStats(def, star);
+      const hps = hitsPerSec(st);
+      return { star, hp: show(st.hp), dmg: show(st.atk), hps: hps.toFixed(2), dps: (show(st.atk) * hps).toFixed(1), sup: show(abilityPower(def.ability.damage ?? def.ability.amount ?? 0, st.ratio)) };
+    });
+    const col = (label, key) => `<tr><th>${label}</th>${rows.map((r) => `<td>${r[key]}</td>`).join('')}</tr>`;
+    const stats0 = unitStats(def, 0);
+    dexEl.querySelector('.dex-panel').innerHTML = `
+      <button id="dex-close" class="ghost" aria-label="Close">✕</button>
+      <h1>Pokédex</h1>
+      <div class="dex-body">
+        <nav class="dex-nav">${list(leaderIds(catalog), 'Leaders')}${list(troopIds(catalog), 'Troops')}</nav>
+        <section class="dex-detail" data-type="${def.type}">
+          <div class="dex-hero">
+            <span class="portrait dex-portrait" data-facing="down"><span class="sprite" ${spriteStyle(def)}></span></span>
+            <div>
+              <h2>${esc(def.name)}</h2>
+              <p class="dex-tags">
+                <span>${def.leader ? 'Leader' : `Troop · ${def.cost} coins`}</span>
+                <span>${def.range > 1 ? `Ranged · ${def.range} tiles` : 'Melee · 1 tile'}</span>
+                <span>Moves 1 tile / ${def.secPerTile}s</span>
+                <span>Super every ${stats0.energy} attacks</span>
+              </p>
+            </div>
+          </div>
+          <table class="dex-table">
+            <thead><tr><th></th>${rows.map((r) => `<th>${def.leader ? 'Base' : r.star ? '★'.repeat(r.star) : '0★'}</th>`).join('')}</tr></thead>
+            <tbody>
+              ${col('HP', 'hp')}
+              ${col('Damage per hit', 'dmg')}
+              ${col('Hits per second', 'hps')}
+              ${col('DPS', 'dps')}
+              ${col(`${esc(def.ability.name)} damage`, 'sup')}
+            </tbody>
+          </table>
+          ${def.leader ? '' : `<p class="muted">Copies on the board: 1 = 0★, 2 = ★, 3 = ★★, 4 = ★★★.</p>`}
+          <h3>Super: ${esc(def.ability.name)}</h3>
+          <p>${describeAbility(def, 0)}</p>
+        </section>
+      </div>`;
   }
 
   return { render, toast };

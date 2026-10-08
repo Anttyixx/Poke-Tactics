@@ -1,27 +1,27 @@
 {
   "mawile": {
     "name": "Mawile", "sprite": "assets/sprites/mawile.png", "fx": "#d4dae6", "type": "warrior", "cost": 3,
-    "hp": [25, 37, 49, 61], "atk": 3, "hitsPerSec": 0.6, "energy": 5, "range": 1, "secPerTile": 1.0,
+    "hp": [25, 37, 49, 61], "atk": 3, "hitsPerSec": 0.6, "energy": 5, "range": 1, "secPerTile": 0.5,
     "ability": {"name": "Crunch", "kind": "strike", "damage": 11}
   },
   "beheeyem": {
     "name": "Beheeyem", "sprite": "assets/sprites/beheeyem.png", "fx": "#ff7ad9", "type": "mage", "cost": 3,
-    "hp": [14, 22, 30, 38], "atk": 1, "hitsPerSec": 0.6, "energy": 4, "range": 5, "secPerTile": 1.0,
+    "hp": [14, 22, 30, 38], "atk": 1, "hitsPerSec": 0.6, "energy": 4, "range": 5, "secPerTile": 0.5,
     "ability": {"name": "Psyshock", "kind": "strike", "damage": 5}
   },
   "toxtricity": {
     "name": "Toxtricity", "sprite": "assets/sprites/toxtricity.png", "fx": "#ffe14d", "type": "ranger", "cost": 4,
-    "hp": [18, 28, 38, 48], "atk": 2, "hitsPerSec": 0.7, "energy": 5, "range": 5, "secPerTile": 1.0,
+    "hp": [18, 28, 38, 48], "atk": 2, "hitsPerSec": 0.7, "energy": 5, "range": 5, "secPerTile": 0.5,
     "ability": {"name": "Thunderbolt", "kind": "stun", "damage": 7, "duration": 10}
   },
   "vespiquen": {
     "name": "Vespiquen", "sprite": "assets/sprites/vespiquen.png", "fx": "#ffc23d", "type": "ranger", "cost": 3,
-    "hp": [15, 25, 35, 45], "atk": 2, "hitsPerSec": 0.5, "energy": 4, "range": 5, "secPerTile": 1.0,
+    "hp": [15, 25, 35, 45], "atk": 2, "hitsPerSec": 0.5, "energy": 4, "range": 5, "secPerTile": 0.5,
     "ability": {"name": "Attack Order", "kind": "strike", "damage": 8}
   },
   "coalossal": {
     "name": "Coalossal", "sprite": "assets/sprites/coalossal.png", "fx": "#ff7a2f", "type": "warrior", "cost": 4,
-    "hp": [35, 55, 75, 95], "atk": 12, "hitsPerSec": 0.3, "energy": 8, "range": 1, "secPerTile": 1.0,
+    "hp": [35, 55, 75, 95], "atk": 12, "hitsPerSec": 0.3, "energy": 8, "range": 1, "secPerTile": 0.5,
     "ability": {"name": "Heat Crash", "kind": "strike", "damage": 42}
   },
 

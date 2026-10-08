@@ -603,3 +603,51 @@ kbd { background: var(--panel-2); border: 1px solid var(--line); border-radius: 
 }
 .build-badge.dev { background: #a8601c; }
 .build-badge:hover { opacity: 1; }
+
+/* ---- Pokédex ---- */
+.dex-button { border-color: #c73d3d; color: #ffd1d1; }
+.linkish { background: none; border: none; padding: 0; color: var(--ally); text-decoration: underline; cursor: pointer; font: inherit; }
+#dex {
+  position: fixed; inset: 0; z-index: 60;
+  display: flex; overflow-y: auto; padding: 16px;
+  background: #000a; backdrop-filter: blur(2px);
+}
+#dex[hidden] { display: none; }
+.dex-panel {
+  position: relative; margin: auto; width: 100%; max-width: 860px;
+  background: var(--panel); border: 1px solid var(--line); border-top: 6px solid #c73d3d;
+  border-radius: 14px; padding: 20px 22px;
+}
+.dex-panel h1 { font-size: 24px; margin-bottom: 12px; }
+#dex-close { position: absolute; top: 12px; right: 12px; padding: 4px 10px; }
+.dex-body { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 18px; }
+.dex-nav h3 { margin: 4px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.dex-list { display: grid; gap: 4px; margin-bottom: 12px; }
+.dex-entry {
+  display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 8px;
+  padding: 4px 8px; text-align: left; border-left: 4px solid var(--type);
+}
+.dex-entry .portrait { width: 34px; height: 34px; }
+.dex-entry small { color: var(--gold); white-space: nowrap; }
+.dex-entry span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dex-entry.active { background: #2b3550; border-color: #4a6ab0; border-left-color: var(--type); }
+.dex-detail { min-width: 0; }
+.dex-hero { display: flex; gap: 14px; align-items: center; margin-bottom: 12px; }
+.dex-portrait { width: 112px; height: 112px; background: radial-gradient(circle, color-mix(in srgb, var(--type) 35%, transparent), transparent 70%); border-radius: 12px; }
+.dex-hero h2 { color: var(--text); font-size: 24px; text-transform: none; letter-spacing: 0; margin-bottom: 6px; }
+.dex-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+.dex-tags span { background: var(--panel-2); border: 1px solid var(--line); border-radius: 99px; padding: 2px 10px; font-size: 13px; }
+.dex-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; margin-bottom: 8px; }
+.dex-table th, .dex-table td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: right; }
+.dex-table th:first-child { text-align: left; color: var(--muted); font-weight: 500; }
+.dex-table thead th { color: var(--gold); }
+.dex-detail h3 { margin: 14px 0 4px; font-size: 15px; }
+.dex-detail p { margin: 4px 0; }
+@media (max-width: 760px) {
+  .dex-body { grid-template-columns: 1fr; }
+  .dex-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dex-entry { grid-template-columns: 26px 1fr auto; gap: 6px; padding: 3px 6px; font-size: 13px; }
+  .dex-entry .portrait { width: 26px; height: 26px; }
+  .dex-portrait { width: 80px; height: 80px; }
+  .dex-panel { padding: 16px; }
+}
