@@ -112,7 +112,10 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     const stars = def.leader ? '' : `<div class="stars s${star}">${'★'.repeat(star)}</div>`;
     if (def.sprite) {
       el.dataset.facing = facing;
-      el.innerHTML = `<div class="shadow"></div><div class="sprite" ${spriteStyle(def)}></div>${stars}${bars}`;
+      el.style.setProperty('--fx', fxColor(unitId));
+      // Cosmetic only: start each unit's idle breathing at a different point.
+      el.style.setProperty('--idle-delay', `${(-Math.random() * 1.8).toFixed(2)}s`);
+      el.innerHTML = `<div class="shadow"></div><div class="body"><div class="sprite" ${spriteStyle(def)}></div></div>${stars}${bars}`;
     } else {
       el.innerHTML = `
         <div class="token"><span>${def.emoji}</span></div>
@@ -541,6 +544,28 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     el.classList.add(cls);
   }
 
+  // Add an animation class for `ms`, restarting it if it's already playing.
+  // Body animations replace each other, so a new move cancels the previous one.
+  const BODY_ANIMS = ['hop', 'lunge', 'shoot', 'cast-strike', 'cast-channel', 'cast-charge', 'cast-slam'];
+  function play(el, cls, ms) {
+    if (BODY_ANIMS.includes(cls)) el.classList.remove(...BODY_ANIMS.filter((c) => c !== cls));
+    pulse(el, cls);
+    el.timers ??= {};
+    clearTimeout(el.timers[cls]);
+    el.timers[cls] = setTimeout(() => el.classList.remove(cls), ms);
+  }
+
+  // Which body animation a Super uses, and when (ms at 1x) its hit lands
+  // within that animation, so damage and effects line up with the motion.
+  function superMotion(ab, ranged) {
+    if (ab.kind === 'blast') return { cls: 'cast-slam', ms: 600, impact: 510 };
+    if (ab.kind === 'stun') return { cls: 'cast-charge', ms: 500, impact: 250 };
+    if (ranged || ab.kind === 'heal' || ab.kind === 'shield') return { cls: 'cast-channel', ms: 550, impact: 275 };
+    return { cls: 'cast-strike', ms: 500, impact: 325 };
+  }
+
+  const flightMs = (from, to) => Math.max(160, 90 * Math.max(Math.abs(to.x - from.x), Math.abs(to.y - from.y))) / speed;
+
   const rangeOf = (a) => catalog[a.unitId].range;
   const fxColor = (unitId) => catalog[unitId].fx ?? TYPE_FX[catalog[unitId].type] ?? '#fff';
 
@@ -560,7 +585,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   function projectile(from, to, color, big) {
     const dx = to.x - from.x;
     const dy = to.y - from.y;
-    const ms = Math.max(160, 90 * Math.max(Math.abs(dx), Math.abs(dy))) / speed;
+    const ms = flightMs(from, to);
     const el = document.createElement('div');
     el.className = `projectile${big ? ' big' : ''}`;
     el.style.setProperty('--fx', color);
@@ -591,6 +616,12 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         const p = viewPos(a.x, a.y);
         face(a, p.x - from.x, p.y - from.y);
         place(a.el, p.x, p.y);
+        if (animate) {
+          // Hop to the next square; the walk cycle plays only during the hop.
+          const hopMs = Math.min(catalog[a.unitId].secPerTile * 1000, 360) / speed;
+          play(a.el, 'hop', hopMs);
+          play(a.el, 'moving', hopMs);
+        }
         break;
       }
       case 'attack': {
@@ -604,8 +635,13 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         a.el.style.setProperty('--dx', Math.sign(to.x - from.x));
         a.el.style.setProperty('--dy', Math.sign(to.y - from.y));
         face(a, to.x - from.x, to.y - from.y);
-        pulse(a.el, rangeOf(a) > 1 ? 'shoot' : 'lunge');
-        if (rangeOf(a) > 1) ctx.srcDelay.set(a.id, projectile(from, to, fxColor(a.unitId), false));
+        if (rangeOf(a) > 1) {
+          play(a.el, 'shoot', 260 / speed);
+          ctx.srcDelay.set(a.id, projectile(from, to, fxColor(a.unitId), false));
+        } else {
+          play(a.el, 'lunge', 300 / speed);
+          ctx.srcDelay.set(a.id, 165 / speed); // the hit lands at the end of the dash
+        }
         break;
       }
       case 'cast': {
@@ -614,17 +650,25 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         ctx.action.set(a.id, 'cast');
         if (!animate) break;
         const ab = catalog[a.unitId].ability;
-        pulse(a.el, 'casting');
-        floatText(a, ab.name, 'cast');
-        if (!['strike', 'stun', 'blast'].includes(ab.kind)) break; // heal/shield show on each recipient
+        const ranged = rangeOf(a) > 1;
         const t = actors.get(ev.target);
         const from = viewPos(a.x, a.y);
         const to = viewPos(t.x, t.y);
+        a.el.style.setProperty('--dx', Math.sign(to.x - from.x));
+        a.el.style.setProperty('--dy', Math.sign(to.y - from.y));
         face(a, to.x - from.x, to.y - from.y);
+        const motion = superMotion(ab, ranged);
+        play(a.el, motion.cls, motion.ms / speed);
+        floatText(a, ab.name, 'cast');
+        if (!['strike', 'stun', 'blast'].includes(ab.kind)) break; // heal/shield show on each recipient
         const color = fxColor(a.unitId);
-        const flight = rangeOf(a) > 1 ? projectile(from, to, color, true) : 0;
-        ctx.srcDelay.set(a.id, flight);
-        later(flight, () => {
+        // Ranged Supers launch their orb at the peak of the wind-up; melee ones
+        // (and the slam) hit at the moment of contact.
+        const windup = motion.impact / speed;
+        const flight = ranged && ab.kind !== 'blast' ? flightMs(from, to) : 0;
+        if (flight) later(windup, () => projectile(from, to, color, true));
+        ctx.srcDelay.set(a.id, windup + flight);
+        later(windup + flight, () => {
           if (ab.kind === 'blast') fx(to.x, to.y, 'ring', color, ab.radius * 2 + 1);
           else fx(to.x, to.y, ab.kind === 'stun' ? 'zap' : 'burst', color, 1.6);
         });
@@ -643,7 +687,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
           }
           if (!animate) return;
           floatText(a, `-${show(ev.amount)}`, 'dmg');
-          pulse(a.el, 'hit');
+          play(a.el, 'hit', 120);
           if (src && rangeOf(src) <= 1 && ctx.action.get(src.id) === 'attack') fx(at().x, at().y, 'slash', fxColor(src.unitId));
         });
         break;

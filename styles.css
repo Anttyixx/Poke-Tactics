@@ -149,9 +149,10 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
   position: absolute;
   width: calc(100% / var(--cols));
   height: calc(100% / var(--rows));
-  /* Glide between squares over the unit's whole step time (5 ticks per step at the usual pace). */
-  --glide: calc(var(--tick, 100ms) * 5 * var(--step, 1) / var(--speed, 1));
-  transition: left var(--glide) linear, top var(--glide) linear, opacity 0.5s, transform 0.5s;
+  /* Each step is a quick hop to the next square (at most 0.36s, or the unit's
+     whole step time if that is shorter), then the unit waits for its next step. */
+  --hop: calc(min(var(--tick, 100ms) * 5 * var(--step, 1), 360ms) / var(--speed, 1));
+  transition: left var(--hop) ease-in-out, top var(--hop) ease-in-out;
 }
 .token {
   width: 74%;
@@ -236,12 +237,11 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
   background-size: 400% 400%;
   background-repeat: no-repeat;
   image-rendering: pixelated;
-  --walk: calc(var(--tick, 100ms) * 10 * var(--step, 1) / var(--speed, 1)); /* one cycle per 2 steps */
-  animation: walk var(--walk) steps(4) infinite;
+  transition: filter 0.12s;
   pointer-events: none;
 }
-/* Units waiting on the board stand still (first frame); they only walk in combat. */
-#arena:not(.in-combat) .sprite { animation: none; background-position-x: 0%; }
+/* The walk cycle only plays while a unit is actually hopping to a new square. */
+.unit.moving .sprite { animation: walk var(--hop) steps(4) infinite; }
 [data-facing="down"] .sprite { background-position-y: 0%; }
 [data-facing="left"] .sprite { background-position-y: 33.333%; }
 [data-facing="right"] .sprite { background-position-y: 66.667%; }
@@ -267,14 +267,82 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .unit.sprite-unit.selected .shadow { box-shadow: 0 0 0 3px #fff; }
 .unit.sprite-unit .bars { z-index: 1; }
 
-.unit.sprite-unit.lunge .sprite { animation: walk var(--walk) steps(4) infinite, lunge 0.2s ease-out; }
-.unit.sprite-unit.shoot .sprite { animation: walk var(--walk) steps(4) infinite, shoot 0.2s ease-out; }
-.unit.sprite-unit.hit .sprite { animation: walk var(--walk) steps(4) infinite, hit 0.2s; }
-.unit.sprite-unit.casting .sprite { animation: walk var(--walk) steps(4) infinite, sprite-cast 0.45s ease-out; }
-.unit.sprite-unit.stunned .sprite { filter: grayscale(0.8) brightness(0.8); animation-play-state: paused; }
-@keyframes sprite-cast {
-  60% { filter: drop-shadow(0 0 4px #d58cff) drop-shadow(0 0 8px #d58cff); }
+/* ---- Combat body animations ----
+   .body wraps the sprite: hops and attack moves animate the body (transform),
+   the sprite inside handles walk frames and the hit flash (filter), and the
+   shadow stays on the ground. Only one body animation plays at a time. */
+.unit .body { position: absolute; inset: 0; transform-origin: 50% 90%; }
+.unit.sprite-unit .body { animation: idle 1.8s ease-in-out infinite alternate; animation-delay: var(--idle-delay, 0s); }
+.unit.hop .body { animation: hop var(--hop) ease-out; }
+.unit.hop .shadow { animation: hop-shadow var(--hop) ease-out; }
+.unit.lunge .body { animation: lunge calc(0.3s / var(--speed, 1)) ease-out; }
+.unit.shoot .body { animation: shoot calc(0.26s / var(--speed, 1)) ease-out; }
+.unit.cast-strike .body { animation: cast-strike calc(0.5s / var(--speed, 1)) ease-in-out; }
+.unit.cast-channel .body { animation: cast-channel calc(0.55s / var(--speed, 1)) ease-in-out; }
+.unit.cast-charge .body { animation: cast-charge calc(0.5s / var(--speed, 1)) linear; }
+.unit.cast-slam .body { animation: cast-slam calc(0.6s / var(--speed, 1)) ease-in; }
+.unit.hit .sprite { filter: brightness(2.4) saturate(0.3); }
+.unit.sprite-unit.dead { animation: faint calc(0.6s / var(--speed, 1)) ease-in forwards; pointer-events: none; }
+.unit.sprite-unit.dead .body { animation: none; }
+
+/* Standing still: a gentle breath, not a walk. */
+@keyframes idle { from { transform: scale(1, 1); } to { transform: scale(1.02, 0.97); } }
+/* Hop: up in an arc and down, with a squash on landing; the shadow shrinks under it. */
+@keyframes hop {
+  0% { transform: translateY(0) scale(1, 1); }
+  15% { transform: translateY(0) scale(1.08, 0.9); }
+  50% { transform: translateY(-26%) scale(0.95, 1.06); }
+  85% { transform: translateY(0) scale(1.08, 0.92); }
+  100% { transform: translateY(0) scale(1, 1); }
 }
+@keyframes hop-shadow { 50% { transform: scale(0.6); opacity: 0.6; } }
+/* Melee hit: dash at the target and back. */
+@keyframes lunge {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(calc(var(--dx) * -8%), calc(var(--dy) * -8%)) scale(0.96); }
+  55% { transform: translate(calc(var(--dx) * 38%), calc(var(--dy) * 38%)) scale(1.08); }
+  100% { transform: translate(0, 0); }
+}
+/* Ranged shot: a short recoil as it fires. */
+@keyframes shoot {
+  0% { transform: translate(0, 0); }
+  30% { transform: translate(calc(var(--dx) * -14%), calc(var(--dy) * -14%)) scale(1.06, 0.94); }
+  100% { transform: translate(0, 0); }
+}
+/* Melee Super: wind up, then a big lunge, glowing. */
+@keyframes cast-strike {
+  0% { transform: translate(0, 0); filter: none; }
+  40% { transform: translate(calc(var(--dx) * -18%), calc(var(--dy) * -18%)) scale(1.12); filter: drop-shadow(0 0 6px var(--fx)); }
+  65% { transform: translate(calc(var(--dx) * 48%), calc(var(--dy) * 48%)) scale(1.18); filter: drop-shadow(0 0 10px var(--fx)); }
+  100% { transform: translate(0, 0); filter: none; }
+}
+/* Ranged Super: rise and channel a glow before the orb flies. */
+@keyframes cast-channel {
+  0% { transform: translateY(0); filter: none; }
+  50% { transform: translateY(-16%) scale(1.08); filter: drop-shadow(0 0 8px var(--fx)) drop-shadow(0 0 14px var(--fx)); }
+  100% { transform: translateY(0); filter: none; }
+}
+/* Stun Super: crackle and shake while charging. */
+@keyframes cast-charge {
+  0%, 100% { transform: translate(0, 0); filter: none; }
+  10%, 50%, 90% { transform: translate(-5%, 0); filter: drop-shadow(0 0 6px var(--fx)) brightness(1.4); }
+  30%, 70% { transform: translate(5%, 0); filter: drop-shadow(0 0 10px var(--fx)); }
+}
+/* Area Super: leap up and slam down (the shockwave ring lands with it). */
+@keyframes cast-slam {
+  0% { transform: translateY(0) scale(1, 1); }
+  20% { transform: translateY(4%) scale(1.12, 0.86); }
+  55% { transform: translateY(-48%) scale(0.92, 1.1); filter: drop-shadow(0 0 8px var(--fx)); }
+  85% { transform: translateY(0) scale(1.2, 0.78); filter: drop-shadow(0 0 12px var(--fx)); }
+  100% { transform: translateY(0) scale(1, 1); filter: none; }
+}
+/* Knocked out: a white flash, tip over and fade. */
+@keyframes faint {
+  0% { opacity: 1; filter: brightness(3); transform: none; }
+  30% { opacity: 1; filter: brightness(1); transform: rotate(-12deg); }
+  100% { opacity: 0; transform: translateY(18%) rotate(-80deg) scale(0.6); }
+}
+.unit.sprite-unit.stunned .sprite { filter: grayscale(0.8) brightness(0.8); animation-play-state: paused; }
 
 .portrait { position: relative; display: inline-block; width: 64px; height: 64px; flex: none; }
 .portrait .sprite { width: 100%; left: 0; bottom: 0; }
