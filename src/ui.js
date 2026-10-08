@@ -5,7 +5,9 @@
 import { COLS, ROWS, HALF, TICK_SECONDS, scale } from './combat.js';
 import { BASE_INCOME, BENCH_SIZE, MAX_INTEREST, REROLL_COST, boardCap, fieldCount, interest, leaderIds, sellValue } from './game.js';
 
-const TICK_MS = 50; // playback speed at 1x (sim tick is 100ms, so 1x plays at double speed)
+const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
+// Attack-effect colour when a unit doesn't set its own "fx" colour in units.json.
+const TYPE_FX = { warrior: '#ffb36b', ranger: '#a6e37f', mage: '#b994ff', rogue: '#e0a3ff', cleric: '#ffe28a' };
 
 // Sprite sheets are 4x4 grids of 64px frames: one row per facing direction,
 // four walk-cycle frames per row. CSS picks the row from data-facing.
@@ -52,6 +54,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   // Board dimensions come from combat.js; CSS sizes everything from these.
   arena.style.setProperty('--cols', COLS);
   arena.style.setProperty('--rows', ROWS);
+  arena.style.setProperty('--tick', `${TICK_MS}ms`);
   arena.style.aspectRatio = `${COLS} / ${ROWS}`;
   for (let vy = 0; vy < ROWS; vy++) {
     for (let vx = 0; vx < COLS; vx++) {
@@ -399,9 +402,23 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     let last = performance.now();
     let raf = 0;
 
+    // Hits from projectiles land after the projectile's flight time, so their
+    // effects are scheduled with later(). Skip/cancel flush or drop them.
+    let pending = [];
+    const later = (ms, fn) => {
+      if (!ms) return fn();
+      const job = { fn };
+      job.timer = setTimeout(() => { pending = pending.filter((j) => j !== job); fn(); }, ms);
+      pending.push(job);
+    };
+    const flush = () => { for (const j of pending) { clearTimeout(j.timer); j.fn(); } pending = []; };
+    const ctx = { actors, later, srcDelay: new Map(), hitDelay: new Map(), action: new Map() };
+
     const advance = (animate) => {
       tick++;
-      while (next < events.length && events[next].t <= tick) applyEvent(actors, events[next++], animate);
+      ctx.srcDelay.clear();
+      ctx.hitDelay.clear();
+      while (next < events.length && events[next].t <= tick) { applyEvent(ctx, events[next], next, animate); next++; }
       for (const a of actors.values()) {
         if (a.stunUntil && tick >= a.stunUntil) { a.stunUntil = 0; a.el.classList.remove('stunned'); }
       }
@@ -422,11 +439,14 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
 
     playback = {
       skip() {
+        flush();
         while (tick < result.ticks) advance(false);
         finish();
       },
       cancel() {
         cancelAnimationFrame(raf);
+        for (const j of pending) clearTimeout(j.timer);
+        pending = [];
         playback = null;
       },
     };
@@ -462,9 +482,47 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     el.classList.add(cls);
   }
 
-  function applyEvent(actors, ev, animate) {
+  const rangeOf = (a) => catalog[a.unitId].range;
+  const fxColor = (unitId) => catalog[unitId].fx ?? TYPE_FX[catalog[unitId].type] ?? '#fff';
+
+  // One-shot visual effect centred on a board square; `cells` sets its size in squares.
+  function fx(vx, vy, cls, color, cells = 1) {
+    const el = document.createElement('div');
+    el.className = `fx ${cls}`;
+    el.style.setProperty('--fx', color);
+    el.style.setProperty('--cells', cells);
+    el.style.left = `${((vx + 0.5 - cells / 2) * 100) / COLS}%`;
+    el.style.top = `${((vy + 0.5 - cells / 2) * 100) / ROWS}%`;
+    el.addEventListener('animationend', () => el.remove());
+    layer.append(el);
+  }
+
+  // Fly a projectile from one square to another; returns its flight time in ms.
+  function projectile(from, to, color, big) {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const ms = Math.max(160, 90 * Math.max(Math.abs(dx), Math.abs(dy))) / speed;
+    const el = document.createElement('div');
+    el.className = `projectile${big ? ' big' : ''}`;
+    el.style.setProperty('--fx', color);
+    el.style.setProperty('--angle', `${Math.atan2(dy, dx)}rad`);
+    el.innerHTML = '<i></i>';
+    place(el, from.x, from.y);
+    el.style.zIndex = 16;
+    layer.append(el);
+    el.animate([{ translate: '0 0' }, { translate: `${dx * 100}% ${dy * 100}%` }], { duration: ms, easing: 'linear' })
+      .onfinish = () => el.remove();
+    return ms;
+  }
+
+  // `idx` is the event's position in the log. A delayed hit must never
+  // overwrite newer HP/mana, so state is only applied if it's the newest seen.
+  function applyEvent(ctx, ev, idx, animate) {
+    const { actors, later } = ctx;
     const a = actors.get(ev.id);
     if (!a) return;
+    const newest = () => { if (idx < (a.seq ?? -1)) return false; a.seq = idx; return true; };
+    const at = () => viewPos(a.x, a.y);
     switch (ev.type) {
       case 'move': {
         const from = viewPos(a.x, a.y);
@@ -478,6 +536,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
       case 'attack': {
         a.mana = ev.mana;
         bars(a);
+        ctx.action.set(a.id, 'attack');
         if (!animate) break;
         const t = actors.get(ev.target);
         const from = viewPos(a.x, a.y);
@@ -485,40 +544,69 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         a.el.style.setProperty('--dx', Math.sign(to.x - from.x));
         a.el.style.setProperty('--dy', Math.sign(to.y - from.y));
         face(a, to.x - from.x, to.y - from.y);
-        pulse(a.el, a.range > 1 ? 'shoot' : 'lunge');
+        pulse(a.el, rangeOf(a) > 1 ? 'shoot' : 'lunge');
+        if (rangeOf(a) > 1) ctx.srcDelay.set(a.id, projectile(from, to, fxColor(a.unitId), false));
         break;
       }
-      case 'damage':
-        a.hp = ev.hp;
-        a.shield = ev.shield;
-        a.mana = ev.mana;
+      case 'cast': {
+        a.mana = 0;
         bars(a);
-        if (animate) { floatText(a, `-${ev.amount}`, 'dmg'); pulse(a.el, 'hit'); }
+        ctx.action.set(a.id, 'cast');
+        if (!animate) break;
+        const ab = catalog[a.unitId].ability;
+        pulse(a.el, 'casting');
+        floatText(a, ab.name, 'cast');
+        if (!['strike', 'stun', 'blast'].includes(ab.kind)) break; // heal/shield show on each recipient
+        const t = actors.get(ev.target);
+        const from = viewPos(a.x, a.y);
+        const to = viewPos(t.x, t.y);
+        face(a, to.x - from.x, to.y - from.y);
+        const color = fxColor(a.unitId);
+        const flight = rangeOf(a) > 1 ? projectile(from, to, color, true) : 0;
+        ctx.srcDelay.set(a.id, flight);
+        later(flight, () => {
+          if (ab.kind === 'blast') fx(to.x, to.y, 'ring', color, ab.radius * 2 + 1);
+          else fx(to.x, to.y, ab.kind === 'stun' ? 'zap' : 'burst', color, 1.6);
+        });
         break;
+      }
+      case 'damage': {
+        const delay = animate ? ctx.srcDelay.get(ev.src) ?? 0 : 0;
+        if (delay) ctx.hitDelay.set(a.id, delay);
+        const src = actors.get(ev.src);
+        later(delay, () => {
+          if (newest()) {
+            a.hp = ev.hp;
+            a.shield = ev.shield;
+            a.mana = ev.mana;
+            bars(a);
+          }
+          if (!animate) return;
+          floatText(a, `-${ev.amount}`, 'dmg');
+          pulse(a.el, 'hit');
+          if (src && rangeOf(src) <= 1 && ctx.action.get(src.id) === 'attack') fx(at().x, at().y, 'slash', fxColor(src.unitId));
+        });
+        break;
+      }
       case 'heal':
-        a.hp = ev.hp;
-        bars(a);
-        if (animate && ev.amount) floatText(a, `+${ev.amount}`, 'heal');
+        if (newest()) { a.hp = ev.hp; bars(a); }
+        if (animate && ev.amount) { floatText(a, `+${ev.amount}`, 'heal'); fx(at().x, at().y, 'heal', '#5be38a', 1.3); }
         break;
       case 'shield':
         a.shield = ev.shield;
         bars(a);
-        if (animate) floatText(a, `+${ev.amount}`, 'shield');
-        break;
-      case 'cast':
-        a.mana = 0;
-        bars(a);
-        if (animate) { pulse(a.el, 'casting'); floatText(a, catalog[a.unitId].ability.name, 'cast'); }
+        if (animate) { floatText(a, `+${ev.amount}`, 'shield'); fx(at().x, at().y, 'shield', '#ffffff', 1.3); }
         break;
       case 'stun':
         a.stunUntil = ev.t + ev.duration;
-        a.el.classList.add('stunned');
+        later(ctx.hitDelay.get(a.id) ?? 0, () => a.el.classList.add('stunned'));
         break;
       case 'death':
-        a.el.classList.add('dead');
+        later(ctx.hitDelay.get(a.id) ?? 0, () => a.el.classList.add('dead'));
         break;
     }
   }
+
 
   // ---- overlays ------------------------------------------------------------
 

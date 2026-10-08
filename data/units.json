@@ -52,12 +52,12 @@
   },
 
   "toxtricity": {
-    "name": "Toxtricity", "sprite": "assets/sprites/toxtricity.png", "type": "ranger", "cost": 2,
+    "name": "Toxtricity", "sprite": "assets/sprites/toxtricity.png", "type": "ranger", "cost": 2, "fx": "#ffe14d",
     "hp": 520, "atk": 60, "armor": 10, "range": 5, "attackCd": 10, "moveCd": 5, "mana": 70,
     "ability": { "name": "Thunderbolt", "kind": "stun", "damage": 200, "duration": 10 }
   },
   "beheeyem": {
-    "name": "Beheeyem", "sprite": "assets/sprites/beheeyem.png", "type": "mage", "cost": 2,
+    "name": "Beheeyem", "sprite": "assets/sprites/beheeyem.png", "type": "mage", "cost": 2, "fx": "#ff7ad9",
     "hp": 560, "atk": 55, "armor": 10, "range": 3, "attackCd": 10, "moveCd": 5, "mana": 65,
     "ability": { "name": "Psyshock", "kind": "strike", "damage": 260 }
   },
@@ -78,7 +78,7 @@
     "ability": { "name": "Meteor", "kind": "blast", "damage": 330, "radius": 1, "duration": 10 }
   },
   "coalossal": {
-    "name": "Coalossal", "sprite": "assets/sprites/coalossal.png", "type": "warrior", "cost": 3,
+    "name": "Coalossal", "sprite": "assets/sprites/coalossal.png", "type": "warrior", "cost": 3, "fx": "#ff7a2f",
     "hp": 1000, "atk": 130, "armor": 30, "range": 1, "attackCd": 16, "moveCd": 10, "mana": 80,
     "ability": { "name": "Heat Crash", "kind": "strike", "damage": 450 }
   },
@@ -94,17 +94,17 @@
   },
 
   "decidueye": {
-    "name": "Decidueye", "leader": true, "sprite": "assets/sprites/decidueye.png", "type": "ranger", "cost": 0,
+    "name": "Decidueye", "leader": true, "sprite": "assets/sprites/decidueye.png", "type": "ranger", "cost": 0, "fx": "#8ee07a",
     "hp": 1100, "atk": 100, "armor": 20, "range": 4, "attackCd": 10, "moveCd": 5, "mana": 70,
     "ability": { "name": "Spirit Shackle", "kind": "stun", "damage": 260, "duration": 15 }
   },
   "infernape": {
-    "name": "Infernape", "leader": true, "sprite": "assets/sprites/infernape.png", "type": "warrior", "cost": 0,
+    "name": "Infernape", "leader": true, "sprite": "assets/sprites/infernape.png", "type": "warrior", "cost": 0, "fx": "#ff8a2a",
     "hp": 1050, "atk": 78, "armor": 25, "range": 1, "attackCd": 8, "moveCd": 4, "mana": 90,
     "ability": { "name": "Flare Blitz", "kind": "blast", "damage": 220, "radius": 1 }
   },
   "greninja": {
-    "name": "Greninja", "leader": true, "sprite": "assets/sprites/greninja.png", "type": "rogue", "cost": 0,
+    "name": "Greninja", "leader": true, "sprite": "assets/sprites/greninja.png", "type": "rogue", "cost": 0, "fx": "#5ab8ff",
     "hp": 1000, "atk": 90, "armor": 15, "range": 1, "attackCd": 7, "moveCd": 3, "mana": 60,
     "ability": { "name": "Water Shuriken", "kind": "strike", "damage": 330 }
   }
