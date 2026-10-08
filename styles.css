@@ -654,7 +654,6 @@ kbd { background: var(--panel-2); border: 1px solid var(--line); border-radius: 
 }
 
 /* ---- Power effects ---- */
-.unit.summon .sprite { scale: 0.68; translate: 0 12%; }
 .unit.stealthed { opacity: 0.35; }
 .unit.stealthed .bars { visibility: hidden; }
 .unit.hasted .sprite { filter: drop-shadow(0 0 0.35em var(--fx)) saturate(1.4); }

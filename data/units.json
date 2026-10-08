@@ -40,7 +40,7 @@
     "ability": {"name": "Blaze", "kind": "haste", "duration": 30, "hastePct": 50}
   },
   "combee": {
-    "name": "Combee", "summon": true, "sprite": "assets/sprites/vespiquen.png", "fx": "#ffd35a", "type": "warrior", "cost": 0,
+    "name": "Combee", "summon": true, "sprite": "assets/sprites/combee.png", "fx": "#ffd35a", "type": "warrior", "cost": 0,
     "hp": [250, 400, 650, 1050], "damage": [35, 55, 90, 145], "range": 1, "moveSpeed": "fast", "secPerHit": 1.0, "critChance": 15, "energy": 0,
     "ability": null
   }
