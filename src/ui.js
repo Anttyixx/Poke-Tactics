@@ -2,7 +2,7 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, CRIT_PCT, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, TICK_SECONDS, abilityPower, unitStats } from './combat.js';
+import { COLS, CRIT_PCT, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, TICK_SECONDS, powerDamage, unitStats } from './combat.js';
 import {
   COPIES_PER_TROOP, LOSS_COINS, MAX_REROLLS, WIN_COINS,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
@@ -27,21 +27,34 @@ const moveText = (def) => `${SPEED_NAME[def.moveSpeed]} (${MOVE_SPEEDS[def.moveS
 // Internal combat numbers -> the design sheet's units.
 const show = (v) => +(v / STAT_SCALE).toFixed(1);
 
-export function describeAbility(def, star) {
-  const ab = def.ability;
-  const ratio = unitStats(def, star).ratio;
-  const p = (v) => show(abilityPower(v, ratio));
-  const stunText = ab.duration ? ` and stuns for ${secs(ab.duration)}s` : '';
-  const anywhere = (text) => (ab.range >= ROWS ? `${text} Reaches any enemy on the board.` : text);
-  switch (ab.kind) {
-    case 'strike': return anywhere(`Strikes its target for ${p(ab.damage)} damage.`);
-    case 'stun': return anywhere(`Hits its target for ${p(ab.damage)} damage${stunText}.`);
-    case 'blast': return `Blasts the target and adjacent enemies for ${p(ab.damage)} damage${stunText}.`;
-    case 'heal': return ab.target === 'all' ? `Heals all allies for ${p(ab.amount)}.` : `Heals the most injured ally for ${p(ab.amount)}.`;
-    case 'shield': return ab.target === 'allies' ? `Shields all allies for ${p(ab.amount)}.` : `Shields itself for ${p(ab.amount)}.`;
+// What a Pokémon's power does, in plain words, with numbers for this star level.
+export function describePower(def, star, catalog) {
+  const p = def.ability;
+  if (!p) return '';
+  const every = `After every ${def.energy} attacks`;
+  const dmg = powerDamage(def, star);
+  switch (p.kind) {
+    case 'empower': {
+      const extras = [
+        p.teleport && 'teleports next to the farthest enemy and',
+        `hits for ${p.damagePct}% damage (${show(dmg)})`,
+        p.knockback && `, knocking the target back ${p.knockback} squares`,
+        p.stun && `${p.knockback ? 'and stunning it' : 'and stuns the target'} for ${secs(p.stun)}s`,
+        p.lifestealPct && `, healing for ${p.lifestealPct}% of the damage dealt`,
+      ].filter(Boolean).join(' ').replace(/ ,/g, ',');
+      return `${every}, its next attack ${extras}.`;
+    }
+    case 'snipe': return `Every ${def.energy}th attack also zaps the farthest enemy for ${p.damagePct}% damage (${show(dmg)}).`;
+    case 'summon': return `${every}, it summons a ${catalog?.[p.unit]?.name ?? p.unit} next to it, at the same star level.`;
+    case 'stealth': return `${every}, it turns invisible for ${secs(p.duration)}s${p.hastePct ? ` and attacks ${p.hastePct}% faster` : ''}. Enemies can't target or follow it while it's invisible.`;
+    case 'haste': return `${every}, it's enraged: ${p.hastePct}% faster attacks for ${secs(p.duration)}s.`;
+    case 'opening': return `When the battle starts, it fires a wave down its column. The first enemy hit takes ${p.damagePct}% damage (${show(dmg)}) and is knocked to the far end of the column. Anyone already there is pushed to the side.`;
     default: return '';
   }
 }
+
+// When a power goes off, as a short tag.
+export const powerCadence = (def) => (!def.ability ? 'No power' : def.ability.kind === 'opening' ? 'Power at battle start' : `Power every ${def.energy} attacks`);
 
 export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   const $ = (id) => document.getElementById(id);
@@ -110,7 +123,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   function unitEl(unitId, star, side = 'ally', facing = 'down') {
     const def = catalog[unitId];
     const el = document.createElement('div');
-    el.className = `unit ${side}${def.sprite ? ' sprite-unit' : ''}`;
+    el.className = `unit ${side}${def.sprite ? ' sprite-unit' : ''}${def.summon ? ' summon' : ''}`;
     el.dataset.type = def.type;
     // Animation pacing follows movement speed (--step 1 = 0.5s per square).
     el.style.setProperty('--step', unitStats(def, 0).moveCd / 5);
@@ -427,9 +440,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         <dt>DPS</dt><dd>${dps(stats)}</dd>
         <dt>Range</dt><dd>${def.range}</dd>
         <dt>Movement</dt><dd>${SPEED_NAME[def.moveSpeed]}</dd>
-        <dt>Super energy</dt><dd>${stats.energy}</dd>
       </dl>
-      <p class="ability"><b>${esc(def.ability.name)}:</b> ${describeAbility(def, star)}</p>
+      ${def.ability ? `<p class="ability"><b>${esc(def.ability.name)}:</b> ${describePower(def, star, catalog)}</p>` : ''}
       ${inst && canPlan()
         ? `<button id="sell" class="danger">Sell for ${sellValue(catalog, inst)} coins (${copies} ${copies === 1 ? 'copy' : 'copies'} back to pool)</button>` : ''}`;
   }
@@ -449,7 +461,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
 
     const actors = new Map();
     layer.replaceChildren();
-    for (const u of result.initial) {
+    const addActor = (u) => {
       const ally = u.side === viewer;
       const a = { ...u, shield: 0, stunUntil: 0, el: unitEl(u.unitId, u.star, ally ? 'ally' : 'enemy', ally ? 'up' : 'down') };
       const p = viewPos(u.x, u.y);
@@ -457,7 +469,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
       layer.append(a.el);
       actors.set(u.id, a);
       bars(a);
-    }
+      return a;
+    };
+    for (const u of result.initial) addActor(u);
 
     const { events } = result;
     let tick = 0;
@@ -476,7 +490,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
       pending.push(job);
     };
     const flush = () => { for (const j of pending) { clearTimeout(j.timer); j.fn(); } pending = []; };
-    const ctx = { actors, later, srcDelay: new Map(), hitDelay: new Map(), action: new Map() };
+    const ctx = { actors, addActor, later, srcDelay: new Map(), hitDelay: new Map(), action: new Map() };
 
     const advance = (animate) => {
       tick++;
@@ -486,6 +500,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
       while (next < events.length && events[next].t <= tick) { applyEvent(ctx, events[next], next, animate); next++; }
       for (const a of actors.values()) {
         if (a.stunUntil && tick >= a.stunUntil) { a.stunUntil = 0; a.el.classList.remove('stunned'); }
+        if (a.stealthUntil && tick >= a.stealthUntil) { a.stealthUntil = 0; a.el.classList.remove('stealthed'); }
+        if (a.hasteUntil && tick >= a.hasteUntil) { a.hasteUntil = 0; a.el.classList.remove('hasted'); }
       }
     };
     const finish = () => {
@@ -565,13 +581,13 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     el.timers[cls] = setTimeout(() => el.classList.remove(cls), ms);
   }
 
-  // Which body animation a Super uses, and when (ms at 1x) its hit lands
+  // Which body animation a power uses, and when (ms at 1x) its hit lands
   // within that animation, so damage and effects line up with the motion.
-  function superMotion(ab, ranged) {
-    if (ab.kind === 'blast') return { cls: 'cast-slam', ms: 600, impact: 510 };
-    if (ab.kind === 'stun') return { cls: 'cast-charge', ms: 500, impact: 250 };
-    if (ranged || ab.kind === 'heal' || ab.kind === 'shield') return { cls: 'cast-channel', ms: 550, impact: 275 };
-    return { cls: 'cast-strike', ms: 500, impact: 325 };
+  function powerMotion(p, ranged) {
+    if (p.knockback) return { cls: 'cast-slam', ms: 600, impact: 510 };
+    if (p.kind === 'empower') return { cls: 'cast-strike', ms: 500, impact: 325 };
+    if (p.kind === 'snipe') return { cls: 'cast-charge', ms: 500, impact: 250 };
+    return { cls: 'cast-channel', ms: 550, impact: 275 };
   }
 
   const flightMs = (from, to) => Math.max(160, 90 * Math.max(Math.abs(to.x - from.x), Math.abs(to.y - from.y))) / speed;
@@ -659,31 +675,60 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         bars(a);
         ctx.action.set(a.id, 'cast');
         if (!animate) break;
-        const ab = catalog[a.unitId].ability;
+        const p = catalog[a.unitId].ability;
         const ranged = rangeOf(a) > 1;
-        const t = actors.get(ev.target);
         const from = viewPos(a.x, a.y);
-        const to = viewPos(t.x, t.y);
+        const t = actors.get(ev.target);
+        // The opening wave flies to its target, or to the end of the column if it misses.
+        const to = t ? viewPos(t.x, t.y) : ev.x !== undefined ? viewPos(ev.x, ev.y) : null;
+        const motion = powerMotion(p, ranged);
+        play(a.el, motion.cls, motion.ms / speed);
+        floatText(a, p.name, 'cast');
+        const color = fxColor(a.unitId);
+        if (!to) { fx(from.x, from.y, 'ring', color, 1.6); break; } // self buffs and summons
         a.el.style.setProperty('--dx', Math.sign(to.x - from.x));
         a.el.style.setProperty('--dy', Math.sign(to.y - from.y));
         face(a, to.x - from.x, to.y - from.y);
-        const motion = superMotion(ab, ranged);
-        play(a.el, motion.cls, motion.ms / speed);
-        floatText(a, ab.name, 'cast');
-        if (!['strike', 'stun', 'blast'].includes(ab.kind)) break; // heal/shield show on each recipient
-        const color = fxColor(a.unitId);
-        // Ranged Supers launch their orb at the peak of the wind-up; melee ones
-        // (and the slam) hit at the moment of contact.
+        // Ranged powers launch their orb at the peak of the wind-up; melee ones
+        // hit at the moment of contact.
         const windup = motion.impact / speed;
-        const flight = ranged && ab.kind !== 'blast' ? flightMs(from, to) : 0;
+        const shot = p.kind === 'snipe' || p.kind === 'opening';
+        const flight = shot ? flightMs(from, to) : 0;
         if (flight) later(windup, () => projectile(from, to, color, true));
         ctx.srcDelay.set(a.id, windup + flight);
-        later(windup + flight, () => {
-          if (ab.kind === 'blast') fx(to.x, to.y, 'ring', color, ab.radius * 2 + 1);
-          else fx(to.x, to.y, ab.kind === 'stun' ? 'zap' : 'burst', color, 1.6);
-        });
+        if (t) later(windup + flight, () => fx(to.x, to.y, p.kind === 'snipe' ? 'zap' : 'burst', color, 1.6));
         break;
       }
+      case 'summon': {
+        const pal = ctx.addActor(ev.unit);
+        if (animate) { play(pal.el, 'spawned', 400); const p = viewPos(pal.x, pal.y); fx(p.x, p.y, 'ring', fxColor(pal.unitId), 1.3); }
+        break;
+      }
+      case 'knock': {
+        // Thrown by a hit: lands when the hit does.
+        const delay = animate ? ctx.hitDelay.get(a.id) ?? 0 : 0;
+        a.x = ev.x;
+        a.y = ev.y;
+        later(delay, () => { const p = viewPos(ev.x, ev.y); place(a.el, p.x, p.y); if (animate) play(a.el, 'knocked', 350 / speed); });
+        break;
+      }
+      case 'teleport': {
+        const from = viewPos(a.x, a.y);
+        a.x = ev.x;
+        a.y = ev.y;
+        const p = viewPos(a.x, a.y);
+        if (animate) { fx(from.x, from.y, 'burst', fxColor(a.unitId), 1.2); play(a.el, 'blink', 250 / speed); }
+        place(a.el, p.x, p.y);
+        break;
+      }
+      case 'stealth':
+        a.stealthUntil = ev.t + ev.duration;
+        a.el.classList.add('stealthed');
+        break;
+      case 'haste':
+        a.hasteUntil = ev.t + ev.duration;
+        a.el.classList.add('hasted');
+        break;
       case 'damage': {
         const delay = animate ? ctx.srcDelay.get(ev.src) ?? 0 : 0;
         if (delay) ctx.hitDelay.set(a.id, delay);
@@ -755,7 +800,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
       ${portrait(def)}
       <b>${esc(def.name)}</b>
       <span class="muted">${def.cost} coins · ${def.range > 1 ? `Ranged (${def.range})` : 'Melee'} · ${show(stats.hp)} HP · ${show(stats.atk)} dmg every ${attackTime(stats)}s</span>
-      <small><b>${esc(def.ability.name)}:</b> ${describeAbility(def, 0)} (every ${stats.energy} attacks)</small>
+      <small><b>${esc(def.ability.name)}:</b> ${describePower(def, 0, catalog)}</small>
     </button>`;
   }
 
@@ -805,14 +850,15 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     const list = (ids, title) => `<h3>${title}</h3><div class="dex-list">${ids.map((id) => {
       const def = catalog[id];
       return `<button class="dex-entry${id === dexPick ? ' active' : ''}" data-dex="${id}" data-type="${def.type}">
-        ${portrait(def)}<span>${esc(def.name)}</span><small>${def.cost} 🪙</small></button>`;
+        ${portrait(def)}<span>${esc(def.name)}</span><small>${def.summon ? 'summon' : `${def.cost} 🪙`}</small></button>`;
     }).join('')}</div>`;
+    const summons = Object.keys(catalog).filter((id) => catalog[id].summon).sort();
     const def = catalog[dexPick];
     const rows = [0, 1, 2, 3].map((star) => {
       const st = unitStats(def, star);
       return {
         star, hp: show(st.hp), dmg: show(st.atk), crit: show(Math.floor((st.atk * CRIT_PCT) / 100)), dps: dps(st),
-        sup: show(abilityPower(def.ability.damage ?? def.ability.amount ?? 0, st.ratio)),
+        sup: powerDamage(def, star) === null ? '—' : show(powerDamage(def, star)),
       };
     });
     const col = (label, key) => `<tr><th>${label}</th>${rows.map((r) => `<td>${r[key]}</td>`).join('')}</tr>`;
@@ -821,19 +867,19 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
       <button id="dex-close" class="ghost" aria-label="Close">✕</button>
       <h1>Pokédex</h1>
       <div class="dex-body">
-        <nav class="dex-nav">${list(troopIds(catalog), 'Pokémon')}</nav>
+        <nav class="dex-nav">${list(troopIds(catalog), 'Pokémon')}${summons.length ? list(summons, 'Summoned in battle') : ''}</nav>
         <section class="dex-detail" data-type="${def.type}">
           <div class="dex-hero">
             <span class="portrait dex-portrait" data-facing="down"><span class="sprite" ${spriteStyle(def)}></span></span>
             <div>
               <h2>${esc(def.name)}</h2>
               <p class="dex-tags">
-                <span>${def.cost} coins</span>
+                <span>${def.summon ? 'Summoned' : `${def.cost} coins`}</span>
                 <span>${def.range > 1 ? `Ranged · ${def.range} tiles` : 'Melee · 1 tile'}</span>
                 <span>Moves: ${moveText(def)}</span>
                 <span>Attacks every ${attackTime(stats0)}s</span>
                 <span>Crit ${stats0.crit}%</span>
-                <span>Super every ${stats0.energy} attacks</span>
+                <span>${powerCadence(def)}</span>
               </p>
             </div>
           </div>
@@ -844,12 +890,12 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
               ${col('Damage per hit', 'dmg')}
               ${col('Crit damage', 'crit')}
               ${col('DPS', 'dps')}
-              ${col(`${esc(def.ability.name)} damage`, 'sup')}
+              ${def.ability ? col(`${esc(def.ability.name)} damage`, 'sup') : ''}
             </tbody>
           </table>
           <p class="muted">Copies on the board: 1 = 0★, 2 = ★, 3 = ★★, 4 = ★★★. A crit deals 50% more damage.</p>
-          <h3>Super: ${esc(def.ability.name)}</h3>
-          <p>${describeAbility(def, 0)}</p>
+          ${def.ability ? `<h3>Power: ${esc(def.ability.name)}</h3>
+          <p>${describePower(def, 0, catalog)}</p>` : `<p>${esc(def.name)} can't be picked: it's summoned in battle.</p>`}
         </section>
       </div>`;
   }

@@ -25,11 +25,6 @@ export const CRIT_PCT = 150;
 // Movement speed tiers, in seconds per square.
 export const MOVE_SPEEDS = { fast: 0.5, medium: 0.8, slow: 1.0, 'very slow': 1.3 };
 
-// How much stronger a star level hits than 0★: Supers scale by the same amount.
-export function starRatio(def, star) {
-  return def.damage[star] / def.damage[0];
-}
-
 // A unit's combat stats at a star level, in internal units (integers).
 export function unitStats(def, star) {
   return {
@@ -39,11 +34,10 @@ export function unitStats(def, star) {
     moveCd: Math.max(1, Math.round(MOVE_SPEEDS[def.moveSpeed] / TICK_SECONDS)), // ticks per square
     crit: def.critChance ?? 0, // percent
     energy: def.energy,
-    ratio: starRatio(def, star),
   };
 }
-// Ability damage/heal/shield amounts are given for 0★ in sheet units.
-export const abilityPower = (value, ratio) => Math.round(value * ratio * STAT_SCALE);
+// Damage a power deals at a star level (powers set it as a % of the unit's hit), or null.
+export const powerDamage = (def, star) => (def.ability?.damagePct ? Math.floor((def.damage[star] * STAT_SCALE * def.ability.damagePct) / 100) : null);
 
 // Board positions are stored in "own" coordinates: x 0..COLS-1, y 0..HALF-1
 // with y = 0 being the front line. Side 1 is point-mirrored so both players
@@ -55,6 +49,7 @@ export function toCombatPos(side, x, y) {
 // Fixed order = deterministic tie-breaking when choosing where to step.
 // Units walk one square at a time, up/down/left/right only (no diagonal steps).
 const NEIGHBORS = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+const DIAGONALS = [[-1, -1], [1, -1], [-1, 1], [1, 1]];
 
 // Deterministic hash (no Math.random: combat must replay identically).
 function hash(seed, t, salt = 0) {
@@ -73,29 +68,30 @@ const critRoll = (seed, t, slot) => hash(seed, t, slot + 1) % 100;
 const dist = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 const manhattan = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 
-function spawn(catalog, inst, side, id, slot) {
+function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, inst.y)) {
   const def = catalog[inst.unitId];
-  const pos = toCombatPos(side, inst.x, inst.y);
   const stats = unitStats(def, inst.star);
   return {
     id, side, slot, uid: inst.uid, unitId: inst.unitId, star: inst.star,
     x: pos.x, y: pos.y,
     hp: stats.hp, maxHp: stats.hp,
-    atk: stats.atk, ratio: stats.ratio, crit: stats.crit,
+    atk: stats.atk, crit: stats.crit,
     armor: def.armor ?? 0, range: def.range,
     attackCd: stats.attackCd, moveCd: stats.moveCd,
-    mana: 0, maxMana: stats.energy,
-    ability: def.ability,
+    mana: 0, maxMana: stats.energy, // mana counts attacks toward the power; 0 = no counter
+    power: def.ability,
     shield: 0, stun: 0,
     pendingMana: 0, pendingStun: 0, // applied at the end of the tick
     atkTimer: FIRST_ATTACK_DELAY, moveTimer: 0,
-    target: null, alive: true,
+    hasteUntil: 0, hastePct: 0, stealthFrom: 0, stealthUntil: 0,
+    target: null, alive: true, summoned: Boolean(inst.summoned),
   };
 }
 
 const snapshot = (u) => ({
   id: u.id, side: u.side, uid: u.uid, unitId: u.unitId, star: u.star,
   x: u.x, y: u.y, hp: u.hp, maxHp: u.maxHp, mana: u.mana, maxMana: u.maxMana,
+  ...(u.summoned && { summoned: true }),
 });
 
 // `seed` decides crits and which side acts first on each tick (see below).
@@ -110,12 +106,17 @@ export function simulate(catalog, boards, seed = 0) {
   const events = [];
   let t = 0;
   const emit = (type, data) => events.push({ t, type, ...data });
-  const occupied = (x, y) => units.some((u) => u.alive && u.x === x && u.y === y);
+  const inside = (x, y) => x >= 0 && y >= 0 && x < COLS && y < ROWS;
+  const unitAt = (x, y) => units.find((u) => u.alive && u.x === x && u.y === y);
+  const occupied = (x, y) => Boolean(unitAt(x, y));
   // Ticks resolve simultaneously: a unit knocked out this tick (hp 0) still acts
   // this tick (its `alive` flag only clears at the end of the tick), but nobody
   // can target, damage, heal or stun it any more. Without this, whichever side
   // happens to act first in a tick wins every even trade.
   const standing = (u) => u.alive && u.hp > 0;
+  // Invisible units can't be targeted or tracked by enemies. Invisibility
+  // starts on the next tick, so it never decides who wins a same-tick trade.
+  const visible = (u) => standing(u) && !(t > u.stealthFrom && t <= u.stealthUntil);
   // Mana gained from being hit, and stuns, also wait for the end of the tick, so
   // a unit's action this tick never depends on who happened to act before it.
   // Events report mana as it will be once the tick ends.
@@ -125,41 +126,49 @@ export function simulate(catalog, boards, seed = 0) {
   // new square until next tick. (Square occupancy stays live: no two units
   // can ever share a square.)
   const at = (u) => ({ x: u.sx, y: u.sy });
+  // Side 1's board is point-mirrored, so it reads direction lists mirrored too;
+  // otherwise the two sides would break ties differently.
+  const dirs = (u, list = NEIGHBORS) => list.map(([dx, dy]) => (u.side === 1 ? [-dx, -dy] : [dx, dy]));
+  const enemiesOf = (u) => units.filter((e) => e.side !== u.side && visible(e));
 
   function nearestEnemy(u) {
     let best = null;
     let bestDist = Infinity;
-    for (const e of units) {
-      if (!standing(e) || e.side === u.side) continue;
+    for (const e of enemiesOf(u)) {
       const d = dist(u, at(e));
       if (d < bestDist) { best = e; bestDist = d; }
     }
     return best;
   }
 
-  function lowestHealth(allies) {
-    return allies.reduce((a, b) => (b.hp * a.maxHp < a.hp * b.maxHp ? b : a));
+  function farthestEnemy(u) {
+    let best = null;
+    let bestDist = -1;
+    for (const e of enemiesOf(u)) {
+      const d = dist(u, at(e));
+      if (d > bestDist) { best = e; bestDist = d; }
+    }
+    return best;
   }
 
+  // Returns the damage actually dealt to HP.
   function damage(target, amount, src, crit = false) {
-    if (!standing(target)) return;
+    if (!standing(target)) return 0;
     const absorbed = Math.min(target.shield, amount);
     target.shield -= absorbed;
+    const before = target.hp;
     target.hp = Math.max(0, target.hp - (amount - absorbed));
     if (target.hp > 0) target.pendingMana += MANA_PER_HIT;
     emit('damage', { id: target.id, src: src.id, amount, hp: target.hp, shield: target.shield, mana: shownMana(target), ...(crit && { crit }) });
     if (target.hp === 0) emit('death', { id: target.id });
+    return before - target.hp;
   }
 
   function heal(target, amount) {
+    if (!standing(target)) return; // knocked out this tick: no coming back
     const gained = Math.min(amount, target.maxHp - target.hp);
     target.hp += gained;
     emit('heal', { id: target.id, amount: gained, hp: target.hp });
-  }
-
-  function addShield(target, amount) {
-    target.shield += amount;
-    emit('shield', { id: target.id, amount, shield: target.shield });
   }
 
   function stun(target, duration) {
@@ -167,47 +176,148 @@ export function simulate(catalog, boards, seed = 0) {
     emit('stun', { id: target.id, duration });
   }
 
-  function cast(u, target) {
-    const ab = u.ability;
-    const power = (v) => abilityPower(v, u.ratio);
-    const allies = units.filter((a) => standing(a) && a.side === u.side);
+  // Shove `u` to (x, y) without walking: knockbacks and teleports.
+  function relocate(u, cell, type) {
+    if (u.x === cell.x && u.y === cell.y) return;
+    u.x = cell.x;
+    u.y = cell.y;
+    emit(type, { id: u.id, x: u.x, y: u.y });
+  }
+
+  // The free square closest to `goal` (ties: closest to `from`, then a fixed
+  // side-mirrored scan order). `self` may stay on its own square.
+  function closestFree(goal, from, self, side) {
+    let best = null;
+    let key = null;
+    for (let i = 0; i < COLS * ROWS; i++) {
+      const j = side === 1 ? COLS * ROWS - 1 - i : i;
+      const c = { x: j % COLS, y: Math.floor(j / COLS) };
+      const o = unitAt(c.x, c.y);
+      if (o && o !== self) continue;
+      const k = [manhattan(c, goal), manhattan(c, from)];
+      if (!key || k[0] < key[0] || (k[0] === key[0] && k[1] < key[1])) { best = c; key = k; }
+    }
+    return best;
+  }
+
+  // A free square next to `target` (up/down/left/right), for teleports.
+  function freeBeside(u, target) {
+    const p = at(target);
+    for (const [dx, dy] of dirs(u)) {
+      const c = { x: p.x + dx, y: p.y + dy };
+      if (inside(c.x, c.y) && !occupied(c.x, c.y)) return c;
+    }
+    return null;
+  }
+
+  // Knockbacks from attacks land at the end of the tick (like stuns), so a unit
+  // hit early in the tick still acts from where it stood.
+  let knocks = [];
+  function knockback(u, target, squares) {
+    // Straight away from the attacker; for a diagonal hit, along the column.
+    const from = at(target);
+    const dy = Math.sign(from.y - at(u).y);
+    const dx = dy ? 0 : Math.sign(from.x - at(u).x);
+    let goal = from;
+    for (let i = 0; i < squares && inside(goal.x + dx, goal.y + dy); i++) goal = { x: goal.x + dx, y: goal.y + dy };
+    knocks.push({ target, goal, side: u.side });
+  }
+
+  function summon(u) {
+    const kin = units.length;
+    const cell = [...dirs(u), ...dirs(u, DIAGONALS)]
+      .map(([dx, dy]) => ({ x: u.x + dx, y: u.y + dy }))
+      .find((c) => inside(c.x, c.y) && !occupied(c.x, c.y));
+    if (!cell) return;
+    const pal = spawn(catalog, { uid: -kin, unitId: u.power.unit, star: u.star, summoned: true }, u.side, kin, bySide[u.side].length, cell);
+    pal.sx = pal.x;
+    pal.sy = pal.y;
+    units.push(pal);
+    bySide[u.side].push(pal);
+    emit('summon', { id: u.id, unit: snapshot(pal) });
+  }
+
+  // Powers that fire the moment the attack counter fills (no attack is lost).
+  function instantPower(u, target) {
+    const p = u.power;
     u.mana = 0;
-    emit('cast', { id: u.id, target: target.id });
-    switch (ab.kind) {
-      case 'strike':
-        damage(target, power(ab.damage), u);
+    switch (p.kind) {
+      case 'snipe': {
+        const far = farthestEnemy(u) ?? target;
+        emit('cast', { id: u.id, target: far.id });
+        damage(far, Math.floor((u.atk * p.damagePct) / 100), u);
         break;
-      case 'stun':
-        damage(target, power(ab.damage), u);
-        if (standing(target)) stun(target, ab.duration);
+      }
+      case 'summon':
+        emit('cast', { id: u.id, target: null });
+        summon(u);
         break;
-      case 'blast':
-        for (const e of units) {
-          if (!standing(e) || e.side === u.side || dist(at(e), at(target)) > ab.radius) continue;
-          damage(e, power(ab.damage), u);
-          if (ab.duration && standing(e)) stun(e, ab.duration);
-        }
+      case 'stealth':
+        emit('cast', { id: u.id, target: null });
+        u.stealthFrom = t;
+        u.stealthUntil = t + p.duration;
+        emit('stealth', { id: u.id, duration: p.duration });
+        if (p.hastePct) { u.hasteUntil = t + p.duration; u.hastePct = p.hastePct; emit('haste', { id: u.id, duration: p.duration }); }
         break;
-      case 'heal':
-        for (const a of ab.target === 'all' ? allies : [lowestHealth(allies)]) heal(a, power(ab.amount));
-        break;
-      case 'shield':
-        for (const a of ab.target === 'allies' ? allies : [u]) addShield(a, power(ab.amount));
+      case 'haste':
+        emit('cast', { id: u.id, target: null });
+        u.hasteUntil = t + p.duration;
+        u.hastePct = p.hastePct;
+        emit('haste', { id: u.id, duration: p.duration });
         break;
       default:
-        throw new Error(`Unknown ability kind "${ab.kind}"`);
+        throw new Error(`Unknown power kind "${p.kind}"`);
     }
   }
 
-  // Step to the free neighbouring cell that gets closest to the target.
+  // An empowered attack: the one after the counter fills.
+  function powerStrike(u, target) {
+    const p = u.power;
+    u.mana = 0;
+    emit('cast', { id: u.id, target: target.id });
+    const dealt = damage(target, Math.floor((u.atk * p.damagePct) / 100), u);
+    if (p.lifestealPct && dealt) heal(u, Math.floor((dealt * p.lifestealPct) / 100));
+    if (!standing(target)) return;
+    if (p.knockback) knockback(u, target, p.knockback);
+    if (p.stun) stun(target, p.stun);
+  }
+
+  // Beheeyem-style opener: a wave straight down the unit's column toward the
+  // enemy. The first enemy in the column is hit and knocked to the far end;
+  // anyone already standing there is pushed to the side.
+  function openingPower(u) {
+    const p = u.power;
+    const dy = u.side === 0 ? -1 : 1;
+    const end = u.side === 0 ? 0 : ROWS - 1;
+    let target = null;
+    for (let y = u.y + dy; inside(u.x, y) && !target; y += dy) {
+      const o = unitAt(u.x, y);
+      if (o && o.side !== u.side && visible(o)) target = o;
+    }
+    emit('cast', { id: u.id, target: target?.id ?? null, x: u.x, y: end });
+    if (!target) return;
+    damage(target, Math.floor((u.atk * p.damagePct) / 100), u);
+    if (!standing(target) || target.y === end) return;
+    const blocker = unitAt(u.x, end);
+    if (blocker) {
+      const side = dirs(u, [[-1, 0], [1, 0]]).map(([dx]) => ({ x: u.x + dx, y: end })).find((c) => inside(c.x, c.y) && !occupied(c.x, c.y));
+      if (side) relocate(blocker, side, 'knock');
+    }
+    // If the end square is still taken, land as close to it as possible in the column.
+    let y = end;
+    while (y !== target.y && occupied(u.x, y)) y -= dy;
+    relocate(target, { x: u.x, y }, 'knock');
+  }
+
+  const cooldown = (u) => (u.hasteUntil > t ? Math.max(1, Math.round((u.attackCd * 100) / (100 + u.hastePct))) : u.attackCd);
+
   // Shortest walk (breadth-first search, up/down/left/right) from `u` around
   // every other unit to a square where some enemy is within its attack range.
   // Returns the first square of that walk and the enemy it leads to, or null if
   // every route is blocked. Neighbours are explored in a side-mirrored order, so
   // both sides break ties the same way.
   function findPath(u) {
-    const flip = u.side === 1 ? -1 : 1;
-    const enemies = units.filter((e) => standing(e) && e.side !== u.side);
+    const enemies = enemiesOf(u);
     const key = (c) => c.y * COLS + c.x;
     const start = { x: u.x, y: u.y };
     const prev = new Map([[key(start), null]]);
@@ -226,9 +336,9 @@ export function simulate(catalog, boards, seed = 0) {
           return { next: first, target: reachable.e };
         }
       }
-      for (const [ndx, ndy] of NEIGHBORS) {
-        const n = { x: c.x + ndx * flip, y: c.y + ndy * flip };
-        if (n.x < 0 || n.y < 0 || n.x >= COLS || n.y >= ROWS || prev.has(key(n)) || occupied(n.x, n.y)) continue;
+      for (const [dx, dy] of dirs(u)) {
+        const n = { x: c.x + dx, y: c.y + dy };
+        if (!inside(n.x, n.y) || prev.has(key(n)) || occupied(n.x, n.y)) continue;
         prev.set(key(n), c);
         queue.push(n);
       }
@@ -248,14 +358,9 @@ export function simulate(catalog, boards, seed = 0) {
     let best = null;
     let bestD = dist(u, goal);
     let bestM = manhattan(u, goal);
-    // Side 1's board is point-mirrored, so it walks the neighbour list mirrored
-    // too; otherwise the two sides would break pathing ties differently.
-    const flip = u.side === 1 ? -1 : 1;
-    for (const [ndx, ndy] of NEIGHBORS) {
-      const dx = ndx * flip;
-      const dy = ndy * flip;
+    for (const [dx, dy] of dirs(u)) {
       const cell = { x: u.x + dx, y: u.y + dy };
-      if (cell.x < 0 || cell.y < 0 || cell.x >= COLS || cell.y >= ROWS || occupied(cell.x, cell.y)) continue;
+      if (!inside(cell.x, cell.y) || occupied(cell.x, cell.y)) continue;
       const d = dist(cell, goal);
       const m = manhattan(cell, goal);
       if (d < bestD || (d === bestD && m < bestM)) { best = cell; bestD = d; bestM = m; }
@@ -271,26 +376,36 @@ export function simulate(catalog, boards, seed = 0) {
     if (u.moveTimer > 0) u.moveTimer--;
 
     let target = u.target === null ? null : units[u.target];
-    if (!target || !standing(target) || dist(u, at(target)) > u.range) target = nearestEnemy(u);
+    if (!target || !visible(target) || target.side === u.side || dist(u, at(target)) > u.range) target = nearestEnemy(u);
     if (!target) return;
     u.target = target.id;
 
-    // A Super can have its own reach (ability.range), e.g. Decidueye's hits from
-    // anywhere on the board; basic attacks always use the unit's range.
-    const superReady = u.mana >= u.maxMana;
-    const reach = superReady ? Math.max(u.range, u.ability.range ?? 0) : u.range;
-    if (dist(u, at(target)) <= reach) {
+    // "Every N attacks, the next attack ..." powers.
+    const empowered = u.power?.kind === 'empower' && u.maxMana > 0 && u.mana >= u.maxMana;
+    if (empowered && u.power.teleport && u.atkTimer === 0) {
+      // No need to teleport if the farthest enemy is already in reach.
+      const far = farthestEnemy(u);
+      const cell = far && dist(u, at(far)) > u.range && freeBeside(u, far);
+      if (cell) {
+        relocate(u, cell, 'teleport');
+        target = far;
+        u.target = far.id;
+      }
+    }
+
+    if (dist(u, at(target)) <= u.range) {
       if (u.atkTimer > 0) return;
-      if (superReady) {
-        cast(u, target);
+      if (empowered) {
+        powerStrike(u, target);
       } else {
-        u.mana = Math.min(u.maxMana, u.mana + MANA_PER_ATTACK);
+        if (u.maxMana > 0) u.mana = Math.min(u.maxMana, u.mana + MANA_PER_ATTACK);
         emit('attack', { id: u.id, target: target.id, mana: shownMana(u) });
         const crit = critRoll(seed, t, u.slot) < u.crit;
         const hit = crit ? Math.floor((u.atk * CRIT_PCT) / 100) : u.atk;
         damage(target, Math.max(1, Math.floor((hit * 100) / (100 + target.armor))), u, crit);
+        if (u.power && u.power.kind !== 'empower' && u.maxMana > 0 && u.mana >= u.maxMana) instantPower(u, target);
       }
-      u.atkTimer = u.attackCd;
+      u.atkTimer = cooldown(u);
     } else if (u.moveTimer === 0) {
       // Out of range: walk around anyone in the way toward the enemy that can
       // be reached soonest (which may not be the one closest as the crow flies).
@@ -320,8 +435,11 @@ export function simulate(catalog, boards, seed = 0) {
     // Which side acts first each tick is a seeded coin flip. Attacks, mana and
     // stuns resolve simultaneously anyway; this only decides who claims a
     // contested square first. A fixed pattern (e.g. odd/even) would line up with
-    // cooldowns and always favour the same side. Each side keeps its unit order.
-    const order = coin(seed, t) ? units : [...bySide[1], ...bySide[0]];
+    // cooldowns and always favour the same side. Each side keeps its unit order,
+    // and units summoned this tick wait until the next one.
+    const order = coin(seed, t) ? [...bySide[0], ...bySide[1]] : [...bySide[1], ...bySide[0]];
+    // Battle-start powers go off on the first tick, before anyone acts.
+    if (t === 1) for (const u of order) if (u.power?.kind === 'opening' && standing(u)) openingPower(u);
     for (const u of order) if (u.alive) act(u);
     if (t === SUDDEN_DEATH_TICK) emit('suddenDeath', {});
     if (t >= SUDDEN_DEATH_TICK) {
@@ -335,6 +453,8 @@ export function simulate(catalog, boards, seed = 0) {
         if (u.hp === 0) emit('death', { id: u.id });
       }
     }
+    for (const k of knocks) if (standing(k.target)) relocate(k.target, closestFree(k.goal, k.target, k.target, k.side), 'knock');
+    knocks = [];
     for (const u of units) {
       if (u.hp === 0) u.alive = false; // knocked out this tick
       u.mana = shownMana(u);
@@ -352,6 +472,6 @@ export function simulate(catalog, boards, seed = 0) {
     events,
     winner,
     ticks: t,
-    survivors: units.filter((u) => u.alive && u.side === winner).map(snapshot),
+    survivors: units.filter((u) => u.alive && u.side === winner && !u.summoned).map(snapshot),
   };
 }

@@ -652,3 +652,18 @@ kbd { background: var(--panel-2); border: 1px solid var(--line); border-radius: 
   .dex-portrait { width: 80px; height: 80px; }
   .dex-panel { padding: 16px; }
 }
+
+/* ---- Power effects ---- */
+.unit.summon .sprite { scale: 0.68; translate: 0 12%; }
+.unit.stealthed { opacity: 0.35; }
+.unit.stealthed .bars { visibility: hidden; }
+.unit.hasted .sprite { filter: drop-shadow(0 0 0.35em var(--fx)) saturate(1.4); }
+.unit.blink { transition: none; animation: blink 0.25s ease-out; }
+.unit.knocked .body { animation: knocked 0.35s ease-out; }
+.unit.spawned { animation: spawned 0.4s ease-out; }
+@keyframes blink { from { opacity: 0; scale: 0.6; } to { opacity: 1; scale: 1; } }
+@keyframes knocked { 0% { rotate: 0deg; } 40% { rotate: -14deg; } 100% { rotate: 0deg; } }
+@keyframes spawned { from { opacity: 0; scale: 0.3; } to { opacity: 1; scale: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .unit.blink, .unit.knocked .body, .unit.spawned { animation: none; }
+}

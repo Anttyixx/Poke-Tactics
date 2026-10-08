@@ -1,42 +1,47 @@
 {
   "mawile": {
     "name": "Mawile", "sprite": "assets/sprites/mawile.png", "fx": "#d4dae6", "type": "warrior", "cost": 5,
-    "hp": [450, 815, 1470, 2650], "damage": [113, 200, 365, 655], "range": 1, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 5,
-    "ability": {"name": "Crunch", "kind": "strike", "damage": 414}
+    "hp": [450, 815, 1470, 2650], "damage": [113, 200, 365, 655], "range": 1, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 8,
+    "ability": {"name": "Jaw Lock", "kind": "empower", "damagePct": 130, "stun": 10}
   },
   "beheeyem": {
     "name": "Beheeyem", "sprite": "assets/sprites/beheeyem.png", "fx": "#ff7ad9", "type": "mage", "cost": 2,
-    "hp": [700, 1145, 1565, 2350], "damage": [116, 175, 261, 390], "range": 3, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 4,
-    "ability": {"name": "Psyshock", "kind": "strike", "damage": 580}
+    "hp": [700, 1145, 1565, 2350], "damage": [116, 175, 261, 390], "range": 3, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 0,
+    "ability": {"name": "Psywave", "kind": "opening", "damagePct": 50}
   },
   "toxtricity": {
     "name": "Toxtricity", "sprite": "assets/sprites/toxtricity.png", "fx": "#ffe14d", "type": "ranger", "cost": 4,
-    "hp": [1000, 1700, 2890, 4900], "damage": [100, 170, 290, 490], "range": 1, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 5,
-    "ability": {"name": "Thunderbolt", "kind": "stun", "damage": 350, "duration": 10}
+    "hp": [1000, 1700, 2890, 4900], "damage": [100, 170, 290, 490], "range": 1, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 8,
+    "ability": {"name": "Thunderbolt", "kind": "snipe", "damagePct": 80}
   },
   "vespiquen": {
     "name": "Vespiquen", "sprite": "assets/sprites/vespiquen.png", "fx": "#ffc23d", "type": "ranger", "cost": 3,
-    "hp": [840, 1350, 2155, 3450], "damage": [80, 125, 200, 320], "range": 3, "moveSpeed": "very slow", "secPerHit": 1.42, "critChance": 15, "energy": 4,
-    "ability": {"name": "Attack Order", "kind": "strike", "damage": 320}
+    "hp": [840, 1350, 2155, 3450], "damage": [80, 125, 200, 320], "range": 3, "moveSpeed": "very slow", "secPerHit": 1.42, "critChance": 15, "energy": 10,
+    "ability": {"name": "Attack Order", "kind": "summon", "unit": "combee"}
   },
   "coalossal": {
     "name": "Coalossal", "sprite": "assets/sprites/coalossal.png", "fx": "#ff7a2f", "type": "warrior", "cost": 5,
-    "hp": [1243, 2235, 4025, 7250], "damage": [155, 280, 500, 900], "range": 1, "moveSpeed": "very slow", "secPerHit": 2, "critChance": 15, "energy": 8,
-    "ability": {"name": "Heat Crash", "kind": "strike", "damage": 542}
+    "hp": [1243, 2235, 4025, 7250], "damage": [155, 280, 500, 900], "range": 1, "moveSpeed": "very slow", "secPerHit": 2, "critChance": 15, "energy": 6,
+    "ability": {"name": "Heat Crash", "kind": "empower", "damagePct": 130, "knockback": 2, "stun": 10}
   },
   "decidueye": {
     "name": "Decidueye", "sprite": "assets/sprites/decidueye.png", "fx": "#8ee07a", "type": "ranger", "cost": 4,
-    "hp": [800, 1360, 2310, 3930], "damage": [100, 170, 285, 490], "range": 4, "moveSpeed": "very slow", "secPerHit": 1.42, "critChance": 15, "energy": 5,
-    "ability": {"name": "Spirit Shackle", "kind": "stun", "damage": 350, "duration": 15, "range": 99}
+    "hp": [800, 1360, 2310, 3930], "damage": [100, 170, 285, 490], "range": 4, "moveSpeed": "very slow", "secPerHit": 1.42, "critChance": 15, "energy": 8,
+    "ability": {"name": "Phantom Force", "kind": "stealth", "duration": 30, "hastePct": 30}
   },
   "greninja": {
     "name": "Greninja", "sprite": "assets/sprites/greninja.png", "fx": "#5ab8ff", "type": "rogue", "cost": 3,
-    "hp": [600, 975, 1560, 2500], "damage": [75, 125, 195, 315], "range": 1, "moveSpeed": "medium", "secPerHit": 1.11, "critChance": 15, "energy": 5,
-    "ability": {"name": "Water Shuriken", "kind": "strike", "damage": 300}
+    "hp": [600, 975, 1560, 2500], "damage": [75, 125, 195, 315], "range": 1, "moveSpeed": "medium", "secPerHit": 1.11, "critChance": 15, "energy": 6,
+    "ability": {"name": "Night Slash", "kind": "empower", "damagePct": 130, "teleport": "farthest", "lifestealPct": 10}
   },
   "infernape": {
     "name": "Infernape", "sprite": "assets/sprites/infernape.png", "fx": "#ff8a2a", "type": "warrior", "cost": 2,
-    "hp": [945, 1415, 2125, 3190], "damage": [118, 180, 265, 400], "range": 1, "moveSpeed": "medium", "secPerHit": 1.11, "critChance": 15, "energy": 9,
-    "ability": {"name": "Flare Blitz", "kind": "blast", "damage": 295, "radius": 1}
+    "hp": [945, 1415, 2125, 3190], "damage": [118, 180, 265, 400], "range": 1, "moveSpeed": "medium", "secPerHit": 1.11, "critChance": 15, "energy": 7,
+    "ability": {"name": "Blaze", "kind": "haste", "duration": 30, "hastePct": 50}
+  },
+  "combee": {
+    "name": "Combee", "summon": true, "sprite": "assets/sprites/vespiquen.png", "fx": "#ffd35a", "type": "warrior", "cost": 0,
+    "hp": [250, 400, 650, 1050], "damage": [35, 55, 90, 145], "range": 1, "moveSpeed": "fast", "secPerHit": 1.0, "critChance": 15, "energy": 0,
+    "ability": null
   }
 }

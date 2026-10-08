@@ -42,7 +42,8 @@ export const MAX_STAR = COPIES_PER_TROOP - 1; // stars = copies - 1
 
 export const copiesOf = (inst) => inst.star + 1;
 export const sellValue = (catalog, inst) => catalog[inst.unitId].cost * copiesOf(inst);
-export const troopIds = (catalog) => Object.keys(catalog).sort();
+// Pokémon players can pick; summoned-only units (e.g. Combee) are never in a team.
+export const troopIds = (catalog) => Object.keys(catalog).filter((id) => !catalog[id].summon).sort();
 // How many troops a team needs (fewer only if the catalog doesn't have enough).
 export const teamSize = (catalog) => Math.min(TEAM_SIZE, troopIds(catalog).length);
 // The troop of this species already on the board, if any (never more than one).

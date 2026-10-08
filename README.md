@@ -52,9 +52,22 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
 - **Combat:** units target the nearest enemy they can reach and walk (pathing around anyone in the way)
   into range one square at a time (up/down/left/right). Movement speed is a tier: fast 0.5s per square,
   medium 0.8s, slow 1.0s, very slow 1.3s. A unit attacks every `secPerHit` seconds; each basic attack
-  has a `critChance`% chance to crit for 50% more damage (Supers never crit). Each attack builds energy,
-  and at full energy a unit casts its Super instead of attacking. Each tick resolves simultaneously, and
-  crit luck is shared slot for slot between the sides, so neither side gets an edge.
+  has a `critChance`% chance to crit for 50% more damage (powers never crit). Each tick resolves
+  simultaneously, and crit luck is shared slot for slot between the sides, so neither side gets an edge.
+- **Powers:** every Pokémon has one. Most count attacks (the purple bar):
+  - Mawile, **Jaw Lock**: after 8 attacks, the next hits for 130% and stuns for 1s.
+  - Beheeyem, **Psywave**: at the start of battle, a wave down its column hits the first enemy for 50% and
+    knocks it to the far end of the column; anyone already there is pushed to the side.
+  - Toxtricity, **Thunderbolt**: every 8th attack also zaps the farthest enemy for 80%.
+  - Vespiquen, **Attack Order**: every 10 attacks, summons a Combee next to it (same star level). Combee
+    fight but never count as survivors for round damage.
+  - Coalossal, **Heat Crash**: after 6 attacks, the next hits for 130%, knocks the target back 2 squares
+    (or to the closest free square) and stuns it for 1s.
+  - Decidueye, **Phantom Force**: after 8 attacks, invisible for 3s and attacks 30% faster. Enemies can't
+    target or follow an invisible unit.
+  - Greninja, **Night Slash**: after 6 attacks, the next teleports beside the farthest enemy (if it's out of
+    reach), hits for 130% and heals 10% of the damage dealt.
+  - Infernape, **Blaze**: after 7 attacks, attacks 50% faster for 3s.
 - **Sudden death:** fights have a 30-second timer. When it runs out, every Pokémon still standing loses
   300 HP per second (the same for everyone, ignoring shields) while the fight carries on, so the weakest
   fall first until one side is knocked out.
@@ -70,8 +83,8 @@ styles.css
 assets/sprites/     walk sheets: 256x256, 4x4 grid of 64px frames;
                     rows = facing down, left, right, up; columns = walk cycle
 data/units.json     unit catalog: cost, hp and damage per star, range, moveSpeed tier,
-                    secPerHit, critChance, energy and Super. Add units here; no code
-                    change needed unless you add a new ability "kind"
+                    secPerHit, critChance, energy (attacks per power) and the power
+                    ("ability"). "summon": true units (Combee) only appear in battle
 src/rng.js          seeded PRNG whose state is stored in game state
 src/combat.js       simulate(catalog, boards). Pure and deterministic, returns an event log
 src/game.js         rules: createGame(), applyIntent(). The only thing that changes state

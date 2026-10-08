@@ -55,7 +55,7 @@ function assertCopiesConserved(player) {
 // ---- catalog --------------------------------------------------------------
 
 test('unit catalog is well formed, and every unit has a sprite that exists', () => {
-  const kinds = new Set(['strike', 'stun', 'blast', 'heal', 'shield']);
+  const kinds = new Set(['empower', 'snipe', 'summon', 'stealth', 'haste', 'opening']);
   for (const [id, u] of Object.entries(catalog)) {
     for (const k of ['hp', 'damage']) {
       const v = u[k];
@@ -65,9 +65,17 @@ test('unit catalog is well formed, and every unit has a sprite that exists', () 
     assert.ok(u.secPerHit > 0, `${id}.secPerHit must be positive`);
     assert.ok(Object.hasOwn(MOVE_SPEEDS, u.moveSpeed) && u.moveSpeed !== 'statue', `${id}.moveSpeed "${u.moveSpeed}"`);
     assert.ok(u.critChance >= 0 && u.critChance <= 100, `${id}.critChance is a percent`);
-    for (const k of ['energy', 'range', 'cost']) assert.ok(Number.isInteger(u[k]) && u[k] > 0, `${id}.${k} must be a positive integer`);
+    assert.ok(Number.isInteger(u.range) && u.range > 0, `${id}.range must be a positive integer`);
     assert.ok(!('leader' in u), `${id}: there are no leaders any more`);
-    assert.ok(kinds.has(u.ability.kind), `${id} ability kind`);
+    if (u.summon) {
+      assert.ok(u.cost === 0 && !TROOPS.includes(id), `${id}: summons are never bought or picked`);
+    } else {
+      assert.ok(Number.isInteger(u.cost) && u.cost > 0, `${id}.cost`);
+      assert.ok(kinds.has(u.ability?.kind), `${id} power kind`);
+      // A power either goes off at battle start or every `energy` attacks.
+      assert.ok(u.ability.kind === 'opening' ? u.energy === 0 : Number.isInteger(u.energy) && u.energy > 0, `${id}.energy`);
+      if (u.ability.kind === 'summon') assert.ok(catalog[u.ability.unit]?.summon, `${id} summons a summon-only unit`);
+    }
     assert.ok(u.sprite && existsSync(new URL(`../${u.sprite}`, import.meta.url)), `${id}: missing sprite ${u.sprite}`);
   }
   assert.equal(teamSize(catalog), TEAM_SIZE);
@@ -359,23 +367,133 @@ test('combat is fair: identical mirrored armies never favour a side', () => {
   assert.ok(Math.abs(wins[0] - wins[1]) <= 10, `mirror wins split ${wins}`);
 });
 
-test("a Super with its own reach (Decidueye's) hits enemies beyond basic range without moving", () => {
-  // Test-only catalog: Decidueye supers after 1 attack; two dummies that never move.
+// ---- powers -----------------------------------------------------------------
+// Test dummies: `wall` never moves (everything is in its range) and hits once
+// for 1; `stalker` walks and pecks for 1.
+const powerCat = () => {
   const cat = clone(catalog);
-  cat.decidueye.energy = 1;
-  cat.dummy = { ...clone(catalog.mawile), hp: [1, 2, 3, 4], secPerHit: 100, moveSpeed: 'statue' };
-  cat.far = { ...cat.dummy, hp: [500, 501, 502, 503] };
+  const big = [1e6, 1e6, 1e6, 1e6];
+  const one = [1, 1, 1, 1];
+  cat.wall = { ...clone(catalog.mawile), moveSpeed: 'statue', range: 99, secPerHit: 1000, hp: big, damage: one, critChance: 0, energy: 0, ability: null, summon: true, cost: 0 };
+  cat.stalker = { ...cat.wall, range: 1, moveSpeed: 'fast', secPerHit: 1 };
+  return cat;
+};
+const unitOf = (r, uid) => r.initial.find((u) => u.uid === uid);
+const evs = (r, type, id) => r.events.filter((e) => e.type === type && (id === undefined || e.id === id));
+
+test('Jaw Lock (Mawile): after 8 attacks the next one hits 30% harder and stuns', () => {
+  const r = simulate(powerCat(), [[{ uid: 1, unitId: 'mawile', star: 0, x: 2, y: 0 }], [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }]], 1);
+  const m = unitOf(r, 1).id;
+  const cast = evs(r, 'cast', m)[0];
+  assert.equal(evs(r, 'attack', m).filter((e) => e.t < cast.t).length, catalog.mawile.energy);
+  const hit = r.events.find((e) => e.type === 'damage' && e.src === m && e.t === cast.t);
+  assert.equal(hit.amount, Math.floor((catalog.mawile.damage[0] * 130) / 100));
+  assert.ok(r.events.some((e) => e.type === 'stun' && e.t === cast.t && e.duration === catalog.mawile.ability.stun));
+});
+
+test('Psywave (Beheeyem): at the start, the first enemy in its column is knocked to the far end; anyone there is pushed aside', () => {
+  const r = simulate(powerCat(), [
+    [{ uid: 1, unitId: 'beheeyem', star: 0, x: 2, y: 3 }], // combat (2, 7)
+    [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'wall', star: 0, x: 2, y: 3 }], // combat (2, 3) and (2, 0)
+  ], 1);
+  const b = unitOf(r, 1).id;
+  const first = unitOf(r, 2).id;
+  const blocker = unitOf(r, 3).id;
+  const cast = evs(r, 'cast', b)[0];
+  assert.deepEqual([cast.t, cast.target], [1, first]);
+  assert.equal(r.events.find((e) => e.type === 'damage' && e.id === first).amount, Math.floor(catalog.beheeyem.damage[0] / 2));
+  assert.deepEqual(evs(r, 'knock', blocker).map((e) => [e.x, e.y]), [[1, 0]], 'pushed to the side');
+  assert.deepEqual(evs(r, 'knock', first).map((e) => [e.x, e.y]), [[2, 0]], 'knocked to the end of the column');
+  assert.equal(evs(r, 'cast', b).length, 1, 'only once per battle');
+});
+
+test('Thunderbolt (Toxtricity): every 8th attack also zaps the farthest enemy for 80%', () => {
+  const r = simulate(powerCat(), [
+    [{ uid: 1, unitId: 'toxtricity', star: 0, x: 2, y: 0 }],
+    [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'wall', star: 0, x: 0, y: 3 }],
+  ], 1);
+  const tx = unitOf(r, 1).id;
+  const far = unitOf(r, 3).id;
+  const cast = evs(r, 'cast', tx)[0];
+  assert.equal(cast.target, far);
+  assert.equal(evs(r, 'attack', tx).filter((e) => e.t <= cast.t).length, catalog.toxtricity.energy, 'fires with the 8th attack');
+  assert.equal(r.events.find((e) => e.type === 'damage' && e.id === far).amount, Math.floor((catalog.toxtricity.damage[0] * 80) / 100));
+});
+
+test('Attack Order (Vespiquen): every 10 attacks summons a Combee that fights but never counts as a survivor', () => {
+  const cat = powerCat();
+  cat.target = { ...cat.wall, hp: [1500, 1500, 1500, 1500] };
+  const r = simulate(cat, [[{ uid: 1, unitId: 'vespiquen', star: 1, x: 2, y: 0 }], [{ uid: 2, unitId: 'target', star: 0, x: 2, y: 0 }]], 1);
+  const v = unitOf(r, 1).id;
+  const s = evs(r, 'summon', v)[0];
+  assert.ok(s, 'summons');
+  assert.deepEqual([s.unit.unitId, s.unit.star, s.unit.summoned], ['combee', 1, true]);
+  assert.equal(evs(r, 'attack', v).filter((e) => e.t <= s.t).length, catalog.vespiquen.energy);
+  assert.ok(evs(r, 'attack', s.unit.id).length > 0, 'the Combee attacks');
+  assert.equal(r.winner, 0);
+  assert.deepEqual(r.survivors.map((u) => u.unitId), ['vespiquen']);
+});
+
+test('Heat Crash (Coalossal): the attack after 6 knocks the target back 2 squares and stuns it', () => {
+  const r = simulate(powerCat(), [[{ uid: 1, unitId: 'coalossal', star: 0, x: 2, y: 0 }], [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }]], 1);
+  const c = unitOf(r, 1).id;
+  const w = unitOf(r, 2).id;
+  const cast = evs(r, 'cast', c)[0];
+  assert.equal(evs(r, 'attack', c).filter((e) => e.t < cast.t).length, catalog.coalossal.energy);
+  assert.deepEqual(evs(r, 'knock', w).slice(0, 1).map((e) => [e.t, e.x, e.y]), [[cast.t, 2, 1]], 'from row 3 to row 1');
+  assert.ok(evs(r, 'stun', w).some((e) => e.t === cast.t));
+  // Blocked landing square: lands on the closest free one instead.
+  const r2 = simulate(powerCat(), [[{ uid: 1, unitId: 'coalossal', star: 0, x: 2, y: 0 }], [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'wall', star: 0, x: 2, y: 2 }]], 1);
+  const k = evs(r2, 'knock', unitOf(r2, 2).id)[0];
+  assert.equal(Math.abs(k.x - 2) + Math.abs(k.y - 1), 1, `landed next to the blocked square, at (${k.x},${k.y})`);
+});
+
+test('Phantom Force (Decidueye): after 8 attacks it turns invisible and faster; enemies cannot target it', () => {
+  const r = simulate(powerCat(), [[{ uid: 1, unitId: 'decidueye', star: 0, x: 2, y: 3 }], [{ uid: 2, unitId: 'stalker', star: 0, x: 2, y: 0 }]], 1);
+  const d = unitOf(r, 1).id;
+  const s = unitOf(r, 2).id;
+  const st = evs(r, 'stealth', d)[0];
+  assert.ok(st && evs(r, 'haste', d).some((e) => e.t === st.t));
+  const end = st.t + catalog.decidueye.ability.duration;
+  assert.ok(evs(r, 'attack', s).some((e) => e.t < st.t), 'the stalker reached it before');
+  assert.ok(!evs(r, 'attack', s).some((e) => e.t > st.t && e.t <= end), 'no attacks while invisible');
+  assert.ok(evs(r, 'attack', s).some((e) => e.t > end), 'found again afterwards');
+  const times = evs(r, 'attack', d).map((e) => e.t).filter((x) => x > st.t && x <= end);
+  const gap = Math.round(Math.round(catalog.decidueye.secPerHit / TICK_SECONDS) * 100 / 130);
+  assert.ok(times.length >= 2 && times.slice(1).every((x, i) => x - times[i] === gap), `attacks every ${gap} ticks: ${times}`);
+});
+
+test('Night Slash (Greninja): the attack after 6 teleports to the farthest enemy, hits 30% harder and heals 10%', () => {
+  const cat = powerCat();
+  cat.brute = { ...cat.wall, range: 1, secPerHit: 1, damage: [40, 40, 40, 40] };
   const r = simulate(cat, [
-    [{ uid: 1, unitId: 'decidueye', star: 0, x: 0, y: HALF - 1 }], // back row
-    [{ uid: 2, unitId: 'dummy', star: 0, x: COLS - 1, y: 0 }, { uid: 3, unitId: 'far', star: 0, x: COLS - 1, y: HALF - 1 }],
-  ]);
-  const cast = r.events.find((e) => e.type === 'cast' && e.id === 0);
-  assert.ok(cast, 'Decidueye should cast');
-  assert.equal(r.initial.find((u) => u.id === cast.target).unitId, 'far');
-  assert.ok(!r.events.some((e) => e.type === 'move' && e.id === 0 && e.t <= cast.t), 'cast without walking');
-  const d = r.initial.find((u) => u.id === 0);
-  const f = r.initial.find((u) => u.unitId === 'far');
-  assert.ok(Math.max(Math.abs(d.x - f.x), Math.abs(d.y - f.y)) > catalog.decidueye.range, 'target was out of basic range');
+    [{ uid: 1, unitId: 'greninja', star: 0, x: 2, y: 0 }],
+    [{ uid: 2, unitId: 'brute', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'wall', star: 0, x: 0, y: 3 }], // far one at combat (4, 0)
+  ], 1);
+  const g = unitOf(r, 1).id;
+  const far = unitOf(r, 3).id;
+  const cast = evs(r, 'cast', g)[0];
+  assert.equal(cast.target, far);
+  const tp = evs(r, 'teleport', g)[0];
+  assert.equal(tp.t, cast.t);
+  assert.equal(Math.abs(tp.x - 4) + Math.abs(tp.y - 0), 1, 'lands next to the farthest enemy');
+  const dealt = Math.floor((catalog.greninja.damage[0] * 130) / 100);
+  assert.equal(r.events.find((e) => e.type === 'damage' && e.id === far).amount, dealt);
+  assert.equal(evs(r, 'heal', g).find((e) => e.t === cast.t).amount, Math.floor(dealt / 10));
+});
+
+test('Blaze (Infernape): after 7 attacks it attacks 50% faster for 3 seconds', () => {
+  const r = simulate(powerCat(), [[{ uid: 1, unitId: 'infernape', star: 0, x: 2, y: 0 }], [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }]], 1);
+  const i = unitOf(r, 1).id;
+  const h = evs(r, 'haste', i)[0];
+  assert.equal(evs(r, 'attack', i).filter((e) => e.t <= h.t).length, catalog.infernape.energy, 'no attack is lost');
+  const base = Math.round(catalog.infernape.secPerHit / TICK_SECONDS);
+  const fast = Math.round((base * 100) / 150);
+  const times = evs(r, 'attack', i).map((e) => e.t);
+  const k = times.indexOf(h.t);
+  assert.equal(times[k + 1] - times[k], fast, 'the triggering attack already uses the faster cooldown');
+  const later = times.filter((x) => x > h.t + catalog.infernape.ability.duration + fast);
+  assert.equal(later[1] - later[0], base, 'back to normal afterwards');
 });
 
 test('units walk one square at a time (no diagonal steps), at their own pace', () => {
@@ -384,12 +502,14 @@ test('units walk one square at a time (no diagonal steps), at their own pace', (
     [{ uid: 2, unitId: 'greninja', star: 0, x: 1, y: 0 }, { uid: 4, unitId: 'vespiquen', star: 2, x: 3, y: 3 }],
   ];
   const r = simulate(catalog, boards, 5);
-  const pos = new Map(r.initial.map((u) => [u.id, { x: u.x, y: u.y, t: -Infinity }]));
+  const all = [...r.initial, ...r.events.filter((e) => e.type === 'summon').map((e) => e.unit)];
+  const pos = new Map(all.map((u) => [u.id, { x: u.x, y: u.y, t: -Infinity }]));
   let moves = 0;
-  for (const e of r.events.filter((ev) => ev.type === 'move')) {
+  for (const e of r.events.filter((ev) => ['move', 'knock', 'teleport'].includes(ev.type))) {
     const p = pos.get(e.id);
+    if (e.type !== 'move') { pos.set(e.id, { ...p, x: e.x, y: e.y }); continue; } // powers move units too
     assert.equal(Math.abs(e.x - p.x) + Math.abs(e.y - p.y), 1, 'one orthogonal square per step');
-    const def = catalog[r.initial.find((u) => u.id === e.id).unitId];
+    const def = catalog[all.find((u) => u.id === e.id).unitId];
     const pace = MOVE_SPEEDS[def.moveSpeed];
     assert.ok(e.t - p.t >= Math.round(pace / TICK_SECONDS), `${def.name} stepped faster than ${pace}s per square`);
     pos.set(e.id, { x: e.x, y: e.y, t: e.t });
