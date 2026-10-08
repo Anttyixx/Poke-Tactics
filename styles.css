@@ -137,7 +137,9 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
   position: absolute;
   width: calc(100% / var(--cols));
   height: calc(100% / var(--rows));
-  transition: left 0.22s linear, top 0.22s linear, opacity 0.5s, transform 0.5s;
+  /* Glide between squares over the unit's whole step time (5 ticks x 50ms at 1x = 0.25s). */
+  --glide: calc(0.25s * var(--step, 1) / var(--speed, 1));
+  transition: left var(--glide) linear, top var(--glide) linear, opacity 0.5s, transform 0.5s;
 }
 .token {
   width: 74%;
@@ -222,7 +224,7 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
   background-size: 400% 400%;
   background-repeat: no-repeat;
   image-rendering: pixelated;
-  --walk: calc(0.72s / var(--speed, 1));
+  --walk: calc(0.72s * var(--step, 1) / var(--speed, 1));
   animation: walk var(--walk) steps(4) infinite;
   transition: translate 0.9s linear;
   pointer-events: none;

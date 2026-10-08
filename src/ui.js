@@ -99,6 +99,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     const el = document.createElement('div');
     el.className = `unit ${side}${def.sprite ? ' sprite-unit' : ''}${def.leader ? ' leader' : ''}`;
     el.dataset.type = def.type;
+    // Animation pacing follows movement speed: 1 = a step every 5 ticks (the usual pace).
+    el.style.setProperty('--step', def.moveCd / 5);
     const bars = '<div class="bars"><div class="hp"><i></i><b></b></div><div class="mana"><i></i></div></div>';
     const stars = def.leader ? '' : `<div class="stars s${star}">${'★'.repeat(star)}</div>`;
     if (def.sprite) {

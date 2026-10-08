@@ -72,6 +72,11 @@
     "hp": 680, "atk": 55, "armor": 15, "range": 3, "attackCd": 11, "moveCd": 5, "mana": 90,
     "ability": { "name": "Meteor", "kind": "blast", "damage": 330, "radius": 1, "duration": 10 }
   },
+  "coalossal": {
+    "name": "Coalossal", "sprite": "assets/sprites/coalossal.png", "type": "warrior", "cost": 3,
+    "hp": 1000, "atk": 130, "armor": 30, "range": 1, "attackCd": 16, "moveCd": 10, "mana": 80,
+    "ability": { "name": "Heat Crash", "kind": "strike", "damage": 450 }
+  },
   "assassin": {
     "name": "Assassin", "emoji": "🥷", "type": "rogue", "cost": 3,
     "hp": 720, "atk": 95, "armor": 20, "range": 1, "attackCd": 7, "moveCd": 3, "mana": 50,
