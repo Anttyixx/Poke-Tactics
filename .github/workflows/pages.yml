@@ -1,6 +1,7 @@
 # Publishes both versions of the game into one GitHub Pages site:
 #   main -> https://<user>.github.io/<repo>/       (stable)
 #   dev  -> https://<user>.github.io/<repo>/dev/   (dev)
+#   each deploy also -> .../builds/<commit>/ (permanent, never stale; list at .../builds/)
 # Each push runs the tests, then updates only its own folder on the
 # `gh-pages` branch, so a dev deploy never touches stable and vice versa.
 # One-time setup: Settings -> Pages -> Deploy from a branch -> gh-pages, / (root).
@@ -38,11 +39,29 @@ jobs:
       - name: Publish to gh-pages
         env:
           REPO_URL: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
+          REPO: ${{ github.repository }}
           BRANCH: ${{ github.ref_name }}
           SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           if [ "$BRANCH" = "main" ]; then TARGET=.; LABEL=stable; else TARGET=dev; LABEL=dev; fi
+          V="${SHA:0:7}"
+          KEEP_BUILDS=30
+
+          # 1. Build the site once into a temp folder.
+          BUILD="$RUNNER_TEMP/build"
+          rm -rf "$BUILD" && mkdir -p "$BUILD"
+          tar -C "$GITHUB_WORKSPACE/app" --exclude=.git --exclude=.github --exclude=tests --exclude=node_modules -cf - . \
+            | tar -C "$BUILD" -xf -
+          if [ -f "$BUILD/index.html" ]; then
+            # Cache-bust: tag every reference with the commit so a deploy never
+            # loads as a mix of old and new files.
+            sed -i -E "s#(href=\"styles\.css|src=\"src/main\.js)\"#\1?v=$V\"#" "$BUILD/index.html"
+            sed -i -E "s#(from '\./[A-Za-z0-9_-]+\.js)'#\1?v=$V'#; s#fetch\('(data/[A-Za-z0-9_-]+\.json)'\)#fetch('\1?v=$V')#" "$BUILD"/src/*.js
+            sed -i -E "s#(\"assets/[^\"]+\.png)\"#\1?v=$V\"#" "$BUILD"/data/*.json
+            # Badge so it's obvious which version you're looking at.
+            sed -i "s|</body>|  <a class=\"build-badge $LABEL\" href=\"https://github.com/$REPO/commit/$SHA\">$LABEL · $V</a>\n</body>|" "$BUILD/index.html"
+          fi
 
           if git ls-remote --exit-code --heads "$REPO_URL" gh-pages >/dev/null; then
             git clone --quiet --depth 1 --branch gh-pages "$REPO_URL" site
@@ -52,26 +71,40 @@ jobs:
           fi
           cd site
 
-          # Clear only this branch's folder (stable owns everything except dev/).
+          # 2. Moving channel: main -> site root, dev -> dev/. Each clears only its own files.
           if [ "$TARGET" = "." ]; then
-            find . -mindepth 1 -maxdepth 1 ! -name .git ! -name dev -exec rm -rf {} +
+            find . -mindepth 1 -maxdepth 1 ! -name .git ! -name dev ! -name builds -exec rm -rf {} +
           else
             rm -rf dev && mkdir dev
           fi
-          tar -C "$GITHUB_WORKSPACE/app" --exclude=.git --exclude=.github --exclude=tests --exclude=node_modules -cf - . \
-            | tar -C "$TARGET" -xf -
+          cp -a "$BUILD/." "$TARGET/"
 
-          # Cache-bust: GitHub Pages lets browsers cache files for 10 minutes, and a
-          # mix of old and new modules can load the previous version of the game.
-          # Tagging every reference with the commit makes each deploy a fresh set.
-          V="${SHA:0:7}"
-          sed -i -E "s#(href=\"styles\.css|src=\"src/main\.js)\"#\1?v=$V\"#" "$TARGET/index.html"
-          sed -i -E "s#(from '\./[A-Za-z0-9_-]+\.js)'#\1?v=$V'#; s#fetch\('(data/[A-Za-z0-9_-]+\.json)'\)#fetch('\1?v=$V')#" "$TARGET"/src/*.js
-          sed -i -E "s#(\"assets/[^\"]+\.png)\"#\1?v=$V\"#" "$TARGET"/data/*.json
-
-          # Stamp the build so it's obvious which version you're testing.
-          if [ -f "$TARGET/index.html" ]; then
-            sed -i "s|</body>|  <a class=\"build-badge $LABEL\" href=\"https://github.com/${{ github.repository }}/commit/$SHA\">$LABEL · ${SHA:0:7}</a>\n</body>|" "$TARGET/index.html"
+          # 3. Permanent per-commit copy at builds/<commit>/. A brand-new URL is never
+          #    cached, so this link shows the update as soon as Pages publishes it.
+          if [ -f "$BUILD/index.html" ]; then
+            mkdir -p builds
+            rm -rf "builds/$V" && cp -a "$BUILD/." "builds/$V/"
+            SUBJECT=$(git -C "$GITHUB_WORKSPACE/app" log -1 --format=%s | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/\t/ /g')
+            touch builds/list.tsv
+            { printf '%s\t%s\t%s\t%s\n' "$V" "$LABEL" "$(date -u '+%Y-%m-%d %H:%M UTC')" "$SUBJECT"; grep -v "^$V	" builds/list.tsv || true; } \
+              | head -n "$KEEP_BUILDS" > builds/list.new && mv builds/list.new builds/list.tsv
+            # Drop build folders that fell off the list.
+            for d in builds/*/; do
+              d="${d%/}"; d="${d#builds/}"
+              grep -q "^$d	" builds/list.tsv || rm -rf "builds/$d"
+            done
+            {
+              echo '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+              echo '<title>Builds</title>'
+              echo '<body style="font-family:system-ui;background:#12141a;color:#e9eaf0;max-width:720px;margin:0 auto;padding:16px">'
+              echo '<h1 style="font-size:20px">Builds <small style="color:#9097a8;font-weight:400">newest first</small></h1>'
+              echo '<p><a style="color:#4ea1ff" href="../dev/">Latest dev</a> · <a style="color:#4ea1ff" href="../">Stable</a></p><ul style="padding-left:18px;line-height:1.8">'
+              while IFS="$(printf '\t')" read -r b label when subject; do
+                echo "<li><a style=\"color:#4ea1ff\" href=\"$b/\"><code>$b</code></a> <small style=\"color:#9097a8\">$label · $when</small><br>$subject</li>"
+              done < builds/list.tsv
+              echo '</ul>'
+            } > builds/index.html
+            echo "::notice title=Build link::https://$(echo "${REPO%%/*}" | tr '[:upper:]' '[:lower:]').github.io/${REPO#*/}/builds/$V/"
           fi
 
           # Until main has a release, the root points people at the dev build.
@@ -80,7 +113,7 @@ jobs:
           <!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
           <title>Auto Battler</title>
           <body style="font-family:system-ui;background:#12141a;color:#e9eaf0;display:grid;place-items:center;min-height:100vh;margin:0">
-          <p>No stable release yet. <a style="color:#4ea1ff" href="dev/">Play the dev build →</a></p>
+          <p>No stable release yet. <a style="color:#4ea1ff" href="dev/">Play the dev build →</a> · <a style="color:#4ea1ff" href="builds/">All builds</a></p>
           HTML
           fi
           touch .nojekyll
@@ -88,5 +121,5 @@ jobs:
           git add -A
           if git diff --cached --quiet; then echo "Nothing changed."; exit 0; fi
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-            commit --quiet -m "Deploy $BRANCH @ ${SHA:0:7}"
+            commit --quiet -m "Deploy $BRANCH @ $V"
           git push --quiet origin gh-pages

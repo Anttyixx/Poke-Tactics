@@ -81,6 +81,13 @@ serves. A failing test blocks the deploy. A small badge in the corner of each bu
 
 Until `main` has a release, the root page links to the dev build.
 
+**Per-build links.** Every deploy is also published permanently at
+`https://<user>.github.io/<repo>/builds/<commit>/`, and `/builds/` lists them newest first
+(the last 30 are kept). `/dev/` and the root can be cached by browsers for up to 10 minutes
+after an update, but a build link is a brand-new address, so it shows the update as soon as
+Pages has published it (usually within a minute of the push). Each workflow run also prints its
+build link as a notice in the Actions tab.
+
 **One-time setup** (after the first workflow run has created the `gh-pages` branch):
 in **Settings → Pages → Build and deployment**, set Source to *Deploy from a branch*,
 Branch to `gh-pages`, and folder to `/ (root)`.
