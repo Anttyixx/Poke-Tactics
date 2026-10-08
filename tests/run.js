@@ -2,7 +2,7 @@
 // Focuses on the properties Phase 3 depends on: determinism, JSON-serializable
 // state, and applyIntent rejecting anything invalid.
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { createGame, applyIntent, boardCap, fieldCount, leaderIds, BENCH_SIZE } from '../src/game.js';
 import { simulate, MAX_TICKS } from '../src/combat.js';
@@ -44,6 +44,22 @@ test('unit catalog is well formed', () => {
     assert.ok(u.leader ? u.cost === 0 && u.sprite : [1, 2, 3].includes(u.cost), `${id} cost`);
     assert.ok(kinds.has(u.ability.kind), `${id} ability kind`);
   }
+});
+
+test('every unit has art, and sprite files exist', () => {
+  for (const [id, u] of Object.entries(catalog)) {
+    assert.ok(u.emoji || u.sprite, `${id} needs an emoji or a sprite`);
+    if (u.sprite) assert.ok(existsSync(new URL(`../${u.sprite}`, import.meta.url)), `${id}: missing ${u.sprite}`);
+  }
+});
+
+test('sprite troops (non-leaders) can be bought', () => {
+  const s = startedGame();
+  const p = s.players[0];
+  p.gold = 99;
+  p.shop[0] = 'beheeyem';
+  assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 0 }).ok);
+  assert.equal(p.bench.find(Boolean).unitId, 'beheeyem');
 });
 
 test('full bot-vs-bot match is deterministic for a seed', () => {

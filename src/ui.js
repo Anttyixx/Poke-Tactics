@@ -97,12 +97,13 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   function unitEl(unitId, star, side = 'ally', facing = 'down') {
     const def = catalog[unitId];
     const el = document.createElement('div');
-    el.className = `unit ${side}${def.sprite ? ' leader' : ''}`;
+    el.className = `unit ${side}${def.sprite ? ' sprite-unit' : ''}${def.leader ? ' leader' : ''}`;
     el.dataset.type = def.type;
     const bars = '<div class="bars"><div class="hp"><i></i><b></b></div><div class="mana"><i></i></div></div>';
+    const stars = def.leader ? '' : `<div class="stars s${star}">${'★'.repeat(star)}</div>`;
     if (def.sprite) {
       el.dataset.facing = facing;
-      el.innerHTML = `<div class="shadow"></div><div class="sprite" ${spriteStyle(def)}></div>${bars}`;
+      el.innerHTML = `<div class="shadow"></div><div class="sprite" ${spriteStyle(def)}></div>${stars}${bars}`;
     } else {
       el.innerHTML = `
         <div class="token"><span>${def.emoji}</span></div>
@@ -111,11 +112,11 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     return el;
   }
 
-  // Planning-phase idle: leaders stroll out of their square and back, turning to
+  // Planning-phase idle: sprite units on the board stroll out of their square and back, turning to
   // face where they walk. Purely cosmetic; the real position never changes.
   setInterval(() => {
     if (state?.phase !== 'planning' || document.hidden) return;
-    for (const el of layer.querySelectorAll('.unit.leader')) {
+    for (const el of layer.querySelectorAll('.unit.sprite-unit')) {
       if (el.classList.contains('selected') || Math.random() < 0.3) continue;
       const [ox, oy] = (el.dataset.off ?? '0,0').split(',').map(Number);
       const [nx, ny] = ox || oy ? [0, 0] : WANDER[Math.floor(Math.random() * WANDER.length)];
@@ -328,7 +329,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
       const def = catalog[id];
       const disabled = !canPlan() || p.gold < def.cost;
       return `<button class="card" data-slot="${slot}" data-type="${def.type}" ${disabled ? 'disabled' : ''}>
-        <span class="emoji">${def.emoji}</span>
+        ${def.sprite
+          ? `<span class="portrait" data-facing="down"><span class="sprite" ${spriteStyle(def)}></span></span>`
+          : `<span class="emoji">${def.emoji}</span>`}
         <span class="name">${esc(def.name)}</span>
         <span class="type">${def.type}</span>
         <span class="cost c${def.cost}">${def.cost}g</span>

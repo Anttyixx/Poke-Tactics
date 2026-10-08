@@ -51,6 +51,12 @@
     "ability": { "name": "Restore", "kind": "heal", "target": "lowest", "amount": 280 }
   },
 
+  "beheeyem": {
+    "name": "Beheeyem", "sprite": "assets/sprites/beheeyem.png", "type": "mage", "cost": 2,
+    "hp": 560, "atk": 55, "armor": 10, "range": 3, "attackCd": 10, "moveCd": 5, "mana": 65,
+    "ability": { "name": "Psyshock", "kind": "strike", "damage": 260 }
+  },
+
   "paladin": {
     "name": "Paladin", "emoji": "🦁", "type": "warrior", "cost": 3,
     "hp": 1100, "atk": 70, "armor": 40, "range": 1, "attackCd": 9, "moveCd": 5, "mana": 90,
