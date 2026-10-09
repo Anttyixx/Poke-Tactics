@@ -86,12 +86,27 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   let shownCoins = null; // last coin count drawn, to animate changes
   let shownShop = ''; // last shop drawn, to deal new cards in
   let seenUids = new Set(); // board units already drawn, to drop new ones in
+  let peek = null; // unit id shown in the info pop-up (phones), opened with an ⓘ button
+  const sheetBackdrop = $('info-backdrop');
 
   // Board dimensions come from combat.js; CSS sizes everything from these.
   arena.style.setProperty('--cols', COLS);
   arena.style.setProperty('--rows', ROWS);
   arena.style.setProperty('--tick', `${TICK_MS}ms`);
   arena.style.aspectRatio = `${COLS} / ${ROWS}`;
+
+  // Size the board to the space it has, as big as fits. Measured in JS (not
+  // just CSS) so that when the space changes (battle controls appearing, a
+  // phone rotating, the window being resized) the board glides to its new size.
+  const fit = $('board-fit');
+  let fitted = false;
+  new ResizeObserver(() => {
+    const w = Math.floor(Math.min(fit.clientWidth, (fit.clientHeight * COLS) / ROWS));
+    if (w <= 0) return;
+    if (!fitted) arena.style.transition = 'none'; // first layout: no animation
+    arena.style.width = `${w}px`;
+    if (!fitted) { void arena.offsetWidth; arena.style.transition = ''; fitted = true; }
+  }).observe(fit);
   for (let vy = 0; vy < ROWS; vy++) {
     for (let vx = 0; vx < COLS; vx++) {
       const c = document.createElement('div');
@@ -189,6 +204,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
 
   arena.addEventListener('click', (e) => {
     if (state?.phase !== 'planning') return;
+    if (e.target.closest('[data-unit-info]')) return openInfo(owned(selected)?.unitId);
     const cell = cellAt(e);
     if (!cell || cell.vy < HALF) return select(null);
     const x = cell.vx;
@@ -232,6 +248,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   dropTarget($('shop-wrap'), (e, kind, id) => { if (kind === 'unit') intent({ type: 'sell', uid: id }); });
 
   shopEl.addEventListener('click', (e) => {
+    const info = e.target.closest('[data-info]');
+    if (info) { e.stopPropagation(); return openInfo(me().shop[+info.dataset.info]); }
     const card = e.target.closest('.card[data-slot]');
     if (card && !card.disabled) pickShop(+card.dataset.slot);
   });
@@ -245,9 +263,11 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   rerollBtn.addEventListener('click', () => intent({ type: 'reroll' }));
   readyBtn.addEventListener('click', () => intent({ type: 'ready' }));
   infoEl.addEventListener('click', (e) => {
-    if (e.target.id === 'sell' && selected !== null) intent({ type: 'sell', uid: selected });
+    if (e.target.closest('#info-close')) return closeInfo();
+    if (e.target.id === 'sell' && selected !== null) { closeInfo(); intent({ type: 'sell', uid: selected }); }
     e.target.closest('.ability')?.classList.toggle('open'); // phones clamp it to two lines
   });
+  sheetBackdrop.addEventListener('click', () => closeInfo());
   hudEl.addEventListener('click', (e) => {
     const btn = e.target.closest('button');
     if (btn?.id === 'open-dex') openDex();
@@ -294,6 +314,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     const key = e.key.toLowerCase();
     if (!dexEl.hidden) { if (key === 'escape' || key === 'p') closeDex(); return; }
     if (!menuEl.hidden) { if (key === 'escape' || key === 'm') closeMenu(); return; }
+    if (peek && key === 'escape') return closeInfo();
     if (key === 'p') openDex();
     else if (key === 'm') openMenu();
     else if (key === 'd' && canPlan()) intent({ type: 'reroll' });
@@ -405,6 +426,24 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     menuEl.hidden = true;
   }
 
+  // Phones: Pokémon details open as a pop-up sheet over the game (the layout
+  // never changes size). On wide screens the panel beside the board shows them.
+  function openInfo(unitId) {
+    if (!unitId) return;
+    peek = unitId;
+    renderInfo();
+    appEl.classList.add('info-open');
+    sheetBackdrop.hidden = false;
+  }
+
+  function closeInfo() {
+    if (!peek) return;
+    peek = null;
+    appEl.classList.remove('info-open');
+    sheetBackdrop.hidden = true;
+    renderInfo();
+  }
+
   function renderPlanning() {
     arena.classList.remove('in-combat', 'sudden-death');
     controls.hidden = true;
@@ -416,8 +455,13 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     // where to place your own Pokémon. Their current board stays hidden.
     const foeSide = 1 - viewer;
     const ghosts = state.phase === 'planning' ? foe().lastBoard ?? [] : [];
-    $('enemy-label').textContent = ghosts.length ? 'Enemy lineup last round' : 'Enemy side';
-    arena.classList.toggle('has-ghosts', ghosts.length > 0);
+    // While buying, the hint shows on the board itself, so nothing else moves.
+    const levelling = buyingId ? fielded(me(), buyingId) : null;
+    $('enemy-label').textContent = buyingId
+      ? (levelling ? `Tap your side to level up ${catalog[buyingId].name}` : 'Tap a square on your side')
+      : ghosts.length ? 'Enemy lineup last round' : 'Enemy side';
+    arena.classList.toggle('has-ghosts', ghosts.length > 0 || !!buyingId);
+    arena.classList.toggle('hinting', !!buyingId);
     const ghostEls = ghosts.map((u) => {
       const el = unitEl(u.unitId, u.star, 'enemy', 'down');
       el.classList.add('ghost');
@@ -438,6 +482,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
       el.dataset.uid = u.uid;
       el.draggable = draggable;
       el.classList.toggle('selected', u.uid === selected);
+      if (u.uid === selected) el.insertAdjacentHTML('beforeend', '<span class="info-btn unit-info" data-unit-info role="button" aria-label="Info">i</span>');
       // Highlight the troop the picked shop copy would level up.
       el.classList.toggle('combine-target', u.unitId === buyingId);
       place(el, u.x, u.y + HALF);
@@ -465,6 +510,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         <span class="name">${esc(def.name)}</span>
         <span class="type">${def.type}</span>
         <span class="cost c${def.cost}" title="${def.cost} coins">${def.cost}</span>
+        <span class="info-btn" data-info="${slot}" role="button" aria-label="${esc(def.name)} info">i</span>
         ${fielded(p, id) ? `<span class="levelup">Level up ${'★'.repeat(fielded(p, id).star) || '0★'}→${'★'.repeat(fielded(p, id).star + 1)}</span>` : ''}
         <span class="left">${p.pool[id]} left in pool</span>
       </button>`;
@@ -492,9 +538,11 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   }
 
   function renderInfo() {
-    const inst = selected !== null ? owned(selected) : null;
-    const shopId = buying !== null ? me().shop[buying] : null;
-    const unitId = inst?.unitId ?? shopId ?? hovered;
+    const sel = selected !== null ? owned(selected) : null;
+    // The pop-up shows exactly what its ⓘ was tapped on.
+    const inst = peek ? (sel?.unitId === peek ? sel : null) : sel;
+    const shopId = peek ? (inst ? null : peek) : buying !== null ? me().shop[buying] : null;
+    const unitId = peek ?? inst?.unitId ?? shopId ?? hovered;
     if (!unitId) {
       appEl.classList.add('info-idle');
       infoEl.innerHTML = `${state.phase === 'planning' ? `<p class="tip">${me().board.length ? 'Tap a Pokémon to see its stats or move it. Tap a shop card, then a square, to buy.' : 'Tap a shop card, then a square on your side, to place your first Pokémon.'}</p>` : ''}
@@ -507,18 +555,18 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     const stats = unitStats(def, star);
     const copies = inst ? copiesOf(inst) : 1;
     const onBoard = shopId && !inst ? fielded(me(), shopId) : null;
-    const hint = !shopId || inst ? ''
+    const hint = !shopId || inst || peek ? ''
       : onBoard
         ? `<p class="hint">You already have a ${esc(def.name)} on the board. Click anywhere on your side to level it up to ${'★'.repeat(onBoard.star + 1)}.</p>`
         : '<p class="hint">Click an empty square on your side to place it.</p>';
     infoEl.innerHTML = `
+      <button id="info-close" class="ghost" aria-label="Close">✕</button>
       <div class="info-head" data-type="${def.type}">
         ${portrait(def)}
         <div><h2>${esc(def.name)} <span class="stars s${star}">${'★'.repeat(star)}</span></h2>
         <span class="sub">${def.type} · ${def.cost} coins · ${copies}/${COPIES_PER_TROOP} copies</span></div>
       </div>
       ${hint}
-      <p class="mini-stats"><span>HP <b>${show(stats.hp)}</b></span><span>DMG <b>${show(stats.atk)}</b></span><span>Every <b>${attackTime(stats)}s</b></span><span>Range <b>${def.range}</b></span><span>Crit <b>${stats.crit}%</b></span></p>
       <dl class="stats">
         <dt>HP</dt><dd>${show(stats.hp)}</dd>
         <dt>Damage per hit</dt><dd>${show(stats.atk)}</dd>
@@ -541,7 +589,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     selected = null;
     overlay.hidden = true;
     arena.classList.add('in-combat');
-    arena.classList.remove('sudden-death', 'buying', 'has-ghosts');
+    arena.classList.remove('sudden-death', 'buying', 'has-ghosts', 'hinting');
+    closeInfo();
     buying = null;
     setClock(0);
     controls.hidden = false;

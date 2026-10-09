@@ -154,7 +154,8 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   -webkit-user-select: none;
   touch-action: manipulation;
   box-shadow: 0 0 0 1px var(--line-2), 0 16px 40px #0008, inset 0 0 0 1px #ffffff10;
-  transition: box-shadow 0.3s;
+  flex: none;
+  transition: width 0.4s var(--glide), box-shadow 0.3s;
 }
 #cells { position: absolute; inset: 0; display: grid; grid-template: repeat(var(--rows), 1fr) / repeat(var(--cols), 1fr); }
 .cell { transition: background-color 0.15s; }
@@ -556,9 +557,34 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   height: auto; top: 0.5em; place-items: start center;
   font-size: 3.4cqi; color: #ffffff80; letter-spacing: 0.1em;
 }
+/* Buying: the "where to put it" hint sits on the board, so nothing else moves. */
+#arena.hinting #enemy-label {
+  top: auto; bottom: calc(50% + 0.6em); left: 8%; right: 8%;
+  font-size: 4cqi; color: #2a1d00; letter-spacing: 0.04em; text-transform: none;
+  background: linear-gradient(180deg, #ffe07a, var(--gold)); border-radius: 99px; padding: 0.35em 0.8em;
+  box-shadow: 0 4px 14px #0008; place-items: center; animation: hint-in 0.3s var(--spring);
+}
+@keyframes hint-in { from { transform: translateY(30%) scale(0.85); opacity: 0; } }
 
 .unit.combine-target .shadow { box-shadow: 0 0 0 3px var(--gold), 0 0 14px var(--gold); animation: ring-gold 0.8s ease-in-out infinite alternate; }
 @keyframes ring-gold { to { box-shadow: 0 0 0 4px var(--gold), 0 0 22px var(--gold); } }
+
+/* ---- Info buttons (phones): open a Pokémon's details as a pop-up ---- */
+.info-btn {
+  display: none; place-items: center;
+  position: absolute; top: 6px; left: 6px; z-index: 2;
+  width: 22px; height: 22px; border-radius: 50%;
+  font: 900 13px/1 Georgia, serif; font-style: italic; color: #fff;
+  background: #ffffff1f; border: 1.5px solid #ffffff66; cursor: pointer;
+}
+.unit .info-btn.unit-info {
+  display: grid; left: auto; right: -4%; top: -4%; width: 34cqi; height: 34cqi; font-size: 20cqi;
+  background: var(--ally); border-color: #fff; box-shadow: 0 2px 8px #0009; pointer-events: auto;
+  animation: pop-in 0.3s var(--spring);
+}
+#info-close { display: none; position: absolute; top: 10px; right: 10px; padding: 4px 10px; }
+#info-backdrop { position: fixed; inset: 0; z-index: 54; background: #070a1499; animation: fade-in 0.2s ease-out; }
+#info-backdrop[hidden] { display: none; }
 
 /* ---- Info panel ---- */
 #info {
@@ -775,24 +801,23 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
     gap: 8px;
     padding: max(8px, env(safe-area-inset-top)) 10px max(8px, env(safe-area-inset-bottom));
   }
-  /* Details only while something is picked: a compact strip above the shop,
-     so the board keeps most of the screen. */
-  #info { contain: none; max-height: 24dvh; padding: 8px 12px; }
-  #combat-controls[hidden] { display: none; } /* phones need the room more than a steady board */
-  #app.info-idle #info { display: none; }
-  #info .info-head { gap: 8px; }
-  #info .info-head .portrait { width: 38px; height: 38px; border-radius: 10px; }
-  #info .info-head h2 { font-size: 16px; }
-  #info .info-head .sub { font-size: 12px; }
-  #info .hint { margin-top: 4px; font-size: 12px; }
-  #info .stats { display: none; }
-  #info .mini-stats { display: flex; }
-  #info .ability {
-    margin: 6px 0; padding: 6px 10px; font-size: 12.5px;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  /* Details are a pop-up sheet, opened with an ⓘ button; the layout never
+     changes size when you pick something. */
+  #app { grid-template-rows: auto minmax(0, 1fr) auto; grid-template-areas: "hud" "arena" "shop"; }
+  #info {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 55;
+    contain: none; max-height: 72dvh;
+    padding: 18px 16px max(18px, env(safe-area-inset-bottom));
+    border-radius: 20px 20px 0 0;
+    transform: translateY(105%); visibility: hidden;
+    transition: transform 0.35s var(--glide), visibility 0s 0.35s;
   }
-  #info .ability.open { -webkit-line-clamp: unset; }
-  #info #sell { padding: 7px; }
+  #app.info-open #info { transform: none; visibility: visible; transition: transform 0.4s var(--spring); }
+  #info::before { content: ""; position: absolute; top: 7px; left: 50%; width: 40px; height: 4px; margin-left: -20px; border-radius: 99px; background: var(--line-2); }
+  #info-close { display: block; }
+  #info .info-head { padding-right: 44px; }
+  .info-btn { display: grid; }
+  #combat-controls[hidden] { display: none; } /* phones need the room more than a steady board */
   #hud { flex-wrap: wrap; gap: 6px; padding: 6px 8px; }
   .chip { padding: 3px 9px; gap: 5px; }
   .chip .label { font-size: 10px; letter-spacing: 0.04em; }
@@ -843,8 +868,8 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   #shop .card .left, #shop .card .type { display: none; }
   #arena-wrap { gap: 4px; }
 }
-.mini-stats { display: none; flex-wrap: wrap; gap: 2px 12px; margin: 6px 0 0; font-size: 12.5px; color: var(--muted); }
-.mini-stats b { color: var(--text); font-variant-numeric: tabular-nums; }
+/* The pop-up sheet and its backdrop only exist on narrow screens. */
+@media (min-width: 821px) { #info-backdrop { display: none !important; } }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
