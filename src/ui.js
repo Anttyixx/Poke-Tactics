@@ -698,19 +698,21 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
 
   // Sprites face along the dominant axis of movement or attack.
   // Sprites only have 4 facings, so a target off the straight lines (a diagonal
-  // attack) is shown by tilting the sprite toward it: a side-facing sprite tips
-  // its head up or down, a front/back-facing one leans left or right. Straight
-  // lines (every step is one) give no tilt.
-  const MAX_TILT = 16; // degrees, for an exact diagonal
+  // attack) is shown by tilting the sprite: it turns from the way it faces
+  // toward the target, i.e. by the signed angle between the two (clockwise on
+  // screen is positive, as for CSS rotate). An exact diagonal (45°) tilts
+  // MAX_TILT degrees, shallower angles less. Straight lines (every step is one)
+  // give no tilt.
+  const MAX_TILT = 16;
+  const FACING_VEC = { down: [0, 1], up: [0, -1], left: [-1, 0], right: [1, 0] };
   function face(a, dx, dy) {
     if (!a.el.dataset.facing) return;
     const horizontal = Math.abs(dx) >= Math.abs(dy);
-    a.el.dataset.facing = facingFor(horizontal ? dx : 0, horizontal ? 0 : dy, a.el.dataset.facing);
-    const major = Math.max(Math.abs(dx), Math.abs(dy));
-    const minor = Math.min(Math.abs(dx), Math.abs(dy));
-    const amount = major ? (MAX_TILT * minor) / major : 0;
-    const sign = horizontal ? Math.sign(dx) * Math.sign(dy) : Math.sign(dx);
-    a.el.style.setProperty('--tilt', `${(sign * amount).toFixed(1)}deg`);
+    const facing = facingFor(horizontal ? dx : 0, horizontal ? 0 : dy, a.el.dataset.facing);
+    a.el.dataset.facing = facing;
+    const [fx, fy] = FACING_VEC[facing];
+    const angle = (Math.atan2(fx * dy - fy * dx, fx * dx + fy * dy) * 180) / Math.PI; // -45..45
+    a.el.style.setProperty('--tilt', `${((angle * MAX_TILT) / 45).toFixed(1)}deg`);
   }
 
   function pulse(el, cls) {
