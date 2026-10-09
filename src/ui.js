@@ -888,8 +888,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
           });
           break;
         }
-        // Thrown by a hit: lands when the hit does (or, pushed aside by the wave, when it arrives).
-        const delay = !animate ? 0 : wave ? wave.arrive : ctx.hitDelay.get(a.id) ?? 0;
+        // Thrown by a hit: lands when the hit does. Shoved aside by someone landing
+        // on its square: moves when they land (for the wave, when it arrives).
+        const delay = !animate ? 0 : wave ? wave.arrive : ctx.hitDelay.get(ev.by ?? a.id) ?? 0;
         later(delay, () => { place(a.el, p.x, p.y); if (animate) play(a.el, 'knocked', 350 / speed); });
         break;
       }

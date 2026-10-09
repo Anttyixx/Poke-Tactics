@@ -181,11 +181,41 @@ export function simulate(catalog, boards, seed = 0) {
   }
 
   // Shove `u` to (x, y) without walking: knockbacks and teleports.
-  function relocate(u, cell, type) {
+  function relocate(u, cell, type, extra) {
     if (u.x === cell.x && u.y === cell.y) return;
     u.x = cell.x;
     u.y = cell.y;
-    emit(type, { id: u.id, x: u.x, y: u.y });
+    emit(type, { id: u.id, x: u.x, y: u.y, ...extra });
+  }
+
+  // Where a Pokémon goes when something is launched onto its square, in order:
+  // its own left, its own right, back (toward its own back row), forward, then
+  // the diagonals (back ones first). Directions are from the displaced
+  // Pokémon's point of view, so both sides are treated the same. Null if all
+  // eight squares are taken or off the board.
+  function displaceSpot(o) {
+    const back = o.side === 0 ? 1 : -1; // side 0's back row is the bottom of the board
+    const left = o.side === 0 ? -1 : 1;
+    const order = [[left, 0], [-left, 0], [0, back], [0, -back], [left, back], [-left, back], [left, -back], [-left, -back]];
+    for (const [dx, dy] of order) {
+      const c = { x: o.x + dx, y: o.y + dy };
+      if (inside(c.x, c.y) && !occupied(c.x, c.y)) return c;
+    }
+    return null;
+  }
+
+  // Land a launched Pokémon on `goal`. Whoever stands there is displaced (see
+  // displaceSpot); if they have nowhere to go, the launched one lands on the
+  // closest free square instead. Returns the displaced Pokémon, if any.
+  function land(target, goal, side) {
+    const o = unitAt(goal.x, goal.y);
+    if (o && o !== target) {
+      const spot = displaceSpot(o);
+      if (!spot) { relocate(target, closestFree(goal, target, target, side), 'knock'); return null; }
+      relocate(o, spot, 'knock', { by: target.id });
+    }
+    relocate(target, goal, 'knock');
+    return o && o !== target ? o : null;
   }
 
   // The free square closest to `goal` (ties: closest to `from`, then a fixed
@@ -311,16 +341,9 @@ export function simulate(catalog, boards, seed = 0) {
     const travel = WAVE_WINDUP + Math.abs(end - at(u).y);
     damage(target, Math.floor((u.atk * p.damagePct) / 100), u);
     if (!standing(target) || target.y === end) return;
-    const blocker = unitAt(u.x, end);
-    if (blocker) {
-      const side = dirs(u, [[-1, 0], [1, 0]]).map(([dx]) => ({ x: u.x + dx, y: end })).find((c) => inside(c.x, c.y) && !occupied(c.x, c.y));
-      if (side) { relocate(blocker, side, 'knock'); blocker.hold = travel; }
-    }
-    // If the end square is still taken, land as close to it as possible in the column.
-    let y = end;
-    while (y !== target.y && occupied(u.x, y)) y -= dy;
-    relocate(target, { x: u.x, y }, 'knock');
+    const shoved = land(target, { x: u.x, y: end }, u.side);
     target.hold = travel;
+    if (shoved) shoved.hold = travel;
   }
 
   const cooldown = (u) => (u.hasteUntil > t ? Math.max(1, Math.round((u.attackCd * 100) / (100 + u.hastePct))) : u.attackCd);
@@ -469,7 +492,7 @@ export function simulate(catalog, boards, seed = 0) {
         if (u.hp === 0) emit('death', { id: u.id });
       }
     }
-    for (const k of knocks) if (standing(k.target)) relocate(k.target, closestFree(k.goal, k.target, k.target, k.side), 'knock');
+    for (const k of knocks) if (standing(k.target)) land(k.target, k.goal, k.side);
     knocks = [];
     for (const u of units) {
       if (u.hp === 0) u.alive = false; // knocked out this tick

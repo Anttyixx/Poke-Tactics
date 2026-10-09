@@ -67,12 +67,16 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
     fight but never count as survivors for round damage. With no free square, the power stays charged
     and tries again after the next attack.
   - Coalossal, **Heat Crash**: after 6 attacks, the next hits for 130%, knocks the target back 2 squares
-    (or to the closest free square) and stuns it for 1s.
+    and stuns it for 1s.
   - Decidueye, **Phantom Force**: after 8 attacks, invisible for 3s and attacks 30% faster. Enemies can't
     target or follow an invisible unit.
   - Greninja, **Night Slash**: after 6 attacks, the next teleports beside the farthest enemy (if it's out of
     reach), hits for 130% and heals 10% of the damage dealt.
   - Infernape, **Blaze**: after 7 attacks, attacks 50% faster for 3s.
+- **Displacement:** when a Pokémon is launched onto an occupied square (Heat Crash, Psywave), the one
+  standing there moves to its own left, else its right, else back (toward its own back row), else
+  forward, else a diagonal (back ones first). If all of those are taken, the launched Pokémon lands
+  on the closest free square instead.
 - **Sudden death:** fights have a 30-second timer. When it runs out, every Pokémon still standing loses
   300 HP per second (the same for everyone, ignoring shields) while the fight carries on, so the weakest
   fall first until one side is knocked out.

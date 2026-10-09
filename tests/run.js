@@ -419,7 +419,7 @@ test('Psywave (Beheeyem): at the start, the first enemy in its column is knocked
   const cast = evs(r, 'cast', b)[0];
   assert.deepEqual([cast.t, cast.target], [1, first]);
   assert.equal(r.events.find((e) => e.type === 'damage' && e.id === first).amount, Math.floor(catalog.beheeyem.damage[0] / 2));
-  assert.deepEqual(evs(r, 'knock', blocker).map((e) => [e.x, e.y]), [[1, 0]], 'pushed to the side');
+  assert.deepEqual(evs(r, 'knock', blocker).map((e) => [e.x, e.y]), [[3, 0]], 'pushed to its own left');
   assert.deepEqual(evs(r, 'knock', first).map((e) => [e.x, e.y]), [[2, 0]], 'knocked to the end of the column');
   assert.equal(evs(r, 'cast', b).length, 1, 'only once per battle');
   // Riding the wave: neither moved unit does anything until it has landed.
@@ -464,10 +464,36 @@ test('Heat Crash (Coalossal): the attack after 6 knocks the target back 2 square
   assert.equal(evs(r, 'attack', c).filter((e) => e.t < cast.t).length, catalog.coalossal.energy);
   assert.deepEqual(evs(r, 'knock', w).slice(0, 1).map((e) => [e.t, e.x, e.y]), [[cast.t, 2, 1]], 'from row 3 to row 1');
   assert.ok(evs(r, 'stun', w).some((e) => e.t === cast.t));
-  // Blocked landing square: lands on the closest free one instead.
+  // Someone on the landing square is displaced; the target still lands there.
   const r2 = simulate(powerCat(), [[{ uid: 1, unitId: 'coalossal', star: 0, x: 2, y: 0 }], [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'wall', star: 0, x: 2, y: 2 }]], 1);
-  const k = evs(r2, 'knock', unitOf(r2, 2).id)[0];
-  assert.equal(Math.abs(k.x - 2) + Math.abs(k.y - 1), 1, `landed next to the blocked square, at (${k.x},${k.y})`);
+  assert.deepEqual(evs(r2, 'knock', unitOf(r2, 2).id).slice(0, 1).map((e) => [e.x, e.y]), [[2, 1]]);
+});
+
+test('a Pokémon launched onto an occupied square displaces it: left, right, back, forward, then diagonals', () => {
+  // Coalossal at combat (2,4) knocks the enemy at (2,3) back to (2,1), where an
+  // enemy blocker stands. The blocker is on side 1, so its own left is +x and
+  // its back is -y. Fill squares around (2,1) one by one and check where it goes.
+  const toOwn = ([x, y]) => ({ x: COLS - 1 - x, y: HALF - 1 - y }); // side 1: combat -> own coordinates
+  const order = [[3, 1], [1, 1], [2, 0], [2, 2], [3, 0], [1, 0], [3, 2], [1, 2]];
+  for (let filled = 0; filled <= order.length; filled++) {
+    const fillers = order.slice(0, filled).map((c, i) => ({ uid: 20 + i, unitId: 'wall', star: 0, ...toOwn(c) }));
+    const r = simulate(powerCat(), [
+      [{ uid: 1, unitId: 'coalossal', star: 0, x: 2, y: 0 }],
+      [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'wall', star: 0, ...toOwn([2, 1]) }, ...fillers],
+    ], 1);
+    const target = evs(r, 'knock', unitOf(r, 2).id)[0];
+    const blocker = evs(r, 'knock', unitOf(r, 3).id)[0];
+    if (filled < order.length) {
+      assert.deepEqual([blocker.x, blocker.y], order[filled], `with ${filled} squares taken`);
+      assert.equal(blocker.t, target.t);
+      assert.deepEqual([target.x, target.y], [2, 1], 'the launched Pokémon takes the square');
+    } else {
+      assert.equal(blocker, undefined, 'nowhere to go: stays put');
+      // ...and the launched one lands on the closest free square instead (here,
+      // with everything around (2,1) taken, that's where it already stands).
+      assert.ok(!target || target.x !== 2 || target.y !== 1, 'it does not land on the blocker');
+    }
+  }
 });
 
 test('Phantom Force (Decidueye): after 8 attacks it turns invisible and faster; enemies cannot target it', () => {
