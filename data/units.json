@@ -7,7 +7,7 @@
   "beheeyem": {
     "name": "Beheeyem", "sprite": "assets/sprites/beheeyem.png", "fx": "#ff7ad9", "type": "mage", "cost": 2,
     "hp": [700, 1145, 1565, 2350], "damage": [116, 175, 261, 390], "range": 3, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 0,
-    "ability": {"name": "Psywave", "kind": "opening", "damagePct": 50}
+    "ability": {"name": "Psywave", "kind": "opening", "damagePct": 50, "stun": 10}
   },
   "toxtricity": {
     "name": "Toxtricity", "sprite": "assets/sprites/toxtricity.png", "fx": "#ffe14d", "type": "ranger", "cost": 4,

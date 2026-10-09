@@ -60,8 +60,8 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
   empty and a full attack cooldown before anyone's first hit, and progress is never lost mid-fight:
   - Mawile, **Jaw Lock**: after 8 attacks, the next hits for 130% and stuns for 1s.
   - Beheeyem, **Psywave**: at the start of battle, a wave flies down its column to the other end of the
-    board. The first enemy it hits takes 50% and is carried to that end; anyone already there is pushed to
-    the side. Both sit out until the wave lands.
+    board. The first enemy it hits takes 50% and is carried to that end, then is stunned for 1s; anyone
+    already there is pushed to the side. Both sit out until the wave lands.
   - Toxtricity, **Thunderbolt**: every 8th attack also zaps the farthest enemy for 80%.
   - Vespiquen, **Attack Order**: every 7 attacks, summons a Combee next to it (same star level). Combee
     fight but never count as survivors for round damage. With no free square, the power stays charged
@@ -73,6 +73,8 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
   - Greninja, **Night Slash**: after 6 attacks, the next teleports beside the farthest enemy (if it's out of
     reach), hits for 130% and heals 10% of the damage dealt.
   - Infernape, **Blaze**: after 7 attacks, attacks 50% faster for 3s.
+- **Stuns:** a stunned Pokémon can't move or attack. When a stun (or a Psywave ride) ends, it picks the
+  nearest enemy as its target again rather than going back to its old one.
 - **Displacement:** when a Pokémon is launched onto an occupied square (Heat Crash, Psywave), the one
   standing there moves to its own left, else its right, else back (toward its own back row), else
   forward, else a diagonal (back ones first). If all of those are taken, the launched Pokémon lands

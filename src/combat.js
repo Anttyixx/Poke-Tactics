@@ -88,6 +88,7 @@ function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, in
     atkTimer: stats.attackCd, moveTimer: 0,
     hasteUntil: 0, hastePct: 0, stealthFrom: 0, stealthUntil: 0,
     hold: 0, // ticks it can't move or attack (riding a Psywave); cooldowns still run
+    landStun: 0, // stun applied when the hold ends (it has landed)
     target: null, alive: true, summoned: Boolean(inst.summoned),
   };
 }
@@ -343,6 +344,7 @@ export function simulate(catalog, boards, seed = 0) {
     if (!standing(target) || target.y === end) return;
     const shoved = land(target, { x: u.x, y: end }, u.side);
     target.hold = travel;
+    target.landStun = p.stun ?? 0; // stunned once it lands (see act)
     if (shoved) shoved.hold = travel;
   }
 
@@ -408,10 +410,19 @@ export function simulate(catalog, boards, seed = 0) {
   }
 
   function act(u) {
-    if (u.stun > 0) { u.stun--; return; }
+    // Coming out of a stun (or landing after being carried), a Pokémon looks
+    // around again and picks the nearest enemy rather than its old target.
+    if (u.stun > 0) { u.stun--; if (u.stun === 0) u.target = null; return; }
     if (u.atkTimer > 0) u.atkTimer--;
     if (u.moveTimer > 0) u.moveTimer--;
-    if (u.hold > 0) { u.hold--; return; }
+    if (u.hold > 0) {
+      u.hold--;
+      if (u.hold === 0) {
+        u.target = null;
+        if (u.landStun) { stun(u, u.landStun); u.landStun = 0; }
+      }
+      return;
+    }
 
     let target = u.target === null ? null : units[u.target];
     if (!target || !visible(target) || target.side === u.side || dist(u, at(target)) > u.range) target = nearestEnemy(u);

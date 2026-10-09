@@ -48,7 +48,7 @@ export function describePower(def, star, catalog) {
     case 'summon': return `${every}, it summons a ${catalog?.[p.unit]?.name ?? p.unit} next to it, at the same star level.`;
     case 'stealth': return `${every}, it turns invisible for ${secs(p.duration)}s${p.hastePct ? ` and attacks ${p.hastePct}% faster` : ''}. Enemies can't target or follow it while it's invisible.`;
     case 'haste': return `${every}, it's enraged: ${p.hastePct}% faster attacks for ${secs(p.duration)}s.`;
-    case 'opening': return `When the battle starts, it fires a wave down its column. The first enemy hit takes ${p.damagePct}% damage (${show(dmg)}) and is carried all the way to the other end of the board. Anyone already there is pushed to the side.`;
+    case 'opening': return `When the battle starts, it fires a wave down its column. The first enemy hit takes ${p.damagePct}% damage (${show(dmg)}) and is carried all the way to the other end of the board${p.stun ? `, stunned for ${secs(p.stun)}s when it lands` : ''}. Anyone already there is pushed to the side.`;
     default: return '';
   }
 }
@@ -154,7 +154,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
       el.style.setProperty('--fx', fxColor(unitId));
       // Cosmetic only: start each unit's idle breathing at a different point.
       el.style.setProperty('--idle-delay', `${(-Math.random() * 1.8).toFixed(2)}s`);
-      el.innerHTML = `<div class="shadow"></div><div class="body"><div class="sprite" ${spriteStyle(def)}></div></div>${stars}${bars}`;
+      el.innerHTML = `<div class="shadow"></div><div class="body"><div class="sprite" ${spriteStyle(def)}></div></div>${stars}${bars}<div class="stun-fx" aria-hidden="true"><i></i><i></i><i></i></div>`;
     } else {
       el.innerHTML = `
         <div class="token"><span>${def.emoji}</span></div>
@@ -952,7 +952,10 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         break;
       case 'stun':
         a.stunUntil = ev.t + ev.duration;
-        later(ctx.hitDelay.get(a.id) ?? 0, () => a.el.classList.add('stunned'));
+        later(ctx.hitDelay.get(a.id) ?? 0, () => {
+          a.el.classList.add('stunned');
+          if (animate) { const p = at(); fx(p.x, p.y, 'stunpop', '#ffe14d', 1.2); }
+        });
         break;
       case 'death':
         later(ctx.hitDelay.get(a.id) ?? 0, () => {

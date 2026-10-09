@@ -427,6 +427,11 @@ test('Psywave (Beheeyem): at the start, the first enemy in its column is knocked
   for (const id of [first, blocker]) {
     assert.ok(!r.events.some((e) => e.id === id && ['move', 'attack'].includes(e.type) && e.t <= landed), `unit ${id} acted mid-air`);
   }
+  // The one it hit is stunned for 1s once it lands; the one shoved aside isn't.
+  const [st] = evs(r, 'stun', first);
+  assert.ok(st && st.t >= landed - 1 && st.t <= landed && st.duration === catalog.beheeyem.ability.stun, `stunned on landing: ${JSON.stringify(st)}`);
+  assert.equal(evs(r, 'stun', blocker).length, 0);
+  assert.ok(!r.events.some((e) => e.id === first && ['move', 'attack'].includes(e.type) && e.t <= st.t + st.duration), 'stays put while stunned');
 });
 
 test('Thunderbolt (Toxtricity): every 8th attack also zaps the farthest enemy for 80%', () => {
@@ -494,6 +499,27 @@ test('a Pokémon launched onto an occupied square displaces it: left, right, bac
       assert.ok(!target || target.x !== 2 || target.y !== 1, 'it does not land on the blocker');
     }
   }
+});
+
+test('when a stun wears off, a Pokémon picks the nearest enemy instead of its old target', () => {
+  // Decidueye (range 4) starts shooting a wall 4 squares away. A stunner walks up
+  // next to it and stuns it; once the stun ends it should turn on the stunner.
+  const cat = powerCat();
+  cat.stunner = { ...cat.wall, range: 1, moveSpeed: 'fast', secPerHit: 1, energy: 1, ability: { name: 'Test', kind: 'empower', damagePct: 100, stun: 10 } };
+  cat.archer = { ...clone(catalog.decidueye), energy: 0, ability: null, hp: [1e6, 1e6, 1e6, 1e6] };
+  const r = simulate(cat, [
+    [{ uid: 1, unitId: 'archer', star: 0, x: 2, y: 3 }], // combat (2,7)
+    [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'stunner', star: 0, x: 4, y: 3 }], // (2,3) and (0,0)
+  ], 1);
+  const d = unitOf(r, 1).id;
+  const wall = unitOf(r, 2).id;
+  const stunner = unitOf(r, 3).id;
+  const st = evs(r, 'stun', d)[0];
+  assert.ok(st, 'it gets stunned');
+  const before = evs(r, 'attack', d).filter((e) => e.t < st.t);
+  assert.ok(before.length && before.every((e) => e.target === wall), 'locked on the wall before the stun');
+  const after = evs(r, 'attack', d).find((e) => e.t > st.t + st.duration);
+  assert.equal(after.target, stunner, 'new target after the stun');
 });
 
 test('Phantom Force (Decidueye): after 8 attacks it turns invisible and faster; enemies cannot target it', () => {
