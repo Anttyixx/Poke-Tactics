@@ -3,15 +3,15 @@
 // host keeps this shape: the bot's seat is taken by intents arriving from the
 // guest's connection, and the host broadcasts state after each dispatch.
 
-import { createGame, applyIntent } from './game.js?v=8222183';
-import { botTurn } from './bot.js?v=8222183';
-import { createUI } from './ui.js?v=8222183';
-import { hashSeed } from './rng.js?v=8222183';
+import { createGame, applyIntent } from './game.js?v=e4e559b';
+import { botTurn } from './bot.js?v=e4e559b';
+import { createUI } from './ui.js?v=e4e559b';
+import { hashSeed } from './rng.js?v=e4e559b';
 
 const HUMAN = 0;
 const BOT = 1;
 
-const catalog = await (await fetch('data/units.json?v=8222183')).json();
+const catalog = await (await fetch('data/units.json?v=e4e559b')).json();
 let state;
 let firstGame = true;
 
@@ -51,7 +51,7 @@ function dispatch(player, intent) {
 function runBot() {
   if (state.players[BOT].ready) return;
   const send = (intent) => applyIntent(state, catalog, BOT, intent);
-  if (state.phase === 'planning' || state.phase === 'leader') botTurn(state, catalog, BOT, send);
+  if (state.phase === 'planning' || state.phase === 'team') botTurn(state, catalog, BOT, send);
   else if (state.phase === 'combat') send({ type: 'continue' });
 }
 
