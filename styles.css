@@ -666,3 +666,11 @@ kbd { background: var(--panel-2); border: 1px solid var(--line); border-radius: 
 @media (prefers-reduced-motion: reduce) {
   .unit.blink, .unit.knocked .body, .unit.spawned { animation: none; }
 }
+
+/* Opponent's lineup from last round, shown faded while planning. */
+#units .unit.ghost { opacity: 0.42; filter: grayscale(0.35); pointer-events: none; }
+#units .unit.ghost .bars { display: none; }
+#arena.has-ghosts #enemy-label {
+  height: auto; top: 0.4em; place-items: start center;
+  font-size: 3.6cqi; color: #ffffff80; letter-spacing: 0.08em;
+}

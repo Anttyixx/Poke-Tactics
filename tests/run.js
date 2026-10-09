@@ -304,6 +304,23 @@ test('locked-in players cannot act; combat starts when both are ready', () => {
   assert.ok(s.combat.result.events.length > 0);
 });
 
+test("each player's lineup from the last fight is kept for the next planning phase", () => {
+  const s = startedGame();
+  assert.deepEqual(s.players.map((p) => p.lastBoard), [[], []], 'nothing before the first fight');
+  const p = s.players[1];
+  p.coins = 99;
+  p.shop = ['mawile', 'coalossal', null];
+  applyIntent(s, catalog, 1, { type: 'buy', slot: 0, x: 1, y: 0 });
+  applyIntent(s, catalog, 1, { type: 'buy', slot: 1, x: 3, y: 2 });
+  for (const i of [0, 1]) applyIntent(s, catalog, i, { type: 'ready' });
+  for (const i of [0, 1]) applyIntent(s, catalog, i, { type: 'continue' });
+  assert.equal(s.phase, 'planning');
+  assert.deepEqual(p.lastBoard, [{ unitId: 'mawile', star: 0, x: 1, y: 0 }, { unitId: 'coalossal', star: 0, x: 3, y: 2 }]);
+  // Changing the board now doesn't change what the opponent sees from last round.
+  applyIntent(s, catalog, 1, { type: 'move', uid: p.board[0].uid, x: 0, y: 3 });
+  assert.deepEqual(p.lastBoard[0], { unitId: 'mawile', star: 0, x: 1, y: 0 });
+});
+
 test('featured troop leads the shop while its pool has copies; bad ids are ignored', () => {
   const s = startedGame(3, { featured: 'beheeyem' });
   for (const p of s.players) assert.equal(p.shop[0], 'beheeyem');

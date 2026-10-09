@@ -2,7 +2,7 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, CRIT_PCT, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, TICK_SECONDS, powerDamage, unitStats } from './combat.js';
+import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, TICK_SECONDS, powerDamage, unitStats } from './combat.js';
 import {
   COPIES_PER_TROOP, LOSS_COINS, MAX_REROLLS, WIN_COINS,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
@@ -344,7 +344,23 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     const buyingId = buying !== null ? me().shop[buying] : null;
     arena.classList.toggle('buying', !!buyingId);
 
-    layer.replaceChildren(...me().board.map((u) => {
+    // The opponent's lineup from last round, faded, on their half: a hint for
+    // where to place your own Pokémon. Their current board stays hidden.
+    const foeSide = 1 - viewer;
+    const ghosts = state.phase === 'planning' ? foe().lastBoard ?? [] : [];
+    $('enemy-label').textContent = ghosts.length ? 'Enemy lineup last round' : 'Enemy side';
+    arena.classList.toggle('has-ghosts', ghosts.length > 0);
+    const ghostEls = ghosts.map((u) => {
+      const el = unitEl(u.unitId, u.star, 'enemy', 'down');
+      el.classList.add('ghost');
+      el.title = `${catalog[u.unitId].name} (last round)`;
+      const c = toCombatPos(foeSide, u.x, u.y);
+      const v = viewPos(c.x, c.y);
+      place(el, v.x, v.y);
+      return el;
+    });
+
+    layer.replaceChildren(...ghostEls, ...me().board.map((u) => {
       const el = unitEl(u.unitId, u.star);
       el.dataset.uid = u.uid;
       el.draggable = draggable;
@@ -407,6 +423,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
           <li>Click a troop in the shop, then click a square on <b>your half</b> (bottom) to buy it there. Desktop: drag it onto the board.</li>
           <li>Each troop can be on the board only once. Buying one you already have <b>levels it up</b>: 2 copies = ★, 3 = ★★, 4 = ★★★. There's no limit on how many different troops you field.</li>
           <li>The row nearest the middle is your front line. Put melee troops there.</li>
+          <li>From round 2, the faded Pokémon on the enemy side show where your opponent placed theirs last round.</li>
           <li>Drag a troop onto the shop (or press Sell) to sell it. Its copies go back to your pool.</li>
           <li>Press <b>Fight!</b> to watch the battle play out by itself.</li>
           <li>Coins: you start with 6. After each battle the winner gets +${WIN_COINS} and the loser +${LOSS_COINS}. Coins carry over.</li>

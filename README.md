@@ -47,6 +47,8 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
   Pokémon lists its own HP and damage for every star level. Moving a troop onto another unit swaps them.
 - **Selling:** drag a troop onto the shop (or press Sell) for its cost in coins per copy; all its copies go back
   to your pool.
+- **Scouting:** while you plan, the enemy half shows (faded) where the opponent placed their Pokémon
+  last round. Their current lineup stays hidden until the fight.
 - **Board:** your half is 5×4 (the board is 5 wide by 8 tall); the row next to the centre line is the
   front. There is no limit on how many troops you field.
 - **Combat:** units target the nearest enemy they can reach and walk (pathing around anyone in the way)
