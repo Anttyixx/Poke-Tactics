@@ -3,15 +3,15 @@
 // host keeps this shape: the bot's seat is taken by intents arriving from the
 // guest's connection, and the host broadcasts state after each dispatch.
 
-import { createGame, applyIntent } from './game.js?v=4d03adb';
-import { botTurn } from './bot.js?v=4d03adb';
-import { createUI } from './ui.js?v=4d03adb';
-import { hashSeed } from './rng.js?v=4d03adb';
+import { createGame, applyIntent } from './game.js?v=82dceda';
+import { botTurn } from './bot.js?v=82dceda';
+import { createUI } from './ui.js?v=82dceda';
+import { hashSeed } from './rng.js?v=82dceda';
 
 const HUMAN = 0;
 const BOT = 1;
 
-const catalog = await (await fetch('data/units.json?v=4d03adb')).json();
+const catalog = await (await fetch('data/units.json?v=82dceda')).json();
 let state;
 let firstGame = true;
 
@@ -23,11 +23,15 @@ const ui = createUI({
 });
 
 function newGame() {
+  const params = new URLSearchParams(location.search);
   // ?seed=anything makes the first match reproducible (handy for bug reports).
-  const param = new URLSearchParams(location.search).get('seed');
+  const param = params.get('seed');
   const seed = firstGame && param ? hashSeed(param) : crypto.getRandomValues(new Uint32Array(1))[0];
   firstGame = false;
-  state = createGame({ seed, catalog, names: ['You', 'Bot'] });
+  // ?unit=<id> puts that unit in the first slot of every shop (for testing new units).
+  const featured = params.get('unit')?.toLowerCase() || null;
+  state = createGame({ seed, catalog, names: ['You', 'Bot'], featured });
+  if (featured && !state.featured) setTimeout(() => ui.toast(`Unknown unit "${featured}" in ?unit=`), 0);
   runBot();
   ui.render(state);
 }
@@ -47,7 +51,7 @@ function dispatch(player, intent) {
 function runBot() {
   if (state.players[BOT].ready) return;
   const send = (intent) => applyIntent(state, catalog, BOT, intent);
-  if (state.phase === 'planning' || state.phase === 'leader') botTurn(state, catalog, BOT, send);
+  if (state.phase === 'planning' || state.phase === 'team') botTurn(state, catalog, BOT, send);
   else if (state.phase === 'combat') send({ type: 'continue' });
 }
 
