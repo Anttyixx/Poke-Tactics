@@ -1,3 +1,4 @@
+f9219d3	dev	2026-10-09 21:47 UTC	Fix diagonal tilt direction for front-facing sprites
 82dceda	dev	2026-10-09 21:36 UTC	Displacement rule for Pokémon launched onto an occupied square
 2e65e53	dev	2026-10-09 20:37 UTC	Tilt sprites toward diagonal targets
 c605f62	stable	2026-10-09 16:28 UTC	Phones: Pokémon info as a pop-up; board resizes smoothly
@@ -27,4 +28,3 @@ a377428	dev	2026-10-08 06:56 UTC	Slow combat to real time and add attack effects
 82bc3f1	dev	2026-10-08 06:51 UTC	Stop sprites walking while waiting; shrink board sprites 15%
 d35ff5e	dev	2026-10-08 06:09 UTC	Add Toxtricity: 2-cost long-range troop that zaps and paralyzes
 8222183	dev	2026-10-08 06:01 UTC	Add Coalossal: slow, hard-hitting 3-cost melee troop
-ca2d6e7	dev	2026-10-08 05:50 UTC	Add ?unit=&lt;id&gt; test link that features a unit in every shop
