@@ -81,6 +81,11 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   let playback = null;
   let speed = 1;
   let toastTimer = 0;
+  const appEl = $('app');
+  const menuEl = $('menu');
+  let shownCoins = null; // last coin count drawn, to animate changes
+  let shownShop = ''; // last shop drawn, to deal new cards in
+  let seenUids = new Set(); // board units already drawn, to drop new ones in
 
   // Board dimensions come from combat.js; CSS sizes everything from these.
   arena.style.setProperty('--cols', COLS);
@@ -241,10 +246,22 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   readyBtn.addEventListener('click', () => intent({ type: 'ready' }));
   infoEl.addEventListener('click', (e) => {
     if (e.target.id === 'sell' && selected !== null) intent({ type: 'sell', uid: selected });
+    e.target.closest('.ability')?.classList.toggle('open'); // phones clamp it to two lines
   });
   hudEl.addEventListener('click', (e) => {
-    if (e.target.id === 'new-game' && confirm('Abandon this match and start a new one?')) onNewGame();
-    if (e.target.id === 'open-dex') openDex();
+    const btn = e.target.closest('button');
+    if (btn?.id === 'open-dex') openDex();
+    if (btn?.id === 'open-menu') openMenu();
+  });
+  menuEl.addEventListener('click', (e) => {
+    if (e.target === menuEl) return closeMenu();
+    const btn = e.target.closest('button[data-menu]');
+    if (!btn) return;
+    const action = btn.dataset.menu;
+    if (action === 'close') closeMenu();
+    else if (action === 'dex') { closeMenu(); openDex(); }
+    else if (action === 'new-confirmed') { closeMenu(); onNewGame(); }
+    else openMenu(action); // 'main', 'help', 'new'
   });
   overlay.addEventListener('click', (e) => {
     if (e.target.id === 'open-dex') return openDex();
@@ -276,7 +293,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     if (!state || e.ctrlKey || e.metaKey || e.altKey || e.target.matches('input, textarea')) return;
     const key = e.key.toLowerCase();
     if (!dexEl.hidden) { if (key === 'escape' || key === 'p') closeDex(); return; }
+    if (!menuEl.hidden) { if (key === 'escape' || key === 'm') closeMenu(); return; }
     if (key === 'p') openDex();
+    else if (key === 'm') openMenu();
     else if (key === 'd' && canPlan()) intent({ type: 'reroll' });
     else if (key === 'f' && canPlan()) intent({ type: 'ready' });
     else if (key === 'e' && canPlan() && selected !== null) intent({ type: 'sell', uid: selected });
@@ -317,24 +336,73 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
 
   function hpBox(p, side) {
     const pct = Math.max(0, p.hp);
-    return `<div class="hpbox ${side}">
-      <span class="name">${esc(p.name)}</span>
+    return `<div class="hpbox ${side}" title="${esc(p.name)}: ${p.hp} HP">
+      ${side === 'ally' ? `<span class="name">${esc(p.name)}</span>` : `<b>${p.hp}</b>`}
       <div class="hpbar"><i style="width:${pct}%"></i></div>
-      <b>${p.hp}</b>
+      ${side === 'ally' ? `<b>${p.hp}</b>` : `<span class="name">${esc(p.name)}</span>`}
     </div>`;
   }
 
+  const ICON_MENU = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>';
+  const ICON_DEX = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><path d="M3 12h6m6 0h6"/><circle cx="12" cy="12" r="3"/></svg>';
+
   function renderHud() {
     const p = me();
+    const coinsChanged = shownCoins !== null && shownCoins !== p.coins;
+    shownCoins = p.coins;
     hudEl.innerHTML = `
-      <div class="stat"><span class="label">Round</span><b>${state.round}</b></div>
-      <div class="stat" title="Win a battle: +${WIN_COINS}. Lose: +${LOSS_COINS}. Coins carry over."><span class="label">Coins</span><b class="gold">${p.coins}</b></div>
-      <div class="stat" title="Free rerolls. +1 each round, up to ${MAX_REROLLS}."><span class="label">Rerolls</span><b>${p.rerolls}/${MAX_REROLLS}</b></div>
-      <div class="stat" title="Copies left to buy"><span class="label">Pool</span><b>${poolSize(p)}</b></div>
-      ${hpBox(p, 'ally')}
-      ${hpBox(foe(), 'enemy')}
-      <button id="open-dex" class="ghost dex-button" title="See every Pokémon's stats (P)">Pokédex</button>
-      <button id="new-game" class="ghost" title="Start a new match">New game</button>`;
+      <span class="chip"><span class="label">Round</span><b>${state.round || '–'}</b></span>
+      <span class="chip coins" title="Win a battle: +${WIN_COINS}. Lose: +${LOSS_COINS}. Coins carry over."><b class="gold${coinsChanged ? ' bump' : ''}">${p.coins}</b></span>
+      <span class="chip" title="Free rerolls. +1 each round, up to ${MAX_REROLLS}."><span class="label">Rerolls</span><b>${p.rerolls}/${MAX_REROLLS}</b></span>
+      <div class="duel">${hpBox(p, 'ally')}<span class="vs">VS</span>${hpBox(foe(), 'enemy')}</div>
+      <div class="hud-actions">
+        <button id="open-dex" class="icon-btn dex-button" title="Every Pokémon's stats (P)">${ICON_DEX}<span class="label-text">Pokédex</span></button>
+        <button id="open-menu" class="icon-btn" title="Menu (M)" aria-label="Menu">${ICON_MENU}<span class="label-text">Menu</span></button>
+      </div>`;
+  }
+
+  // ---- menu ------------------------------------------------------------------
+
+  function openMenu(view = 'main') {
+    const panel = menuEl.querySelector('.menu-panel');
+    panel.classList.toggle('help', view === 'help');
+    const close = '<button class="menu-close ghost" data-menu="close" aria-label="Close">✕</button>';
+    const back = '<button class="back ghost" data-menu="main">← Back</button>';
+    if (view === 'help') {
+      panel.innerHTML = `${close}${back}<h1>How to play</h1>
+        <ul class="help-list">
+          <li><b>Build a team</b> of ${teamSize(catalog)} Pokémon. Each puts ${COPIES_PER_TROOP} copies into your own pool, and your shop draws from it. Your board starts empty.</li>
+          <li><b>Buy</b>: tap a shop card, then a square on your half (or drag the card onto the board).</li>
+          <li><b>Level up</b>: each Pokémon can be on the board only once. Buying another copy levels it up: 2 copies = ★, 3 = ★★, 4 = ★★★.</li>
+          <li><b>Position</b>: the row nearest the middle is your front line. Tap a Pokémon, then a square, to move it (onto another Pokémon swaps them).</li>
+          <li><b>Sell</b>: drag a Pokémon onto the shop, or tap it and press Sell. Its copies go back to your pool.</li>
+          <li><b>Fight</b>: the battle plays out by itself. After 30 seconds, sudden death drains everyone until one side falls.</li>
+          <li><b>Powers</b>: every Pokémon has one; the blue bar under it fills with each attack. See them all in the Pokédex.</li>
+          <li><b>Scouting</b>: from round 2, the faded Pokémon on the enemy side show where your opponent placed theirs last round.</li>
+          <li><b>Coins</b>: you start with 6. Win a battle: +${WIN_COINS}. Lose: +${LOSS_COINS}. Coins carry over.</li>
+          <li><b>Rerolls</b> are free: ${MAX_REROLLS} to start, +1 each round (max ${MAX_REROLLS}). The shop refreshes after every battle.</li>
+          <li><b>Win</b> by bringing your opponent from 100 HP to 0. The loser of a battle loses HP for every Pokémon still standing.</li>
+        </ul>
+        <p class="muted">Keys: <kbd>D</kbd> reroll · <kbd>F</kbd> fight · <kbd>E</kbd> sell · <kbd>Space</kbd> skip · <kbd>P</kbd> Pokédex · <kbd>M</kbd> menu</p>`;
+    } else if (view === 'new') {
+      panel.innerHTML = `${close}<h1>New game?</h1>
+        <p class="muted">This match will be lost.</p>
+        <div class="confirm-row"><button data-menu="main">Keep playing</button><button class="danger" data-menu="new-confirmed">Start a new game</button></div>`;
+    } else {
+      panel.innerHTML = `${close}<h1>Menu</h1>
+        <div class="menu-list">
+          <button data-menu="close"><span>▶</span><div>Resume</div></button>
+          <button data-menu="help"><span>?</span><div>How to play<small>Rules, controls and keys</small></div></button>
+          <button data-menu="dex"><span>◎</span><div>Pokédex<small>Every Pokémon's stats and power</small></div></button>
+          <button data-menu="new"><span>↻</span><div>New game<small>Start over with a new team</small></div></button>
+        </div>`;
+    }
+    menuEl.hidden = false;
+    panel.querySelector('button:not(.menu-close)')?.focus();
+  }
+
+  function closeMenu() {
+    menuEl.hidden = true;
   }
 
   function renderPlanning() {
@@ -360,8 +428,13 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
       return el;
     });
 
+    const fresh = state.round !== seenUids.round;
+    if (fresh) seenUids = Object.assign(new Set(), { round: state.round });
     layer.replaceChildren(...ghostEls, ...me().board.map((u) => {
       const el = unitEl(u.unitId, u.star);
+      // Newly bought (or levelled up): drop onto the board with a bounce.
+      const key = `${u.uid}:${u.star}`;
+      if (!seenUids.has(key)) { if (!fresh) el.classList.add('dropped'); seenUids.add(key); }
       el.dataset.uid = u.uid;
       el.draggable = draggable;
       el.classList.toggle('selected', u.uid === selected);
@@ -377,17 +450,21 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
 
   function renderShop() {
     const p = me();
+    // A new round or a reroll deals the cards in; buying one doesn't.
+    const deal = `${state.round}|${p.rerolls}|${state.phase}`;
+    const dealt = deal !== shownShop && state.phase === 'planning';
+    shownShop = deal;
     shopEl.innerHTML = p.shop.map((id, slot) => {
       if (!id) return `<button class="card empty" disabled><span>${state.phase === 'planning' ? 'Bought' : ''}</span></button>`;
       const def = catalog[id];
       const disabled = !canPlan() || p.coins < def.cost;
-      return `<button class="card${slot === buying ? ' buying' : ''}" data-slot="${slot}" data-type="${def.type}" ${disabled ? 'disabled' : 'draggable="true"'}>
+      return `<button class="card${slot === buying ? ' buying' : ''}${dealt ? ' dealt' : ''}" style="--i:${slot}" data-slot="${slot}" data-type="${def.type}" ${disabled ? 'disabled' : 'draggable="true"'}>
         ${def.sprite
           ? `<span class="portrait" data-facing="down"><span class="sprite" ${spriteStyle(def)}></span></span>`
           : `<span class="emoji">${def.emoji}</span>`}
         <span class="name">${esc(def.name)}</span>
         <span class="type">${def.type}</span>
-        <span class="cost c${def.cost}">${def.cost} 🪙</span>
+        <span class="cost c${def.cost}" title="${def.cost} coins">${def.cost}</span>
         ${fielded(p, id) ? `<span class="levelup">Level up ${'★'.repeat(fielded(p, id).star) || '0★'}→${'★'.repeat(fielded(p, id).star + 1)}</span>` : ''}
         <span class="left">${p.pool[id]} left in pool</span>
       </button>`;
@@ -405,11 +482,12 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   function poolList() {
     const p = me();
     if (!p.team.length) return '';
-    return `<h2 class="pool-title">Your pool</h2>
+    const pips = (n) => `<span class="pips" title="${n} of ${COPIES_PER_TROOP} copies left">${Array.from({ length: COPIES_PER_TROOP }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</span>`;
+    return `<h2 class="pool-title"><span>Your pool</span><span>${poolSize(p)} left</span></h2>
       <ul class="pool-list">${p.team.map((id) => `
         <li data-type="${catalog[id].type}">${portrait(catalog[id])}
           <span>${esc(catalog[id].name)}</span>
-          <b>${p.pool[id]}/${COPIES_PER_TROOP}</b></li>`).join('')}
+          ${pips(p.pool[id])}</li>`).join('')}
       </ul>`;
   }
 
@@ -418,21 +496,12 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     const shopId = buying !== null ? me().shop[buying] : null;
     const unitId = inst?.unitId ?? shopId ?? hovered;
     if (!unitId) {
-      infoEl.innerHTML = `<h2>How to play</h2>
-        <ul class="help">
-          <li>Click a troop in the shop, then click a square on <b>your half</b> (bottom) to buy it there. Desktop: drag it onto the board.</li>
-          <li>Each troop can be on the board only once. Buying one you already have <b>levels it up</b>: 2 copies = ★, 3 = ★★, 4 = ★★★. There's no limit on how many different troops you field.</li>
-          <li>The row nearest the middle is your front line. Put melee troops there.</li>
-          <li>From round 2, the faded Pokémon on the enemy side show where your opponent placed theirs last round.</li>
-          <li>Drag a troop onto the shop (or press Sell) to sell it. Its copies go back to your pool.</li>
-          <li>Press <b>Fight!</b> to watch the battle play out by itself.</li>
-          <li>Coins: you start with 6. After each battle the winner gets +${WIN_COINS} and the loser +${LOSS_COINS}. Coins carry over.</li>
-          <li>Rerolls are free: you get ${MAX_REROLLS}, plus 1 more each round (max ${MAX_REROLLS}). The shop refreshes by itself after every battle.</li>
-        </ul>
-        <p class="keys">Keys: <kbd>D</kbd> reroll · <kbd>F</kbd> fight · <kbd>E</kbd> sell · <kbd>Space</kbd> skip</p>
+      appEl.classList.add('info-idle');
+      infoEl.innerHTML = `${state.phase === 'planning' ? `<p class="tip">${me().board.length ? 'Tap a Pokémon to see its stats or move it. Tap a shop card, then a square, to buy.' : 'Tap a shop card, then a square on your side, to place your first Pokémon.'}</p>` : ''}
         ${poolList()}`;
       return;
     }
+    appEl.classList.remove('info-idle');
     const def = catalog[unitId];
     const star = inst?.star ?? 0;
     const stats = unitStats(def, star);
@@ -449,6 +518,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         <span class="sub">${def.type} · ${def.cost} coins · ${copies}/${COPIES_PER_TROOP} copies</span></div>
       </div>
       ${hint}
+      <p class="mini-stats"><span>HP <b>${show(stats.hp)}</b></span><span>DMG <b>${show(stats.atk)}</b></span><span>Every <b>${attackTime(stats)}s</b></span><span>Range <b>${def.range}</b></span><span>Crit <b>${stats.crit}%</b></span></p>
       <dl class="stats">
         <dt>HP</dt><dd>${show(stats.hp)}</dd>
         <dt>Damage per hit</dt><dd>${show(stats.atk)}</dd>
@@ -471,7 +541,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     selected = null;
     overlay.hidden = true;
     arena.classList.add('in-combat');
-    arena.classList.remove('sudden-death');
+    arena.classList.remove('sudden-death', 'buying', 'has-ghosts');
+    buying = null;
     setClock(0);
     controls.hidden = false;
     renderInfo();
@@ -560,6 +631,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
 
   function bars(a) {
     a.el.querySelector('.hp i').style.width = `${(100 * a.hp) / a.maxHp}%`;
+    a.el.querySelector('.hp').style.setProperty('--hp-trail', `${(100 * a.hp) / a.maxHp}%`);
     a.el.querySelector('.hp b').style.width = `${Math.min(100, (100 * a.shield) / a.maxHp)}%`;
     a.el.querySelector('.mana i').style.width = `${a.maxMana ? (100 * a.mana) / a.maxMana : 0}%`;
   }
@@ -568,6 +640,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     const el = document.createElement('div');
     el.className = `float ${kind}`;
     el.textContent = text;
+    el.style.setProperty('--jx', `${Math.round((Math.random() - 0.5) * 50)}%`);
     const p = viewPos(a.x, a.y);
     place(el, p.x, p.y);
     el.addEventListener('animationend', () => el.remove());
@@ -663,11 +736,14 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         face(a, p.x - from.x, p.y - from.y);
         place(a.el, p.x, p.y);
         if (animate) {
-          // Walk to the next square over the unit's whole move time, with a hop;
-          // the walk cycle plays only while it's moving.
+          // Hop to the next square over the unit's whole move time, leaning into
+          // the move; the walk cycle plays only while it's moving, and a little
+          // dust puffs up where it lands.
           const hopMs = (unitStats(catalog[a.unitId], 0).moveCd * TICK_MS) / speed;
+          a.el.style.setProperty('--mx', Math.sign(p.x - from.x));
           play(a.el, 'hop', hopMs);
           play(a.el, 'moving', hopMs);
+          setTimeout(() => { if (a.el.isConnected && !a.el.classList.contains('dead')) fx(p.x, p.y, 'dust', '#fff', 1); }, hopMs * 0.85);
         }
         break;
       }
@@ -788,7 +864,14 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
           }
           if (!animate) return;
           floatText(a, ev.crit ? `-${show(ev.amount)}!` : `-${show(ev.amount)}`, ev.crit ? 'dmg crit' : 'dmg');
-          play(a.el, 'hit', 120);
+          // Flinch away from whoever hit it.
+          if (src) {
+            const s = viewPos(src.x, src.y);
+            const me = at();
+            a.el.style.setProperty('--hx', Math.sign(me.x - s.x));
+            a.el.style.setProperty('--hy', Math.sign(me.y - s.y));
+          }
+          play(a.el, 'hit', ev.crit ? 200 : 140);
           if (src && rangeOf(src) <= 1 && ctx.action.get(src.id) === 'attack') fx(at().x, at().y, 'slash', fxColor(src.unitId));
         });
         break;
@@ -810,7 +893,10 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         later(ctx.hitDelay.get(a.id) ?? 0, () => a.el.classList.add('stunned'));
         break;
       case 'death':
-        later(ctx.hitDelay.get(a.id) ?? 0, () => a.el.classList.add('dead'));
+        later(ctx.hitDelay.get(a.id) ?? 0, () => {
+          a.el.classList.add('dead');
+          if (animate) { const p = at(); setTimeout(() => fx(p.x, p.y, 'poof', '#fff', 1.3), 250 / speed); }
+        });
         break;
     }
   }

@@ -2,8 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Auto Battler</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0e1220">
+  <title>Poke Tactics</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -11,17 +15,20 @@
     <header id="hud"></header>
 
     <section id="arena-wrap">
-      <div id="arena">
-        <div id="cells"></div>
-        <div id="enemy-label">Enemy side</div>
-        <div id="units"></div>
+      <div id="board-fit">
+        <div id="arena">
+          <div id="cells"></div>
+          <div id="enemy-label">Enemy side</div>
+          <div id="units"></div>
+        </div>
       </div>
       <div id="combat-controls" hidden>
         <span id="clock" title="When the timer runs out, sudden death starts">0:30</span>
-        <span>Speed</span>
-        <button data-speed="1" class="active">1×</button>
-        <button data-speed="2">2×</button>
-        <button data-speed="4">4×</button>
+        <div class="speeds" role="group" aria-label="Playback speed">
+          <button data-speed="1" class="active">1×</button>
+          <button data-speed="2">2×</button>
+          <button data-speed="4">4×</button>
+        </div>
         <button id="skip">Skip ⏭</button>
       </div>
     </section>
@@ -38,7 +45,8 @@
   </div>
 
   <div id="overlay" hidden><div class="card"></div></div>
-  <div id="dex" hidden role="dialog" aria-label="Pokédex"><div class="dex-panel"></div></div>
+  <div id="dex" class="modal" hidden role="dialog" aria-label="Pokédex"><div class="dex-panel"></div></div>
+  <div id="menu" class="modal" hidden role="dialog" aria-label="Menu"><div class="menu-panel"></div></div>
   <div id="toast" hidden></div>
 
   <script type="module" src="src/main.js"></script>

@@ -78,7 +78,8 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
   fall first until one side is knocked out.
 - **Damage:** the loser takes `round + 2 × (copies in the winner's surviving troops)`. A draw (the last
   Pokémon on both sides fall at the same moment) costs each player `ceil(round / 2)`. Everyone starts at 100 HP.
-- **Keys:** `D` reroll, `F` fight, `E` sell the selected troop, `Space` skip the combat replay, `Esc` deselect.
+- **Keys:** `D` reroll, `F` fight, `E` sell the selected troop, `Space` skip the combat replay, `P` Pokédex,
+  `M` menu (How to play, Pokédex, New game), `Esc` deselect or close.
 
 ## Project layout
 
