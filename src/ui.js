@@ -697,10 +697,20 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   }
 
   // Sprites face along the dominant axis of movement or attack.
+  // Sprites only have 4 facings, so a target off the straight lines (a diagonal
+  // attack) is shown by tilting the sprite toward it: a side-facing sprite tips
+  // its head up or down, a front/back-facing one leans left or right. Straight
+  // lines (every step is one) give no tilt.
+  const MAX_TILT = 16; // degrees, for an exact diagonal
   function face(a, dx, dy) {
     if (!a.el.dataset.facing) return;
     const horizontal = Math.abs(dx) >= Math.abs(dy);
     a.el.dataset.facing = facingFor(horizontal ? dx : 0, horizontal ? 0 : dy, a.el.dataset.facing);
+    const major = Math.max(Math.abs(dx), Math.abs(dy));
+    const minor = Math.min(Math.abs(dx), Math.abs(dy));
+    const amount = major ? (MAX_TILT * minor) / major : 0;
+    const sign = horizontal ? Math.sign(dx) * Math.sign(dy) : Math.sign(dx);
+    a.el.style.setProperty('--tilt', `${(sign * amount).toFixed(1)}deg`);
   }
 
   function pulse(el, cls) {

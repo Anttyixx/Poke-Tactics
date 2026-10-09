@@ -302,7 +302,9 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   background-size: 400% 400%;
   background-repeat: no-repeat;
   image-rendering: pixelated;
-  transition: filter 0.12s, translate 0.12s ease-out;
+  transition: filter 0.12s, translate 0.12s ease-out, rotate 0.18s var(--spring);
+  rotate: var(--tilt, 0deg); /* leaning toward a diagonal target (set in ui.js) */
+  transform-origin: 50% 85%;
   pointer-events: none;
 }
 /* The walk cycle only plays while a unit is moving to a new square. */
