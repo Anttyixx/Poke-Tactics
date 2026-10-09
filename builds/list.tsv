@@ -1,3 +1,4 @@
+fb316c6	dev	2026-10-09 23:41 UTC	Faster shoves, and no diagonal-looking displacement
 e4e559b	dev	2026-10-09 21:54 UTC	Stun on landing, new stun effect, retarget after stuns
 f9219d3	dev	2026-10-09 21:47 UTC	Fix diagonal tilt direction for front-facing sprites
 82dceda	dev	2026-10-09 21:36 UTC	Displacement rule for Pokémon launched onto an occupied square
@@ -27,4 +28,3 @@ d4fed02	dev	2026-10-08 08:14 UTC	Use the design-sheet stats for leaders and troo
 e41ac72	dev	2026-10-08 07:03 UTC	Add Vespiquen: 2-cost mid-range troop with Attack Order
 a377428	dev	2026-10-08 06:56 UTC	Slow combat to real time and add attack effects
 82bc3f1	dev	2026-10-08 06:51 UTC	Stop sprites walking while waiting; shrink board sprites 15%
-d35ff5e	dev	2026-10-08 06:09 UTC	Add Toxtricity: 2-cost long-range troop that zaps and paralyzes
