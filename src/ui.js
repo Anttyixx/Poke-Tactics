@@ -704,6 +704,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   // MAX_TILT degrees, shallower angles less. Straight lines (every step is one)
   // give no tilt.
   const MAX_TILT = 16;
+  const SHOVE_MS = 200; // shoved aside by someone landing on its square
+  const KNOCK_MS = 300; // knocked back by a hit (up to 2 squares)
   const FACING_VEC = { down: [0, 1], up: [0, -1], left: [-1, 0], right: [1, 0] };
   function face(a, dx, dy) {
     if (!a.el.dataset.facing) return;
@@ -790,6 +792,10 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     const at = () => viewPos(a.x, a.y);
     switch (ev.type) {
       case 'move': {
+        // A shove still waiting for its hit to land happens now, so this step
+        // starts from the square the unit was shoved to.
+        a.pendingKnock?.(true);
+        a.el.style.transition = '';
         const from = viewPos(a.x, a.y);
         a.x = ev.x;
         a.y = ev.y;
@@ -892,8 +898,20 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         }
         // Thrown by a hit: lands when the hit does. Shoved aside by someone landing
         // on its square: moves when they land (for the wave, when it arrives).
+        // Either way it's a quick slide, not the unit's (slower) walking pace.
         const delay = !animate ? 0 : wave ? wave.arrive : ctx.hitDelay.get(ev.by ?? a.id) ?? 0;
-        later(delay, () => { place(a.el, p.x, p.y); if (animate) play(a.el, 'knocked', 350 / speed); });
+        const ms = animate ? (ev.by !== undefined ? SHOVE_MS : KNOCK_MS) / speed : 0;
+        const job = (instant) => {
+          if (a.pendingKnock !== job) return; // already done, or replaced by a newer one
+          a.pendingKnock = null;
+          a.el.style.transition = instant || !ms ? 'none' : `left ${ms}ms cubic-bezier(.2,.8,.3,1), top ${ms}ms cubic-bezier(.2,.8,.3,1)`;
+          place(a.el, p.x, p.y);
+          if (instant || !ms) { void a.el.offsetWidth; a.el.style.transition = ''; return; }
+          play(a.el, 'knocked', ms + 150 / speed);
+          setTimeout(() => { if (!a.pendingKnock) a.el.style.transition = ''; }, ms);
+        };
+        a.pendingKnock = job;
+        later(delay, () => job(false));
         break;
       }
       case 'teleport': {
