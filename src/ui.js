@@ -86,6 +86,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   let shownCoins = null; // last coin count drawn, to animate changes
   let shownShop = ''; // last shop drawn, to deal new cards in
   let seenUids = new Set(); // board units already drawn, to drop new ones in
+  let started = false; // past the start screen (it shows once, when the game loads)
   let peek = null; // unit id shown in the info pop-up (phones), opened with an ⓘ button
   const sheetBackdrop = $('info-backdrop');
 
@@ -171,6 +172,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   }
 
   function showOverlay(html) {
+    overlay.classList.remove('start-screen');
     overlay.querySelector('.card').innerHTML = html;
     overlay.hidden = false;
   }
@@ -284,9 +286,15 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     else openMenu(action); // 'main', 'help', 'new'
   });
   overlay.addEventListener('click', (e) => {
+    const btn = e.target.closest('button, [data-dex-info]');
+    if (btn?.id === 'battle') { started = true; overlay.classList.remove('start-screen'); return showTeamBuilder(); }
+    if (btn?.id === 'start-help') return openMenu('help');
+    if (btn?.id === 'start-dex') return openDex();
+    const info = e.target.closest('[data-dex-info]');
+    if (info) return openDex(info.dataset.dexInfo); // a team card's ⓘ: full stats and power
     if (e.target.id === 'open-dex') return openDex();
     if (e.target.id === 'continue') { e.target.disabled = true; onIntent({ type: 'continue' }); }
-    if (e.target.id === 'play-again') onNewGame();
+    if (e.target.id === 'play-again') { started = true; onNewGame(); }
     if (state?.phase !== 'team' || me().ready) return;
     const troop = e.target.closest('[data-pick-troop]');
     if (troop) {
@@ -351,7 +359,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     }
     overlay.hidden = true;
     renderPlanning();
-    if (state.phase === 'team') showTeamBuilder();
+    if (state.phase === 'team') { if (started) showTeamBuilder(); else showStart(); }
     if (state.phase === 'gameover') showGameOver();
   }
 
@@ -1008,29 +1016,50 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     overlay.querySelector('#continue')?.focus();
   }
 
-  function teamCard(id, picked) {
+  // Team cards look like the shop's: portrait, name, type and the cost in the
+  // corner. Stats live behind the ⓘ button (the Pokédex entry).
+  function teamCard(id, picked, i) {
     const def = catalog[id];
-    const stats = unitStats(def, 0);
-    return `<button class="leader-card${picked ? ' chosen' : ''}" data-pick-troop="${id}" data-type="${def.type}" ${me().ready ? 'disabled' : ''}>
+    return `<button class="team-card${picked ? ' chosen' : ''}" style="--i:${i}" data-pick-troop="${id}" data-type="${def.type}" ${me().ready ? 'disabled' : ''} aria-pressed="${picked}">
+      <span class="cost c${def.cost}" title="${def.cost} coins">${def.cost}</span>
+      <span class="info-btn" data-dex-info="${id}" role="button" aria-label="${esc(def.name)} info">i</span>
       ${portrait(def)}
-      <b>${esc(def.name)}</b>
-      <span class="muted">${def.cost} coins · ${def.range > 1 ? `Ranged (${def.range})` : 'Melee'} · ${show(stats.hp)} HP · ${show(stats.atk)} dmg every ${attackTime(stats)}s</span>
-      <small><b>${esc(def.ability.name)}:</b> ${describePower(def, 0, catalog)}</small>
+      <span class="check" aria-hidden="true">✓</span>
+      <span class="name">${esc(def.name)}</span>
+      <span class="type">${def.type}</span>
     </button>`;
+  }
+
+  function showStart() {
+    const parade = troopIds(catalog).map((id, i) => `<span class="walker" style="--i:${i}" data-facing="right"><span class="sprite" ${spriteStyle(catalog[id])}></span></span>`).join('');
+    showOverlay(`
+      <div class="start">
+        <div class="logo"><span>Poke</span><span>Tactics</span></div>
+        <p class="tagline">Draft a team, place your Pokémon, and watch them battle it out.</p>
+        <div class="parade" aria-hidden="true">${parade}</div>
+        <button id="battle" class="primary battle-btn">Battle</button>
+        <div class="start-links">
+          <button id="start-help" class="ghost">How to play</button>
+          <button id="start-dex" class="ghost">Pokédex</button>
+        </div>
+      </div>`);
+    overlay.classList.add('start-screen');
+    overlay.querySelector('#battle').focus();
   }
 
   function showTeamBuilder() {
     const need = teamSize(catalog);
     const waiting = me().ready;
     const ready = draft.troops.length === need;
+    const fresh = !overlay.querySelector('.team-grid');
     showOverlay(`
-      <h1>Build your team</h1>
-      <p class="muted">Pick ${need} Pokémon. Each one adds ${COPIES_PER_TROOP} copies to your pool, and your shop draws from it. Your board starts empty. <button id="open-dex" class="linkish">Compare them in the Pokédex</button></p>
-      <h2 class="pick-title">Team ${draft.troops.length}/${need}</h2>
-      <div class="pick-grid">${troopIds(catalog).map((id) => teamCard(id, draft.troops.includes(id))).join('')}</div>
+      <h1>Choose your team</h1>
+      <p class="muted">Pick ${need} Pokémon. Each puts ${COPIES_PER_TROOP} copies in your pool for the shop. Tap <span class="info-btn inline">i</span> for a Pokémon's stats.</p>
+      <div class="team-count">${Array.from({ length: need }, (_, k) => `<i class="${k < draft.troops.length ? 'on' : ''}"></i>`).join('')}<span>${draft.troops.length}/${need}</span></div>
+      <div class="team-grid${fresh ? ' fresh' : ''}">${troopIds(catalog).map((id, i) => teamCard(id, draft.troops.includes(id), i)).join('')}</div>
       ${waiting
         ? '<p class="muted">Waiting for opponent…</p>'
-        : `<button id="start-team" class="primary" ${ready ? '' : 'disabled'}>${ready ? 'Start match' : `Pick ${need - draft.troops.length} more`}</button>`}`);
+        : `<button id="start-team" class="primary" ${ready ? '' : 'disabled'}>${ready ? 'Start battle' : `Pick ${need - draft.troops.length} more`}</button>`}`);
   }
 
   function showGameOver() {

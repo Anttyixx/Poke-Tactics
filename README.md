@@ -32,6 +32,8 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
 
 ## How to play
 
+- **Start:** the game opens on a start screen; **Battle** goes to team selection. Pokémon are shown as
+  cards (cost in the corner); tap one to pick it, or its **i** for its stats and power.
 - **Team:** before round 1, each player picks 6 Pokémon. Each one puts 4 copies into that player's own
   pool. The board starts empty: everything you field, you buy.
 - **Coins:** you start with 6. After each battle the winner gets 6 coins and the loser 9 (a draw pays
