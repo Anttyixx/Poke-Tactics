@@ -29,15 +29,50 @@
     "hp": [800, 1360, 2310, 3930], "damage": [100, 170, 285, 490], "range": 4, "moveSpeed": "very slow", "secPerHit": 1.42, "critChance": 15, "energy": 8,
     "ability": {"name": "Phantom Force", "kind": "stealth", "duration": 30, "hastePct": 30}
   },
-  "greninja": {
-    "name": "Greninja", "sprite": "assets/sprites/greninja.png", "fx": "#5ab8ff", "type": "rogue", "cost": 3,
+  "hoopa": {
+    "name": "Hoopa", "sprite": "assets/sprites/hoopa.png", "fx": "#ff8ad8", "type": "mage", "cost": 3,
     "hp": [600, 975, 1560, 2500], "damage": [75, 125, 195, 315], "range": 1, "moveSpeed": "medium", "secPerHit": 1.11, "critChance": 15, "energy": 6,
-    "ability": {"name": "Night Slash", "kind": "empower", "damagePct": 130, "teleport": "farthest", "lifestealPct": 10}
+    "ability": {"name": "Hyperspace Hole", "kind": "empower", "damagePct": 130, "teleport": "farthest", "lifestealPct": 10}
   },
   "infernape": {
     "name": "Infernape", "sprite": "assets/sprites/infernape.png", "fx": "#ff8a2a", "type": "warrior", "cost": 2,
     "hp": [945, 1415, 2125, 3190], "damage": [118, 180, 265, 400], "range": 1, "moveSpeed": "medium", "secPerHit": 1.11, "critChance": 15, "energy": 7,
     "ability": {"name": "Blaze", "kind": "haste", "duration": 30, "hastePct": 50}
+  },
+  "greninja": {
+    "name": "Greninja", "sprite": "assets/sprites/greninja.png", "fx": "#5ab8ff", "type": "rogue", "cost": 4,
+    "hp": [700, 1190, 2025, 3430], "damage": [80, 136, 231, 392], "range": 2, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 10,
+    "ability": {"name": "Battle Bond", "kind": "transform", "form": {"name": "Ash-Greninja", "sprite": "assets/sprites/ash-greninja.png", "moveSpeed": "fast", "secPerHit": 1.0, "damage": [100, 170, 289, 490], "range": 3}}
+  },
+  "torterra": {
+    "name": "Torterra", "sprite": "assets/sprites/torterra.png", "fx": "#7bd36a", "type": "warrior", "cost": 4,
+    "hp": [900, 1530, 2600, 4410], "damage": [125, 212, 361, 612], "range": 1, "moveSpeed": "slow", "secPerHit": 1.8, "critChance": 15, "energy": 10,
+    "ability": {"name": "Earthquake", "kind": "quake", "damagePct": 100, "stun": 10}
+  },
+  "lilligant": {
+    "name": "Lilligant", "sprite": "assets/sprites/lilligant.png", "fx": "#9be07a", "type": "cleric", "cost": 3,
+    "hp": [700, 1190, 2025, 3430], "damage": [60, 102, 173, 294], "range": 2, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 0,
+    "ability": {"name": "Aromatherapy", "kind": "splashHeal", "healPct": 50}
+  },
+  "golem": {
+    "name": "Golem", "sprite": "assets/sprites/golem.png", "fx": "#d8b16a", "type": "warrior", "cost": 4,
+    "hp": [1100, 1870, 3180, 5390], "damage": [100, 170, 289, 490], "range": 1, "moveSpeed": "slow", "secPerHit": 1.8, "critChance": 15, "energy": 0,
+    "ability": {"name": "Self-Destruct", "kind": "selfdestruct", "delay": 30, "damagePct": 300, "radius": 1}
+  },
+  "minior": {
+    "name": "Minior", "sprite": "assets/sprites/minior.png", "fx": "#ff7aa8", "type": "mage", "cost": 4,
+    "hp": [1350, 2295, 3900, 6615], "damage": [80, 136, 231, 392], "range": 1, "moveSpeed": "very slow", "secPerHit": 2.2, "critChance": 15, "energy": 0,
+    "ability": {"name": "Shining Star", "kind": "transform", "trigger": "lowHp", "hpPct": 10, "form": {"name": "Minior (Star Form)", "sprite": "assets/sprites/minior-star.png", "moveSpeed": "very fast", "secPerHit": 0.7, "damage": [100, 170, 289, 490], "range": 1}}
+  },
+  "tapukoko": {
+    "name": "Tapu Koko", "sprite": "assets/sprites/tapukoko.png", "fx": "#ffe14d", "type": "rogue", "cost": 4,
+    "hp": [700, 1190, 2025, 3430], "damage": [100, 170, 289, 490], "range": 1, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 7,
+    "ability": {"name": "Wild Charge", "kind": "empower", "damagePct": 150, "dash": true, "stun": 10}
+  },
+  "ditto": {
+    "name": "Ditto", "sprite": "assets/sprites/ditto.png", "fx": "#c9a4ff", "type": "mage", "cost": 3,
+    "hp": [900, 1530, 2600, 4410], "damage": [60, 102, 173, 294], "range": 1, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 0,
+    "ability": {"name": "Transform", "kind": "copy"}
   },
   "combee": {
     "name": "Combee", "summon": true, "sprite": "assets/sprites/combee.png", "fx": "#ffd35a", "type": "warrior", "cost": 0,

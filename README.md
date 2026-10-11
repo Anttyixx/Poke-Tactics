@@ -76,6 +76,24 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
   - Greninja, **Night Slash**: after 6 attacks, the next teleports beside the farthest enemy (if it's out of
     reach), hits for 130% and heals 10% of the damage dealt.
   - Infernape, **Blaze**: after 7 attacks, attacks 50% faster for 3s.
+  - Hoopa, **Hyperspace Hole**: after 6 attacks, the next teleports beside the farthest enemy (if it's out
+    of reach), hits for 130% and heals 10% of the damage dealt. (The old Greninja's stats and power.)
+  - Greninja, **Battle Bond**: after 10 attacks, becomes Ash-Greninja for the rest of the fight: fast
+    movement, attacks every 1.0s, more damage, range 3 (same HP).
+  - Torterra, **Earthquake**: with every 10th attack, every enemy on the board takes 100% and is stunned 1s.
+  - Lilligant, **Aromatherapy**: every attack heals your Pokémon directly left, right, above and below the
+    square it hits, for 50% of its damage.
+  - Golem, **Self-Destruct**: when knocked out it stays on its square for 3s (it can't be hit), then
+    explodes for 300% on enemies within 1 square. The fight waits for it.
+  - Minior, **Shining Star**: at 10% HP or less it becomes its star form: very fast movement (0.35s per
+    square), attacks every 0.7s, more damage (same HP).
+  - Tapu Koko, **Wild Charge**: after 7 attacks, the next dashes in a straight line to the open square
+    next to the farthest enemy (closest to Tapu Koko), hits for 150%, and stuns the target and every
+    enemy it passes through for 1s.
+  - Ditto, **Transform**: copies the nearest enemy's damage, attack speed, movement, range and crit (not
+    its power or HP). When that Pokémon faints, it turns back and copies the next nearest.
+- **Healing** (Lilligant, Hoopa) lands at the end of each tick, like stuns, so it never depends on who
+  acted first; a Pokémon knocked out that tick stays knocked out.
 - **Stuns:** a stunned Pokémon can't move or attack. When a stun (or a Psywave ride) ends, it picks the
   nearest enemy as its target again rather than going back to its old one.
 - **Displacement:** when a Pokémon is launched onto an occupied square (Heat Crash, Psywave), the one

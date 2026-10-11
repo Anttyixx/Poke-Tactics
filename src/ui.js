@@ -21,7 +21,7 @@ const secs = (ticks) => +(ticks * TICK_SECONDS).toFixed(1);
 // Seconds between attacks, as the game actually plays it (cooldowns are whole 0.1s ticks).
 const attackTime = (stats) => secs(stats.attackCd);
 const dps = (stats) => (show(stats.atk) / attackTime(stats)).toFixed(1);
-const SPEED_NAME = { fast: 'Fast', medium: 'Medium', slow: 'Slow', 'very slow': 'Very slow' };
+const SPEED_NAME = { 'very fast': 'Very fast', fast: 'Fast', medium: 'Medium', slow: 'Slow', 'very slow': 'Very slow' };
 const moveText = (def) => `${SPEED_NAME[def.moveSpeed]} (${MOVE_SPEEDS[def.moveSpeed]}s per tile)`;
 
 // Internal combat numbers -> the design sheet's units.
@@ -37,9 +37,10 @@ export function describePower(def, star, catalog) {
     case 'empower': {
       const extras = [
         p.teleport && 'teleports next to the farthest enemy and',
+        p.dash && 'dashes in a straight line next to the farthest enemy and',
         `hits for ${p.damagePct}% damage (${show(dmg)})`,
         p.knockback && `, knocking the target back ${p.knockback} squares`,
-        p.stun && `${p.knockback ? 'and stunning it' : 'and stuns the target'} for ${secs(p.stun)}s`,
+        p.stun && `${p.knockback ? 'and stunning it' : p.dash ? ', stunning the target and every enemy it dashes through' : 'and stuns the target'} for ${secs(p.stun)}s`,
         p.lifestealPct && `, healing for ${p.lifestealPct}% of the damage dealt`,
       ].filter(Boolean).join(' ').replace(/ ,/g, ',');
       return `${every}, its next attack ${extras}.`;
@@ -56,13 +57,34 @@ export function describePower(def, star, catalog) {
     }
     case 'stealth': return `${every}, it turns invisible for ${secs(p.duration)}s${p.hastePct ? ` and attacks ${p.hastePct}% faster` : ''}. Enemies can't target or follow it while it's invisible.`;
     case 'haste': return `${every}, it's enraged: ${p.hastePct}% faster attacks for ${secs(p.duration)}s.`;
+    case 'quake': return `With every ${def.energy}th attack, it shakes the whole board: every enemy takes ${p.damagePct}% damage (${show(dmg)})${p.stun ? ` and is stunned for ${secs(p.stun)}s` : ''}.`;
+    case 'splashHeal': return `Every attack also heals your Pokémon directly left, right, above and below the square it hits, for ${p.healPct}% of its damage (${show(Math.floor((def.damage[star ?? 0] * STAT_SCALE * p.healPct) / 100))}).`;
+    case 'selfdestruct': return `When it's knocked out, it stays on its square for ${secs(p.delay)}s, then explodes: enemies within ${p.radius} square take ${p.damagePct}% damage (${show(dmg)}).`;
+    case 'copy': return `It turns into the nearest enemy, copying its damage, attack speed, movement, range and crit (not its power or HP). When that Pokémon faints, it turns back and copies the next nearest.`;
+    case 'transform': {
+      const f = p.form;
+      const fs = `${SPEED_NAME[f.moveSpeed].toLowerCase()} movement, attacks every ${f.secPerHit}s for ${show(Math.round(f.damage[star ?? 0] * STAT_SCALE))} damage, range ${f.range}`;
+      return `${p.trigger === 'lowHp' ? `When its HP drops to ${p.hpPct}% or less` : every}, it transforms into ${f.name} for the rest of the fight (${fs}; HP stays the same).`;
+    }
     case 'opening': return `When the battle starts, it fires a wave down its column. The first enemy hit takes ${p.damagePct}% damage (${show(dmg)}) and is carried all the way to the other end of the board${p.stun ? `, stunned for ${secs(p.stun)}s when it lands` : ''}. Anyone already there is pushed to the side.`;
     default: return '';
   }
 }
 
+// Ditto has no fighting stats of its own: it copies the nearest enemy's.
+const isCopycat = (def) => def.ability?.kind === 'copy';
+
 // When a power goes off, as a short tag.
-export const powerCadence = (def) => (!def.ability ? 'No power' : def.ability.kind === 'opening' ? 'Power at battle start' : `Power every ${def.energy} attacks`);
+export const powerCadence = (def) => {
+  const p = def.ability;
+  if (!p) return 'No power';
+  if (p.kind === 'opening') return 'Power at battle start';
+  if (p.kind === 'splashHeal') return 'Heals with every attack';
+  if (p.kind === 'selfdestruct') return 'Power when knocked out';
+  if (p.kind === 'copy') return 'Copies the nearest enemy';
+  if (p.trigger === 'lowHp') return `Power at ${p.hpPct}% HP`;
+  return `Power every ${def.energy} attacks`;
+};
 
 export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   const $ = (id) => document.getElementById(id);
@@ -585,12 +607,13 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
       ${hint}
       <dl class="stats">
         <dt>HP</dt><dd>${show(stats.hp)}</dd>
+        ${isCopycat(def) ? '<dt>Everything else</dt><dd>Copies its target</dd>' : `
         <dt>Damage per hit</dt><dd>${show(stats.atk)}</dd>
         <dt>Attacks every</dt><dd>${attackTime(stats)}s</dd>
         <dt>Crit chance</dt><dd>${stats.crit}%</dd>
         <dt>DPS</dt><dd>${dps(stats)}</dd>
         <dt>Range</dt><dd>${def.range}</dd>
-        <dt>Movement</dt><dd>${SPEED_NAME[def.moveSpeed]}</dd>
+        <dt>Movement</dt><dd>${SPEED_NAME[def.moveSpeed]}</dd>`}
       </dl>
       ${def.ability ? `<p class="ability"><b>${esc(def.ability.name)}:</b> ${describePower(def, star, catalog)}</p>` : ''}
       ${inst && canPlan()
@@ -756,12 +779,13 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     if (p.knockback) return { cls: 'cast-slam', ms: 600, impact: 510 };
     if (p.kind === 'empower') return { cls: 'cast-strike', ms: 500, impact: 325 };
     if (p.kind === 'snipe') return { cls: 'cast-charge', ms: 500, impact: 250 };
+    if (p.kind === 'quake') return { cls: 'cast-slam', ms: 600, impact: 510 };
     return { cls: 'cast-channel', ms: 550, impact: 275 };
   }
 
   const flightMs = (from, to) => Math.max(160, 90 * Math.max(Math.abs(to.x - from.x), Math.abs(to.y - from.y))) / speed;
 
-  const rangeOf = (a) => catalog[a.unitId].range;
+  const rangeOf = (a) => a.range ?? catalog[a.unitId].range; // a transformed unit's range can change
   const fxColor = (unitId) => catalog[unitId].fx ?? TYPE_FX[catalog[unitId].type] ?? '#fff';
 
   // One-shot visual effect centred on a board square; `cells` sets its size in squares.
@@ -865,6 +889,11 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         play(a.el, motion.cls, motion.ms / speed);
         floatText(a, p.name, 'cast');
         const color = fxColor(a.unitId);
+        if (p.kind === 'quake') {
+          // The whole board shakes as it lands.
+          later(motion.impact / speed, () => { pulse(arena, 'shake'); fx(from.x, from.y, 'ring', color, 5); });
+          break;
+        }
         if (!to) { fx(from.x, from.y, 'ring', color, 1.6); break; } // self buffs and summons
         a.el.style.setProperty('--dx', Math.sign(to.x - from.x));
         a.el.style.setProperty('--dy', Math.sign(to.y - from.y));
@@ -937,6 +966,64 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         const p = viewPos(a.x, a.y);
         if (animate) { fx(from.x, from.y, 'burst', fxColor(a.unitId), 1.2); play(a.el, 'blink', 250 / speed); }
         place(a.el, p.x, p.y);
+        break;
+      }
+      case 'transform': {
+        // Battle Bond, Shining Star, Ditto copying or turning back: a quick
+        // morph, then the new sprite. A Ditto that turns back and copies again in
+        // the same moment shows its own form briefly in between.
+        a.range = ev.range;
+        const spr = a.el.querySelector('.sprite');
+        const apply = () => {
+          if (spr) spr.style.backgroundImage = `url('${ev.sprite}')`;
+          a.el.style.setProperty('--step', ev.moveCd / 5);
+        };
+        if (!animate) { apply(); break; }
+        const delay = !ev.revert && a.revertedAt === ev.t ? 450 / speed : 0;
+        if (ev.revert) a.revertedAt = ev.t;
+        later(delay, () => {
+          play(a.el, 'morph', 500 / speed);
+          setTimeout(apply, 200 / speed);
+          const p = at();
+          fx(p.x, p.y, 'burst', fxColor(a.unitId), 1.5);
+          floatText(a, ev.revert ? ev.name : ev.copy ? `→ ${ev.name}` : ev.name, 'cast');
+        });
+        break;
+      }
+      case 'dash': {
+        // Tapu Koko: a straight-line dash, crackling along the way.
+        const from = viewPos(ev.fromX, ev.fromY);
+        a.x = ev.x;
+        a.y = ev.y;
+        const p = viewPos(a.x, a.y);
+        face(a, p.x - from.x, p.y - from.y);
+        if (!animate) { place(a.el, p.x, p.y); break; }
+        const ms = 240 / speed;
+        a.el.style.transition = `left ${ms}ms cubic-bezier(.6,0,.2,1), top ${ms}ms cubic-bezier(.6,0,.2,1)`;
+        place(a.el, p.x, p.y);
+        play(a.el, 'dashing', ms + 80);
+        const steps = Math.max(Math.abs(p.x - from.x), Math.abs(p.y - from.y));
+        for (let i = 1; i <= steps; i++) {
+          const k = i / (steps + 1);
+          setTimeout(() => fx(from.x + (p.x - from.x) * k, from.y + (p.y - from.y) * k, 'zap', fxColor(a.unitId), 1), (ms * k));
+        }
+        setTimeout(() => { a.el.style.transition = ''; }, ms);
+        break;
+      }
+      case 'fuse': // Golem knocked out: it stays, glowing, until it explodes
+        if (newest()) { a.hp = 0; bars(a); }
+        later(ctx.hitDelay.get(a.id) ?? 0, () => {
+          a.el.classList.add('fusing');
+          if (animate) floatText(a, '!!', 'crit');
+        });
+        break;
+      case 'explode': {
+        a.el.classList.remove('fusing');
+        if (!animate) break;
+        const p = at();
+        fx(p.x, p.y, 'ring', '#ff7a2f', ev.radius * 2 + 1.4);
+        fx(p.x, p.y, 'burst', '#ffd36b', ev.radius * 2 + 0.6);
+        pulse(arena, 'shake');
         break;
       }
       case 'stealth':
@@ -1039,7 +1126,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   }
 
   function showStart() {
-    const parade = troopIds(catalog).map((id, i) => `<span class="walker" style="--i:${i}" data-facing="right"><span class="sprite" ${spriteStyle(catalog[id])}></span></span>`).join('');
+    const ids = troopIds(catalog);
+    const parade = ids.map((id, i) => `<span class="walker" style="--i:${i};--n:${ids.length}" data-facing="right"><span class="sprite" ${spriteStyle(catalog[id])}></span></span>`).join('');
     showOverlay(`
       <div class="start">
         <div class="logo"><span>Poke</span><span>Tactics</span></div>
@@ -1106,11 +1194,13 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     }).join('')}</div>`;
     const summons = Object.keys(catalog).filter((id) => catalog[id].summon).sort();
     const def = catalog[dexPick];
+    const form = def.ability?.form;
     const rows = [0, 1, 2, 3].map((star) => {
       const st = unitStats(def, star);
       return {
         star, hp: show(st.hp), dmg: show(st.atk), crit: show(Math.floor((st.atk * CRIT_PCT) / 100)), dps: dps(st),
         sup: powerDamage(def, star) === null ? '—' : show(powerDamage(def, star)),
+        form: form ? show(Math.round(form.damage[star] * STAT_SCALE)) : '',
       };
     });
     const col = (label, key) => `<tr><th>${label}</th>${rows.map((r) => `<td>${r[key]}</td>`).join('')}</tr>`;
@@ -1127,10 +1217,11 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
               <h2>${esc(def.name)}</h2>
               <p class="dex-tags">
                 <span>${def.summon ? 'Summoned' : `${def.cost} coins`}</span>
+                ${isCopycat(def) ? '<span>Copies the nearest enemy\'s stats</span>' : `
                 <span>${def.range > 1 ? `Ranged · ${def.range} tiles` : 'Melee · 1 tile'}</span>
                 <span>Moves: ${moveText(def)}</span>
                 <span>Attacks every ${attackTime(stats0)}s</span>
-                <span>Crit ${stats0.crit}%</span>
+                <span>Crit ${stats0.crit}%</span>`}
                 <span>${powerCadence(def)}</span>
               </p>
             </div>
@@ -1139,10 +1230,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
             <thead><tr><th></th>${rows.map((r) => `<th>${r.star ? '★'.repeat(r.star) : '0★'}</th>`).join('')}</tr></thead>
             <tbody>
               ${col('HP', 'hp')}
-              ${col('Damage per hit', 'dmg')}
-              ${col('Crit damage', 'crit')}
-              ${col('DPS', 'dps')}
-              ${def.ability ? col(`${esc(def.ability.name)} damage`, 'sup') : ''}
+              ${isCopycat(def) ? '' : `${col('Damage per hit', 'dmg')}${col('Crit damage', 'crit')}${col('DPS', 'dps')}`}
+              ${form ? col(`${esc(form.name)} damage`, 'form') : ''}
+              ${def.ability && powerDamage(def, 0) !== null ? col(`${esc(def.ability.name)} damage`, 'sup') : ''}
             </tbody>
           </table>
           <p class="muted">Copies on the board: 1 = 0★, 2 = ★, 3 = ★★, 4 = ★★★. A crit deals 50% more damage.</p>
