@@ -65,9 +65,10 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
     board. The first enemy it hits takes 50% and is carried to that end, then is stunned for 1s; anyone
     already there is pushed to the side. Both sit out until the wave lands.
   - Toxtricity, **Thunderbolt**: every 8th attack also zaps the farthest enemy for 80%.
-  - Vespiquen, **Attack Order**: every 7 attacks, summons a Combee next to it (same star level). Combee
-    fight but never count as survivors for round damage. With no free square, the power stays charged
-    and tries again after the next attack.
+  - Vespiquen, **Attack Order**: every 7 attacks, summons 1 / 2 / 3 / 3 Combee (at 0★ / ★ / ★★ / ★★★)
+    beside it: its sides first, then behind, in front, and the diagonals from back to front. Combee are
+    always 0★ (188 HP). They fight but never count as survivors for round damage. With no free square,
+    the power stays charged and tries again after the next attack.
   - Coalossal, **Heat Crash**: after 6 attacks, the next hits for 130%, knocks the target back 2 squares
     and stuns it for 1s.
   - Decidueye, **Phantom Force**: after 8 attacks, invisible for 3s and attacks 30% faster. Enemies can't
