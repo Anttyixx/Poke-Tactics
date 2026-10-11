@@ -48,7 +48,6 @@ export function toCombatPos(side, x, y) {
 // Fixed order = deterministic tie-breaking when choosing where to step.
 // Units walk one square at a time, up/down/left/right only (no diagonal steps).
 const NEIGHBORS = [[0, -1], [0, 1], [-1, 0], [1, 0]];
-const DIAGONALS = [[-1, -1], [1, -1], [-1, 1], [1, 1]];
 // Psywave's wind-up before the wave leaves Beheeyem, in ticks.
 const WAVE_WINDUP = 3;
 
@@ -194,16 +193,16 @@ export function simulate(catalog, boards, seed = 0) {
   // the diagonals (back ones first). Directions are from the displaced
   // Pokémon's point of view, so both sides are treated the same. Null if all
   // eight squares are taken or off the board.
-  function displaceSpot(o) {
+  // The free squares around `o`, in order: its own left, its own right, back
+  // (toward its own back row), forward, then the diagonals from back to front.
+  // Directions are from o's point of view, so both sides are treated the same.
+  function freeAround(o) {
     const back = o.side === 0 ? 1 : -1; // side 0's back row is the bottom of the board
     const left = o.side === 0 ? -1 : 1;
     const order = [[left, 0], [-left, 0], [0, back], [0, -back], [left, back], [-left, back], [left, -back], [-left, -back]];
-    for (const [dx, dy] of order) {
-      const c = { x: o.x + dx, y: o.y + dy };
-      if (inside(c.x, c.y) && !occupied(c.x, c.y)) return c;
-    }
-    return null;
+    return order.map(([dx, dy]) => ({ x: o.x + dx, y: o.y + dy })).filter((c) => inside(c.x, c.y) && !occupied(c.x, c.y));
   }
+  const displaceSpot = (o) => freeAround(o)[0] ?? null;
 
   // Land a launched Pokémon on `goal`. Whoever stands there is displaced (see
   // displaceSpot); if they have nowhere to go, the launched one lands on the
@@ -258,13 +257,14 @@ export function simulate(catalog, boards, seed = 0) {
     knocks.push({ target, goal, side: u.side });
   }
 
-  const summonCell = (u) => [...dirs(u), ...dirs(u, DIAGONALS)]
-    .map(([dx, dy]) => ({ x: u.x + dx, y: u.y + dy }))
-    .find((c) => inside(c.x, c.y) && !occupied(c.x, c.y));
+  // How many a summon power brings at the summoner's star level, and at what
+  // star the summoned units come (fixed, or the summoner's own).
+  const summonCount = (u) => u.power.countByStar?.[u.star] ?? 1;
 
   function summon(u, cell) {
     const kin = units.length;
-    const pal = spawn(catalog, { uid: -kin, unitId: u.power.unit, star: u.star, summoned: true }, u.side, kin, bySide[u.side].length, cell);
+    const star = u.power.summonStar ?? u.star;
+    const pal = spawn(catalog, { uid: -kin, unitId: u.power.unit, star, summoned: true }, u.side, kin, bySide[u.side].length, cell);
     pal.sx = pal.x;
     pal.sy = pal.y;
     units.push(pal);
@@ -277,8 +277,9 @@ export function simulate(catalog, boards, seed = 0) {
     const p = u.power;
     // A charged power is never wasted: with no free square to summon into, it
     // stays charged and tries again after the next attack.
-    const cell = p.kind === 'summon' ? summonCell(u) : null;
-    if (p.kind === 'summon' && !cell) return;
+    // Summons take the free squares around the summoner in freeAround's order.
+    const cells = p.kind === 'summon' ? freeAround(u).slice(0, summonCount(u)) : [];
+    if (p.kind === 'summon' && !cells.length) return;
     u.mana = 0;
     switch (p.kind) {
       case 'snipe': {
@@ -289,7 +290,7 @@ export function simulate(catalog, boards, seed = 0) {
       }
       case 'summon':
         emit('cast', { id: u.id, target: null });
-        summon(u, cell);
+        for (const cell of cells) summon(u, cell);
         break;
       case 'stealth':
         emit('cast', { id: u.id, target: null });

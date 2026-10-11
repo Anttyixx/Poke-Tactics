@@ -447,18 +447,30 @@ test('Thunderbolt (Toxtricity): every 8th attack also zaps the farthest enemy fo
   assert.equal(r.events.find((e) => e.type === 'damage' && e.id === far).amount, Math.floor((catalog.toxtricity.damage[0] * 80) / 100));
 });
 
-test('Attack Order (Vespiquen): every 10 attacks summons a Combee that fights but never counts as a survivor', () => {
+test('Attack Order (Vespiquen): summons 1/2/3/3 Combee by star, always 0★, sides first; they never count as survivors', () => {
   const cat = powerCat();
   cat.target = { ...cat.wall, hp: [1500, 1500, 1500, 1500] };
-  const r = simulate(cat, [[{ uid: 1, unitId: 'vespiquen', star: 1, x: 2, y: 0 }], [{ uid: 2, unitId: 'target', star: 0, x: 2, y: 0 }]], 1);
-  const v = unitOf(r, 1).id;
-  const s = evs(r, 'summon', v)[0];
-  assert.ok(s, 'summons');
-  assert.deepEqual([s.unit.unitId, s.unit.star, s.unit.summoned], ['combee', 1, true]);
-  assert.equal(evs(r, 'attack', v).filter((e) => e.t <= s.t).length, catalog.vespiquen.energy);
-  assert.ok(evs(r, 'attack', s.unit.id).length > 0, 'the Combee attacks');
-  assert.equal(r.winner, 0);
-  assert.deepEqual(r.survivors.map((u) => u.unitId), ['vespiquen']);
+  // Vespiquen at combat (2,6), the target far up the board out of everyone's way.
+  const fight = (star, extra = [], foe = 'wall') => simulate(cat, [[{ uid: 1, unitId: 'vespiquen', star, x: 2, y: 2 }, ...extra], [{ uid: 2, unitId: foe, star: 0, x: 2, y: 0 }]], 1);
+  const v0 = unitOf(fight(0), 1).id;
+  for (const [star, n] of [[0, 1], [1, 2], [2, 3], [3, 3]]) {
+    const r = fight(star);
+    const first = evs(r, 'summon', v0).filter((e, _, all) => e.t === all[0].t);
+    assert.equal(first.length, n, `${n} Combee at star ${star}`);
+    assert.ok(first.every((e) => e.unit.unitId === 'combee' && e.unit.star === 0 && e.unit.summoned), 'all 0★ Combee');
+    // Order around (2,6) for side 0: left (1,6), right (3,6), back (2,7).
+    assert.deepEqual(first.map((e) => [e.unit.x, e.unit.y]), [[1, 6], [3, 6], [2, 7]].slice(0, n));
+    assert.equal(evs(r, 'attack', v0).filter((e) => e.t <= first[0].t).length, catalog.vespiquen.energy);
+  }
+  // Sides taken: behind, then in front, then diagonals back to front.
+  const walls = [[1, 6], [3, 6]].map(([x, y], i) => ({ uid: 30 + i, unitId: 'wall', star: 0, x, y: y - HALF }));
+  const r = fight(3, walls);
+  assert.deepEqual(evs(r, 'summon', v0).slice(0, 3).map((e) => [e.unit.x, e.unit.y]), [[2, 7], [2, 5], [1, 7]]);
+  // Combee fight, but never count as survivors.
+  const r2 = fight(1, [], 'target');
+  assert.ok(evs(r2, 'summon', v0).some((s) => evs(r2, 'attack', s.unit.id).length > 0), 'Combee attack');
+  assert.equal(r2.winner, 0);
+  assert.deepEqual(r2.survivors.map((u) => u.unitId), ['vespiquen']);
 });
 
 test('Heat Crash (Coalossal): the attack after 6 knocks the target back 2 squares and stuns it', () => {

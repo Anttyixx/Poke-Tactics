@@ -32,7 +32,7 @@ export function describePower(def, star, catalog) {
   const p = def.ability;
   if (!p) return '';
   const every = `After every ${def.energy} attacks`;
-  const dmg = powerDamage(def, star);
+  const dmg = powerDamage(def, star ?? 0); // no star given (the Pokédex): quote 0★
   switch (p.kind) {
     case 'empower': {
       const extras = [
@@ -45,7 +45,15 @@ export function describePower(def, star, catalog) {
       return `${every}, its next attack ${extras}.`;
     }
     case 'snipe': return `Every ${def.energy}th attack also zaps the farthest enemy for ${p.damagePct}% damage (${show(dmg)}).`;
-    case 'summon': return `${every}, it summons a ${catalog?.[p.unit]?.name ?? p.unit} next to it, at the same star level.`;
+    case 'summon': {
+      const name = catalog?.[p.unit]?.name ?? p.unit;
+      // With no star given (the Pokédex), list the count at every star level.
+      const n = star === null ? null : p.countByStar?.[star] ?? 1;
+      const what = n === null
+        ? `${(p.countByStar ?? [1, 1, 1, 1]).join(' / ')} ${name} (0★ / ★ / ★★ / ★★★)`
+        : n === 1 ? `a ${name}` : `${n} ${name}`;
+      return `${every}, it summons ${what} beside it (sides first, then behind, in front, and the diagonals).${p.summonStar !== undefined ? ` ${name} ${n === 1 ? 'is' : 'are'} always ${p.summonStar ? '★'.repeat(p.summonStar) : '0★'}.` : ''}`;
+    }
     case 'stealth': return `${every}, it turns invisible for ${secs(p.duration)}s${p.hastePct ? ` and attacks ${p.hastePct}% faster` : ''}. Enemies can't target or follow it while it's invisible.`;
     case 'haste': return `${every}, it's enraged: ${p.hastePct}% faster attacks for ${secs(p.duration)}s.`;
     case 'opening': return `When the battle starts, it fires a wave down its column. The first enemy hit takes ${p.damagePct}% damage (${show(dmg)}) and is carried all the way to the other end of the board${p.stun ? `, stunned for ${secs(p.stun)}s when it lands` : ''}. Anyone already there is pushed to the side.`;
@@ -1139,7 +1147,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
           </table>
           <p class="muted">Copies on the board: 1 = 0★, 2 = ★, 3 = ★★, 4 = ★★★. A crit deals 50% more damage.</p>
           ${def.ability ? `<h3>Power: ${esc(def.ability.name)}</h3>
-          <p>${describePower(def, 0, catalog)}</p>` : `<p>${esc(def.name)} can't be picked: it's summoned in battle.</p>`}
+          <p>${describePower(def, null, catalog)}</p>` : `<p>${esc(def.name)} can't be picked: it's summoned in battle.</p>`}
         </section>
       </div>`;
   }
