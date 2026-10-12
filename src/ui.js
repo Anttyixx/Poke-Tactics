@@ -338,10 +338,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
     if (btn?.dataset.lobby) return onLobby(btn.dataset.lobby, lobbyValues());
     if (btn?.dataset.copy) return copyText(btn.dataset.copy, btn);
     if (btn?.id === 'share-link') return navigator.share?.({ title: 'Poke Tactics', text: `Battle me in Poke Tactics! Code: ${btn.dataset.code}`, url: btn.dataset.url }).catch(() => {});
-    if (btn?.id === 'start-help') return openMenu('help');
-    if (btn?.id === 'start-news') return openMenu('news');
     if (btn?.id === 'start-menu') return openMenu('main');
-    if (btn?.id === 'start-dex') return openDex();
     const info = e.target.closest('[data-dex-info]');
     if (info) return openDex(info.dataset.dexInfo); // a team card's ⓘ: full stats and power
     if (e.target.id === 'open-dex') return openDex();
@@ -470,6 +467,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
     } else if (view === 'news') {
       try { localStorage.setItem(SEEN_KEY, latestUpdate); } catch {}
       hudEl.querySelector('#open-menu')?.classList.remove('unread');
+      overlay.querySelector('#start-menu')?.classList.remove('unread');
       panel.innerHTML = `${close}${back}<h1>What's new</h1>${changelogHTML()}`;
     } else if (view === 'log') {
       panel.innerHTML = `${close}${back}<h1>Match log</h1>
@@ -1244,13 +1242,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
           <button id="friend" class="primary battle-btn">Battle</button>
           <button id="battle" class="battle-btn training-btn">Training</button>
         </div>
-        <button id="start-menu" class="icon-btn start-menu" title="Menu (M)" aria-label="Menu">${ICON_MENU}</button>
+        <button id="start-menu" class="icon-btn start-menu${hasUnread() ? ' unread' : ''}" title="Menu (M)" aria-label="Menu">${ICON_MENU}</button>
         ${versionText ? `<div class="start-version">${esc(versionText)}</div>` : ''}
-        <div class="start-links">
-          <button id="start-news" class="ghost${hasUnread() ? ' unread' : ''}">What's new</button>
-          <button id="start-help" class="ghost">How to play</button>
-          <button id="start-dex" class="ghost">Pokédex</button>
-        </div>
       </div>`);
     overlay.classList.add('start-screen');
     overlay.querySelector('#friend').focus();
