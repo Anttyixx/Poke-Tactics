@@ -1249,8 +1249,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
       check: () => {
         const c = data;
         const keyText = {
-          ok: [true, `Relay key accepted (${c.servers} relay servers)`],
-          missing: [false, 'No relay key in this version of the game'],
+          ok: [true, 'Relay login is set'],
+          missing: [false, 'No relay login in this version of the game'],
           unreachable: [false, 'Couldn\'t reach Metered to check the relay key'],
         }[c.key] ?? [false, `Metered refused the relay key (${esc(c.key.replace('rejected', '').trim() || 'error')})`];
         const row = ([ok, text]) => `<li class="${ok ? 'ok' : 'bad'}"><span aria-hidden="true">${ok ? '✓' : '✗'}</span>${text}</li>`;

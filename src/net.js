@@ -6,7 +6,7 @@
 // notices a friend who closed the tab or lost their connection, since WebRTC
 // doesn't always report that on its own.
 
-import { METERED_APP, METERED_API_KEY } from './net-config.js';
+import { TURN_URLS, TURN_USERNAME, TURN_PASSWORD } from './net-config.js';
 
 const PEERJS_SRC = 'vendor/peerjs-1.5.4.min.js';
 const ID_PREFIX = 'poke-tactics-';
@@ -42,21 +42,11 @@ const STUN = [
   { urls: 'stun:stun.cloudflare.com:3478' },
 ];
 const PEERJS_TURN = { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' };
-// Relay credentials from Metered: { list, status } where status is 'ok',
-// 'missing' (no key in this build), 'rejected <http status>' or 'unreachable'.
-let relays = null;
-function relayCredentials() {
-  relays ??= (async () => {
-    if (!METERED_APP || !METERED_API_KEY) return { list: [], status: 'missing' };
-    try {
-      const res = await fetch(`https://${METERED_APP}.metered.live/api/v1/turn/credentials?apiKey=${encodeURIComponent(METERED_API_KEY)}`);
-      if (!res.ok) { relays = null; return { list: [], status: `rejected ${res.status}` }; }
-      const list = await res.json();
-      return Array.isArray(list) && list.length ? { list, status: 'ok' } : { list: [], status: 'rejected (empty list)' };
-    } catch { relays = null; return { list: [], status: 'unreachable' }; } // try again next time
-  })();
-  return relays;
-}
+// The relay login (see net-config.js): { list, status }, status 'ok' or 'missing'.
+const relay = TURN_USERNAME && TURN_PASSWORD
+  ? { list: [{ urls: TURN_URLS, username: TURN_USERNAME, credential: TURN_PASSWORD }], status: 'ok' }
+  : { list: [], status: 'missing' };
+const relayCredentials = async () => relay;
 async function iceServers() {
   return [...STUN, ...(await relayCredentials()).list, PEERJS_TURN];
 }
@@ -83,7 +73,7 @@ export async function checkConnection() {
   } catch {}
   return { key: status, servers: list.length, direct: types.has('srflx'), relay: types.has('relay') };
 }
-export const hasRelay = () => Boolean(METERED_APP && METERED_API_KEY);
+export const hasRelay = () => relay.status === 'ok';
 
 // ?peer=host:port uses your own PeerJS server instead of the public one
 // (for testing, or if the public one is down).

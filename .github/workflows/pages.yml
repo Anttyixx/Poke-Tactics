@@ -42,7 +42,8 @@ jobs:
           REPO: ${{ github.repository }}
           BRANCH: ${{ github.ref_name }}
           SHA: ${{ github.sha }}
-          METERED_API_KEY: ${{ secrets.METERED_API_KEY }}
+          TURN_USERNAME: ${{ secrets.METERED_TURN_USERNAME }}
+          TURN_PASSWORD: ${{ secrets.METERED_TURN_PASSWORD }}
         run: |
           set -euo pipefail
           if [ "$BRANCH" = "main" ]; then TARGET=.; LABEL=stable; else TARGET=dev; LABEL=dev; fi
@@ -60,16 +61,16 @@ jobs:
             sed -i -E "s#(href=\"styles\.css|src=\"src/main\.js)\"#\1?v=$V\"#" "$BUILD/index.html"
             sed -i -E "s#(from '\./[A-Za-z0-9_-]+\.js)'#\1?v=$V'#; s#fetch\('(data/[A-Za-z0-9_-]+\.json)'\)#fetch('\1?v=$V')#" "$BUILD"/src/*.js
             sed -i -E "s#(\"assets/[^\"]+\.png)\"#\1?v=$V\"#" "$BUILD"/data/*.json
-            # Relay key for online play, from the METERED_API_KEY repository secret
-            # (a publishable key, so it may appear in the site, but not in the repo).
-            if [ -n "${METERED_API_KEY:-}" ]; then
-              if printf '%s' "$METERED_API_KEY" | grep -Eq '^[A-Za-z0-9_-]+$'; then
-                sed -i -E "s#^export const METERED_API_KEY = '';#export const METERED_API_KEY = '$METERED_API_KEY';#" "$BUILD/src/net-config.js"
+            # Relay login for online play, from the METERED_TURN_USERNAME and
+            # METERED_TURN_PASSWORD repository secrets (kept out of the repo).
+            if [ -n "${TURN_USERNAME:-}" ] && [ -n "${TURN_PASSWORD:-}" ]; then
+              if printf '%s\n%s' "$TURN_USERNAME" "$TURN_PASSWORD" | grep -Eqv '^[A-Za-z0-9_+/=.:@-]+$'; then
+                echo "::warning title=Relay login::The relay username or password has unexpected characters; online play will run without the relay"
               else
-                echo "::warning title=Relay key::METERED_API_KEY has unexpected characters; online play will run without the relay"
+                sed -i -E "s#^export const TURN_USERNAME = '';#export const TURN_USERNAME = '$TURN_USERNAME';#; s#^export const TURN_PASSWORD = '';#export const TURN_PASSWORD = '$TURN_PASSWORD';#" "$BUILD/src/net-config.js"
               fi
             else
-              echo "::warning title=Relay key::No METERED_API_KEY secret; online play will run without the relay"
+              echo "::warning title=Relay login::No METERED_TURN_USERNAME / METERED_TURN_PASSWORD secrets; online play will run without the relay"
             fi
             # Badge so it's obvious which version you're looking at.
             sed -i "s|</body>|  <a class=\"build-badge $LABEL\" href=\"https://github.com/$REPO/commit/$SHA\">$LABEL · $V</a>\n</body>|" "$BUILD/index.html"

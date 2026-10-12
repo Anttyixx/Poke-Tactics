@@ -24,8 +24,11 @@ code is PeerJS (MIT, copied into `vendor/`) for online play.
 - A heartbeat notices a friend who leaves or loses connection; the other player is told
   the match ended. **Leave match** in the menu disconnects. After a match: **Rematch**.
 - Players on different networks often can't connect directly; then a TURN relay from
-  Metered.ca carries the messages (`src/net-config.js`). Its publishable API key lives in
-  the `METERED_API_KEY` repository secret, and the deploy workflow writes it into the site.
+  Metered.ca carries the messages (`src/net-config.js`). Its username and password (from
+  "New credential" in Metered's TURN dashboard) live in the `METERED_TURN_USERNAME` and
+  `METERED_TURN_PASSWORD` repository secrets; the deploy workflow writes them into the site.
+- **Battle a Friend → Check my connection** shows whether the relay login is set and whether
+  direct and relayed routes work on that device.
 - `?peer=host:port` uses your own PeerJS server instead of the public one, e.g.
   `npx peerjs --port 9000` for testing two tabs locally.
 
