@@ -42,17 +42,46 @@ const STUN = [
   { urls: 'stun:stun.cloudflare.com:3478' },
 ];
 const PEERJS_TURN = { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' };
+// Relay credentials from Metered: { list, status } where status is 'ok',
+// 'missing' (no key in this build), 'rejected <http status>' or 'unreachable'.
 let relays = null;
-async function iceServers() {
+function relayCredentials() {
   relays ??= (async () => {
-    if (!METERED_APP || !METERED_API_KEY) return [];
+    if (!METERED_APP || !METERED_API_KEY) return { list: [], status: 'missing' };
     try {
       const res = await fetch(`https://${METERED_APP}.metered.live/api/v1/turn/credentials?apiKey=${encodeURIComponent(METERED_API_KEY)}`);
-      const list = res.ok ? await res.json() : [];
-      return Array.isArray(list) ? list : [];
-    } catch { relays = null; return []; } // try again next time
+      if (!res.ok) { relays = null; return { list: [], status: `rejected ${res.status}` }; }
+      const list = await res.json();
+      return Array.isArray(list) && list.length ? { list, status: 'ok' } : { list: [], status: 'rejected (empty list)' };
+    } catch { relays = null; return { list: [], status: 'unreachable' }; } // try again next time
   })();
-  return [...STUN, ...(await relays), PEERJS_TURN];
+  return relays;
+}
+async function iceServers() {
+  return [...STUN, ...(await relayCredentials()).list, PEERJS_TURN];
+}
+
+// What this device can do, for the "Check my connection" screen: whether the
+// relay key works, and which kinds of route the browser finds. 'srflx' =
+// direct through the router (STUN), 'relay' = through the Metered relay.
+export async function checkConnection() {
+  const { list, status } = await relayCredentials();
+  const types = new Set();
+  try {
+    const pc = new RTCPeerConnection({ iceServers: [...STUN, ...list] });
+    pc.createDataChannel('check');
+    pc.onicecandidate = (e) => {
+      const m = / typ ([a-z]+)/.exec(e.candidate?.candidate ?? '');
+      if (m) types.add(m[1]);
+    };
+    await pc.setLocalDescription(await pc.createOffer());
+    await new Promise((resolve) => {
+      const stop = setTimeout(resolve, 8000);
+      pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === 'complete') { clearTimeout(stop); resolve(); } };
+    });
+    pc.close();
+  } catch {}
+  return { key: status, servers: list.length, direct: types.has('srflx'), relay: types.has('relay') };
 }
 export const hasRelay = () => Boolean(METERED_APP && METERED_API_KEY);
 
@@ -126,6 +155,7 @@ export async function hostRoom({ onGuest, onMessage, onClose, onError }) {
     });
     if (result === 'open') {
       let link = null;
+      let onGuestWrapped = null; // stops the waiting-room keep-alive
       peer.on('connection', (conn) => {
         // The friend may send before this side sees the connection open: keep
         // those messages and replay them once we're listening.
@@ -136,12 +166,26 @@ export async function hostRoom({ onGuest, onMessage, onClose, onError }) {
           conn.off('data', keep);
           if (link) { conn.send({ type: 'full' }); setTimeout(() => conn.close(), 200); return; }
           link = wrap(conn, peer, { onMessage: (msg) => onMessage(msg, link), onClose });
+          onGuestWrapped?.();
           onGuest(link);
           for (const msg of early) conn.emit('data', msg);
         });
       });
-      peer.on('error', (err) => { if (!link) onError(friendlyError(err)); });
-      return { code, cancel: () => { if (!link) peer.destroy(); } };
+      // Stay reachable while waiting: phones drop the matchmaking connection
+      // when the page goes to the background (e.g. to text the code to a
+      // friend). Re-register the same code as soon as it drops or we're back.
+      const rejoin = () => { if (!link && peer.disconnected && !peer.destroyed) { try { peer.reconnect(); } catch {} } };
+      peer.on('disconnected', () => setTimeout(rejoin, 500));
+      document.addEventListener('visibilitychange', rejoin);
+      const keepAlive = setInterval(rejoin, 3000);
+      peer.on('error', (err) => {
+        if (link) return;
+        if (['network', 'socket-error', 'socket-closed', 'server-error', 'disconnected'].includes(err?.type)) return setTimeout(rejoin, 1000);
+        onError(friendlyError(err));
+      });
+      const stop = () => { clearInterval(keepAlive); document.removeEventListener('visibilitychange', rejoin); };
+      onGuestWrapped = stop;
+      return { code, cancel: () => { stop(); if (!link) peer.destroy(); } };
     }
     peer.destroy();
     if (result?.type !== 'unavailable-id') throw new Error(friendlyError(result));

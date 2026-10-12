@@ -19,7 +19,7 @@ import { createGame, applyIntent } from './game.js';
 import { botTurn } from './bot.js';
 import { createUI } from './ui.js';
 import { hashSeed } from './rng.js';
-import { hostRoom, joinRoom, cleanCode, isCode } from './net.js';
+import { hostRoom, joinRoom, cleanCode, isCode, checkConnection } from './net.js';
 
 const BOT = 1;
 // Online, each planning phase lasts this long; then everyone still planning is
@@ -138,6 +138,13 @@ function lobby(action, data = {}) {
   }
   if (action === 'cancel') { stopHosting(); return ui.showLobby('menu', { name: savedName() }); }
   if (action === 'leave') return leave();
+  if (action === 'check') {
+    ui.showLobby('checking');
+    return checkConnection().then((result) => {
+      console.info('Connection check', result);
+      if (ui.lobbyView() === 'checking') ui.showLobby('check', result);
+    });
+  }
   if (action === 'home') return goHome();
 }
 
