@@ -82,8 +82,9 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
   into range one square at a time (up/down/left/right). Distance (for picking the nearest or
   farthest enemy) is the number of steps between two squares, so a diagonal neighbour is 2 away.
   Attack range is a square around the Pokémon instead: range 1 (melee) covers the 3x3 around
-  it, diagonals included; range 2 the 5x5; and so on. Movement speed is how long each step takes: fast
-  0.5s per square, medium 0.8s, slow 1.0s, very slow 1.3s, super slow 2.0s. A unit can't attack until it finishes its step. A unit attacks every `secPerHit` seconds; each basic attack
+  it, diagonals included; range 2 the 5x5; and so on. Each step takes 0.5s; movement speed is how long a unit waits before each
+  step (before its first one too): very fast 0.35s, fast 0.5s, medium 0.8s, slow 1.0s, very slow 1.3s,
+  super slow 2.0s. So a medium unit covers a square every 1.3s. A unit can't attack until it finishes its step. A unit attacks every `secPerHit` seconds; each basic attack
   has a `critChance`% chance to crit for 50% more damage (powers never crit). Each tick resolves
   simultaneously, and crit luck is shared slot for slot between the sides, so neither side gets an edge.
 - **Powers:** every Pokémon has one. Most count attacks (the purple bar). Every fight starts with the bar

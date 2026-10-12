@@ -9,7 +9,7 @@ import {
   COPIES_PER_TROOP, MAX_STAR, SHOP_SIZE, START_COINS, WIN_COINS, LOSS_COINS, MAX_REROLLS,
 } from '../src/game.js';
 import {
-  simulate, MAX_TICKS, COLS, HALF, SUDDEN_DEATH_TICK, SUDDEN_DEATH_HP_PER_SECOND, MOVE_SPEEDS, CRIT_PCT, STAT_SCALE, TICK_SECONDS,
+  simulate, MAX_TICKS, COLS, HALF, SUDDEN_DEATH_TICK, SUDDEN_DEATH_HP_PER_SECOND, MOVE_SPEEDS, STEP_TICKS, CRIT_PCT, STAT_SCALE, TICK_SECONDS,
 } from '../src/combat.js';
 import { botTurn } from '../src/bot.js';
 
@@ -699,20 +699,24 @@ test('Transform (Ditto): walks into the nearest enemy\'s range, takes 0.5s to co
   const cat = powerCat();
   cat.weak = { ...clone(catalog.mawile), hp: [300, 300, 300, 300], moveSpeed: 'statue' };
   cat.far = { ...clone(catalog.coalossal), moveSpeed: 'statue', hp: [1e6, 1e6, 1e6, 1e6] };
+  cat.ditto = { ...clone(catalog.ditto), hp: [4000, 4000, 4000, 4000] }; // survives long enough to copy twice
   const r = simulate(cat, [
     [{ uid: 1, unitId: 'ditto', star: 0, x: 2, y: 3 }], // combat (2,7)
     [{ uid: 2, unitId: 'weak', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'far', star: 0, x: 4, y: 3 }], // combat (2,3), (0,0)
   ], 1);
   const d = unitOf(r, 1).id;
-  const max = catalog.ditto.hp[0];
+  const max = cat.ditto.hp[0];
   assert.equal(r.initial.find((u) => u.id === d).maxHp, max);
   const moves = evs(r, 'move', d);
   const start = evs(r, 'morphStart', d)[0];
+  assert.ok(start.t >= moves.filter((e) => e.t < start.t).at(-1).t + STEP_TICKS, 'finishes its step before transforming');
   assert.equal(start.target, unitOf(r, 2).id, 'goes for the nearest');
   assert.ok(moves.filter((e) => e.t < start.t).length >= 2, 'walks next to it first (range 1)');
-  assert.equal(moves[1].t - moves[0].t, 8, 'at medium speed');
+  assert.equal(moves[1].t - moves[0].t, 8 + 5, 'a 0.5s step, then a 0.8s wait (medium)');
+  assert.ok(moves[0].t >= 8, 'waits before its first step too');
   const tfs = evs(r, 'transform', d);
-  assert.deepEqual([tfs[0].copy, tfs[0].t, tfs[0].maxHp, tfs[0].hp], ['weak', start.t + 4, 300, 300], 'copies it 0.5s later, with its max HP');
+  const hpBefore = r.events.filter((e) => e.type === 'damage' && e.id === d && e.t <= tfs[0].t).at(-1)?.hp ?? max;
+  assert.deepEqual([tfs[0].copy, tfs[0].t, tfs[0].maxHp, tfs[0].hp], ['weak', start.t + 4, 300, Math.round((hpBefore * 300) / max)], 'copies it 0.5s later, with its max HP (same share of HP)');
   assert.ok(!r.events.some((e) => e.src === d && e.t <= tfs[0].t), 'does not attack before copying');
   const first = r.events.find((e) => e.type === 'damage' && e.src === d && !e.crit);
   assert.equal(first.amount, cat.weak.damage[0], "with the copied Pokémon's damage");
@@ -755,25 +759,27 @@ test('attack range is a square: range 1 = the 3x3 around it (diagonals too), ran
   assert.ok(!attacks('spear', 2, 2), 'range 2 does not reach 3 squares ahead (2,1)');
 });
 
-test('units walk one square at a time (no diagonal steps), at their own pace', () => {
+test('units walk one square at a time (no diagonal steps): wait their movement speed, then a 0.5s step', () => {
   const boards = [
     [{ uid: 1, unitId: 'decidueye', star: 0, x: 0, y: 3 }, { uid: 3, unitId: 'mawile', star: 1, x: 4, y: 0 }, { uid: 5, unitId: 'coalossal', star: 0, x: 2, y: 1 }],
     [{ uid: 2, unitId: 'greninja', star: 0, x: 1, y: 0 }, { uid: 4, unitId: 'vespiquen', star: 2, x: 3, y: 3 }],
   ];
   const r = simulate(catalog, boards, 5);
   const all = [...r.initial, ...r.events.filter((e) => e.type === 'summon').map((e) => e.unit)];
-  const pos = new Map(all.map((u) => [u.id, { x: u.x, y: u.y, t: -Infinity }]));
+  // Before its first step a unit waits its movement speed too (summons from when they appear).
+  const born = new Map(r.events.filter((e) => e.type === 'summon').map((e) => [e.unit.id, e.t]));
+  const pos = new Map(all.map((u) => [u.id, { x: u.x, y: u.y, t: (born.get(u.id) ?? 0) - STEP_TICKS, first: true }]));
   let moves = 0;
   for (const e of r.events.filter((ev) => ['move', 'knock', 'teleport'].includes(ev.type))) {
     const p = pos.get(e.id);
     if (e.type !== 'move') { pos.set(e.id, { ...p, x: e.x, y: e.y }); continue; } // powers move units too
     assert.equal(Math.abs(e.x - p.x) + Math.abs(e.y - p.y), 1, 'one orthogonal square per step');
     const def = catalog[all.find((u) => u.id === e.id).unitId];
-    const pace = MOVE_SPEEDS[def.moveSpeed];
-    assert.ok(e.t - p.t >= Math.round(pace / TICK_SECONDS), `${def.name} stepped faster than ${pace}s per square`);
-    const early = r.events.find((ev) => ev.type === 'attack' && ev.id === e.id && ev.t > e.t && ev.t < e.t + Math.round(pace / TICK_SECONDS));
+    const wait = Math.round(MOVE_SPEEDS[def.moveSpeed] / TICK_SECONDS);
+    if (p.first || p.t > 0) assert.ok(e.t - p.t >= STEP_TICKS + wait, `${def.name} stepped at tick ${e.t}, too soon after tick ${p.t}`);
+    const early = r.events.find((ev) => ev.type === 'attack' && ev.id === e.id && ev.t > e.t && ev.t < e.t + STEP_TICKS);
     assert.ok(!early, `${def.name} attacked at tick ${early?.t} before finishing its step from tick ${e.t}`);
-    pos.set(e.id, { x: e.x, y: e.y, t: e.t });
+    pos.set(e.id, { x: e.x, y: e.y, t: e.t, first: false });
     moves++;
   }
   assert.ok(moves > 0);
