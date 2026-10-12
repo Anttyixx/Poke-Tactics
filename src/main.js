@@ -22,6 +22,9 @@ import { hashSeed } from './rng.js';
 import { hostRoom, joinRoom, cleanCode, isCode } from './net.js';
 
 const BOT = 1;
+// Online, each planning phase lasts this long; then everyone still planning is
+// locked in as they are. The host's clock decides; both screens count down.
+const PLAN_SECONDS = 30;
 const NAME_KEY = 'poke-tactics-name';
 
 const catalogText = await (await fetch('data/units.json')).text();
@@ -37,6 +40,8 @@ let link = null; // the connection to the friend, online
 let hosting = null; // a room waiting for a friend: { code, cancel }
 let names = ['You', 'Bot'];
 let me = 0; // which player this browser is
+let timerKey = null; // the planning phase the countdown belongs to ("seed:round")
+let lockTimer = 0;
 
 const ui = createUI({
   catalog,
@@ -57,7 +62,7 @@ function newGame() {
   state = createGame({ seed, catalog, names, featured });
   if (featured && !state.featured) setTimeout(() => ui.toast(`Unknown unit "${featured}" in ?unit=`), 0);
   runBot();
-  ui.render(state);
+  show();
   broadcast();
 }
 
@@ -70,7 +75,7 @@ function dispatch(player, intent) {
     return res;
   }
   runBot();
-  ui.render(state);
+  show();
   broadcast();
   return res;
 }
@@ -80,6 +85,26 @@ function runBot() {
   const send = (intent) => applyIntent(state, catalog, BOT, intent);
   if (state.phase === 'planning' || state.phase === 'team') botTurn(state, catalog, BOT, send);
   else if (state.phase === 'combat') send({ type: 'continue' });
+}
+
+function show() {
+  ui.render(state);
+  planClock();
+}
+
+// Start the countdown when a new planning phase begins (online only).
+function planClock() {
+  if (mode === 'bot' || state.phase !== 'planning') return;
+  const key = `${state.seed}:${state.round}`;
+  if (key === timerKey) return;
+  timerKey = key;
+  ui.setDeadline(Date.now() + PLAN_SECONDS * 1000);
+  if (mode !== 'host') return;
+  clearTimeout(lockTimer);
+  lockTimer = setTimeout(() => {
+    if (mode !== 'host' || state.phase !== 'planning' || `${state.seed}:${state.round}` !== key) return;
+    for (const p of [0, 1]) if (state.phase === 'planning' && !state.players[p].ready) dispatch(p, { type: 'ready' });
+  }, PLAN_SECONDS * 1000);
 }
 
 const broadcast = () => { if (mode === 'host') link?.send({ type: 'state', state }); };
@@ -153,7 +178,7 @@ function hostMessage(msg, l) {
     names = [names[0], String(msg.name ?? '').slice(0, 16) || 'Player 2'];
     ui.setOnline({ viewer: 0 });
     newGame();
-    ui.toast(`${names[1]} joined!`);
+    ui.playIntro(names);
   } else if (mode !== 'host') {
     // Not in a match yet: ignore anything else.
   } else if (msg.type === 'intent') {
@@ -176,9 +201,10 @@ async function join(code, name) {
             mode = 'guest';
             me = 1;
             ui.setOnline({ viewer: 1 });
+            ui.playIntro([msg.state.players[1].name, msg.state.players[0].name]);
           }
           state = msg.state;
-          ui.render(state);
+          show();
         } else if (msg.type === 'reject') ui.toast(msg.error);
         else if (msg.type === 'refuse' || msg.type === 'full') {
           link?.close();
@@ -207,6 +233,8 @@ function stopHosting() {
 function disconnected(reason) {
   const wasPlaying = mode !== 'bot';
   link = null;
+  clearTimeout(lockTimer); // nobody to lock in any more
+  ui.setDeadline(null);
   if (reason === 'self' || !wasPlaying) return;
   const who = mode === 'host' ? names[1] : names[0];
   ui.showLobby('disconnected', { error: reason === 'timeout' ? `Lost the connection to ${who}.` : `${who} left the game.` });
@@ -221,6 +249,8 @@ function leave() {
 // Back to the start screen with a fresh game against the bot.
 function goHome() {
   stopHosting();
+  clearTimeout(lockTimer);
+  timerKey = null;
   mode = 'bot';
   me = 0;
   names = ['You', 'Bot'];
