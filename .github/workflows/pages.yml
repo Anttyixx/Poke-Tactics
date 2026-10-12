@@ -53,7 +53,7 @@ jobs:
           # 1. Build the site once into a temp folder.
           BUILD="$RUNNER_TEMP/build"
           rm -rf "$BUILD" && mkdir -p "$BUILD"
-          tar -C "$GITHUB_WORKSPACE/app" --exclude=.git --exclude=.github --exclude=tests --exclude=node_modules -cf - . \
+          tar -C "$GITHUB_WORKSPACE/app" --exclude=.git --exclude=.github --exclude=tests --exclude=tools --exclude=node_modules -cf - . \
             | tar -C "$BUILD" -xf -
           if [ -f "$BUILD/index.html" ]; then
             # Cache-bust: tag every reference with the commit so a deploy never
