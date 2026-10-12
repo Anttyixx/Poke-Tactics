@@ -88,7 +88,7 @@ export const powerCadence = (def) => {
   return `Power every ${def.energy} attacks`;
 };
 
-export function createUI({ catalog, viewer, onIntent, onNewGame }) {
+export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
   const $ = (id) => document.getElementById(id);
   const arena = $('arena');
   const layer = $('units');
@@ -119,6 +119,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   let shownShop = ''; // last shop drawn, to deal new cards in
   let seenUids = new Set(); // board units already drawn, to drop new ones in
   let started = false; // past the start screen (it shows once, when the game loads)
+  let online = false; // playing a friend (the menu offers Leave instead of New game)
+  let lobbyView = null; // which online-lobby screen is showing, if any
   let peek = null; // unit id shown in the info pop-up (phones), opened with an ⓘ button
   const sheetBackdrop = $('info-backdrop');
 
@@ -204,7 +206,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   }
 
   function showOverlay(html) {
-    overlay.classList.remove('start-screen');
+    lobbyView = null;
+    overlay.classList.remove('start-screen', 'lobby');
     overlay.querySelector('.card').innerHTML = html;
     overlay.hidden = false;
   }
@@ -315,18 +318,24 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     if (action === 'close') closeMenu();
     else if (action === 'dex') { closeMenu(); openDex(); }
     else if (action === 'new-confirmed') { closeMenu(); onNewGame(); }
+    else if (action === 'leave-confirmed') { closeMenu(); onLobby('leave'); }
     else openMenu(action); // 'main', 'help', 'new'
   });
   overlay.addEventListener('click', (e) => {
     const btn = e.target.closest('button, [data-dex-info]');
     if (btn?.id === 'battle') { started = true; overlay.classList.remove('start-screen'); return showTeamBuilder(); }
+    if (btn?.id === 'friend') return onLobby('open');
+    if (btn?.dataset.lobby) return onLobby(btn.dataset.lobby, lobbyValues());
+    if (btn?.dataset.copy) return copyText(btn.dataset.copy, btn);
+    if (btn?.id === 'share-link') return navigator.share?.({ title: 'Poke Tactics', text: `Battle me in Poke Tactics! Code: ${btn.dataset.code}`, url: btn.dataset.url }).catch(() => {});
     if (btn?.id === 'start-help') return openMenu('help');
     if (btn?.id === 'start-dex') return openDex();
     const info = e.target.closest('[data-dex-info]');
     if (info) return openDex(info.dataset.dexInfo); // a team card's ⓘ: full stats and power
     if (e.target.id === 'open-dex') return openDex();
     if (e.target.id === 'continue') { e.target.disabled = true; onIntent({ type: 'continue' }); }
-    if (e.target.id === 'play-again') { started = true; onNewGame(); }
+    if (e.target.id === 'play-again') { started = true; if (online) { e.target.disabled = true; e.target.textContent = 'Waiting for the host…'; } onNewGame(); }
+    if (e.target.id === 'leave-match') return onLobby('leave');
     if (state?.phase !== 'team' || me().ready) return;
     const troop = e.target.closest('[data-pick-troop]');
     if (troop) {
@@ -445,6 +454,10 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
           <li><b>Win</b> by bringing your opponent from 100 HP to 0. The loser of a battle loses HP for every Pokémon still standing.</li>
         </ul>
         <p class="muted">Keys: <kbd>D</kbd> reroll · <kbd>F</kbd> fight · <kbd>E</kbd> sell · <kbd>Space</kbd> skip · <kbd>P</kbd> Pokédex · <kbd>M</kbd> menu</p>`;
+    } else if (view === 'leave') {
+      panel.innerHTML = `${close}<h1>Leave the match?</h1>
+        <p class="muted">Your friend will be told you left, and the match ends.</p>
+        <div class="confirm-row"><button data-menu="main">Keep playing</button><button class="danger" data-menu="leave-confirmed">Leave</button></div>`;
     } else if (view === 'new') {
       panel.innerHTML = `${close}<h1>New game?</h1>
         <p class="muted">This match will be lost.</p>
@@ -455,7 +468,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
           <button data-menu="close"><span>▶</span><div>Resume</div></button>
           <button data-menu="help"><span>?</span><div>How to play<small>Rules, controls and keys</small></div></button>
           <button data-menu="dex"><span>◎</span><div>Pokédex<small>Every Pokémon's stats and power</small></div></button>
-          <button data-menu="new"><span>↻</span><div>New game<small>Start over with a new team</small></div></button>
+          ${online
+            ? '<button data-menu="leave"><span>⏏</span><div>Leave match<small>Disconnect from your friend</small></div></button>'
+            : '<button data-menu="new"><span>↻</span><div>New game<small>Start over with a new team</small></div></button>'}
         </div>`;
     }
     menuEl.hidden = false;
@@ -1148,7 +1163,10 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         <div class="logo"><span>Poke</span><span>Tactics</span></div>
         <p class="tagline">Draft a team, place your Pokémon, and watch them battle it out.</p>
         <div class="parade" aria-hidden="true">${parade}</div>
-        <button id="battle" class="primary battle-btn">Battle</button>
+        <div class="start-modes">
+          <button id="battle" class="primary battle-btn">Battle the Bot</button>
+          <button id="friend" class="battle-btn friend-btn">Battle a Friend</button>
+        </div>
         <div class="start-links">
           <button id="start-help" class="ghost">How to play</button>
           <button id="start-dex" class="ghost">Pokédex</button>
@@ -1178,7 +1196,102 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     showOverlay(`
       <h1 class="${state.winner === viewer ? 'win' : 'loss'}">${title}</h1>
       <p>The match lasted ${state.round} rounds. Final HP: ${me().hp} vs ${foe().hp}.</p>
-      <button id="play-again" class="primary">Play again</button>`);
+      ${online && viewer === 1
+        ? '<button id="play-again" class="primary">Ask for a rematch</button>'
+        : `<button id="play-again" class="primary">${online ? 'Rematch' : 'Play again'}</button>`}
+      ${online ? '<button id="leave-match" class="ghost">Leave</button>' : ''}`);
+  }
+
+  // ---- online lobby ----------------------------------------------------------
+
+  const lobbyValues = () => ({
+    name: overlay.querySelector('#lobby-name')?.value ?? '',
+    code: overlay.querySelector('#lobby-code')?.value ?? '',
+  });
+
+  async function copyText(text, btn) {
+    try {
+      await navigator.clipboard.writeText(text);
+      const was = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = was; }, 1400);
+    } catch { toast('Copy blocked here. Select the text and copy it yourself.'); }
+  }
+
+  // Screens: 'menu' (name, create or join), 'connecting', 'hosting' (show the
+  // code), 'error' and 'disconnected'. main.js decides which one to show.
+  function showLobby(view, data = {}) {
+    const back = '<button class="ghost" data-lobby="home">Back</button>';
+    const html = {
+      menu: () => `
+        <h1>Battle a Friend</h1>
+        <label class="field">Your name<input id="lobby-name" maxlength="16" autocomplete="nickname" placeholder="Trainer" value="${esc(data.name ?? '')}"></label>
+        <div class="lobby-split">
+          <section>
+            <h2>Create a game</h2>
+            <p class="muted">Get a code to send your friend.</p>
+            <button class="primary" data-lobby="host">Create game</button>
+          </section>
+          <section>
+            <h2>Join a game</h2>
+            <p class="muted">Enter the code your friend sent you.</p>
+            <input id="lobby-code" class="code-input" maxlength="7" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCDE" value="${esc(data.code ?? '')}" aria-label="Game code">
+            <button class="primary" data-lobby="join">Join</button>
+          </section>
+        </div>
+        ${back}`,
+      connecting: () => `
+        <h1>Battle a Friend</h1>
+        <div class="spinner" aria-hidden="true"></div>
+        <p>${esc(data.text ?? 'Connecting…')}</p>
+        ${data.cancel ? '<button class="ghost" data-lobby="home">Cancel</button>' : ''}`,
+      hosting: () => `
+        <h1>Your game code</h1>
+        <p class="muted">Send this code to your friend. They open Poke Tactics, tap <b>Battle a Friend</b> and enter it.</p>
+        <div class="code-box" aria-label="Game code ${data.code.split('').join(' ')}">${data.code}</div>
+        <div class="lobby-actions">
+          <button data-copy="${esc(data.code)}">Copy code</button>
+          <button data-copy="${esc(data.link)}">Copy invite link</button>
+          ${navigator.share ? `<button id="share-link" data-code="${esc(data.code)}" data-url="${esc(data.link)}">Share…</button>` : ''}
+        </div>
+        <p class="waiting"><span class="spinner small" aria-hidden="true"></span> Waiting for your friend to join…</p>
+        <button class="ghost" data-lobby="cancel">Cancel</button>`,
+      error: () => `
+        <h1>Couldn't connect</h1>
+        <p>${esc(data.error)}</p>
+        <div class="lobby-actions"><button class="primary" data-lobby="open">Try again</button>${back}</div>`,
+      disconnected: () => `
+        <h1>Match ended</h1>
+        <p>${esc(data.error)}</p>
+        <button class="primary" data-lobby="home">Back to start</button>`,
+    }[view]();
+    showOverlay(html);
+    overlay.classList.add('lobby');
+    lobbyView = view;
+    const focus = view === 'menu' ? (data.code ? '[data-lobby="join"]' : '#lobby-name') : 'button.primary, button';
+    overlay.querySelector(focus)?.focus();
+  }
+
+  overlay.addEventListener('input', (e) => {
+    if (e.target.id !== 'lobby-code') return;
+    const v = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (v !== e.target.value) e.target.value = v;
+  });
+  overlay.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    if (e.target.id === 'lobby-code') onLobby('join', lobbyValues());
+  });
+
+  // Switch between playing the bot (null) and playing a friend as `viewer`.
+  function setOnline(opts) {
+    online = Boolean(opts);
+    viewer = opts?.viewer ?? 0;
+    started = online;
+    playback?.cancel();
+    playback = null;
+    state = null; // the next render starts fresh, from this player's side
+    closeMenu();
+    closeDex();
   }
 
   // ---- Pokédex ---------------------------------------------------------------
@@ -1257,5 +1370,5 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
       </div>`;
   }
 
-  return { render, toast };
+  return { render, toast, showLobby, setOnline, lobbyView: () => lobbyView };
 }

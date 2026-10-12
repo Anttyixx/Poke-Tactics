@@ -2,10 +2,26 @@
 
 A browser-based 1v1 auto-battler. Buy units, place them on your half of the grid,
 then watch the fight play out by itself. Plain HTML/CSS/JS with ES modules. There is
-no build step and no dependencies, and it deploys to GitHub Pages as static files.
+no build step, and it deploys to GitHub Pages as static files. The only third-party
+code is PeerJS (MIT, copied into `vendor/`) for online play.
 
-**Status: Phase 1, a single-player loop against a bot.** PeerJS host/join (Phase 2) and
-host-authoritative multiplayer (Phase 3) are not started yet.
+**Status:** play against the bot, or a friend online with a game code.
+
+## Online play
+
+**Battle a Friend** on the start screen. One player taps **Create game** and gets a
+5-character code (and an invite link, `?join=CODE`); the other enters it under **Join**.
+
+- Browsers connect directly over WebRTC (`src/net.js`); PeerJS's free public server only
+  introduces them. Strict networks (some school/work Wi-Fi, some mobile data) can block
+  direct connections; then the join fails with a message suggesting another network.
+- The host's browser runs the match (`src/main.js`): the guest sends intents, the host
+  validates them with `applyIntent()` like anyone's and sends the new state back after
+  every change. Both players must run the same build; otherwise the join is refused.
+- A heartbeat notices a friend who leaves or loses connection; the other player is told
+  the match ended. **Leave match** in the menu disconnects. After a match: **Rematch**.
+- `?peer=host:port` uses your own PeerJS server instead of the public one, e.g.
+  `npx peerjs --port 9000` for testing two tabs locally.
 
 ## Run locally
 
@@ -32,7 +48,7 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
 
 ## How to play
 
-- **Start:** the game opens on a start screen; **Battle** goes to team selection. Pokémon are shown as
+- **Start:** the game opens on a start screen; **Battle the Bot** goes to team selection (or **Battle a Friend**, above). Pokémon are shown as
   cards (cost in the corner); tap one to pick it, or its **i** for its stats and power.
 - **Team:** before round 1, each player picks 6 Pokémon. Each one puts 4 copies into that player's own
   pool. The board starts empty: everything you field, you buy.
