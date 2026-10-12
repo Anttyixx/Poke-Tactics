@@ -1,3 +1,4 @@
+55fd3da	dev	2026-10-12 02:06 UTC	Online: more STUN servers and support for a Metered TURN relay
 823cf9c	dev	2026-10-12 01:46 UTC	Online: battle intro wipe and a 30-second planning timer
 f4cd70e	dev	2026-10-12 01:37 UTC	Online multiplayer: battle a friend with a game code (PeerJS)
 1f977e7	stable	2026-10-12 01:18 UTC	Tapu Koko is immune while dashing
@@ -27,4 +28,3 @@ cfa20aa	dev	2026-10-08 14:59 UTC	Units path around blockers to reach an enemy in
 92442f1	dev	2026-10-08 08:50 UTC	Remove the troop limit; one of each troop on the field, duplicates level up
 0208ff5	dev	2026-10-08 08:48 UTC	Sudden death after the 30-second timer
 8bbc713	dev	2026-10-08 08:40 UTC	New economy: coins from battles, limited free rerolls
-ceb7713	dev	2026-10-08 08:28 UTC	All troops move at the same speed (1 second per square)

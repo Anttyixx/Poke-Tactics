@@ -6,6 +6,8 @@
 // notices a friend who closed the tab or lost their connection, since WebRTC
 // doesn't always report that on its own.
 
+import { METERED_APP, METERED_API_KEY } from './net-config.js?v=55fd3da';
+
 const PEERJS_SRC = 'vendor/peerjs-1.5.4.min.js';
 const ID_PREFIX = 'poke-tactics-';
 // No 0/O or 1/I/L: codes get read out loud and typed on phones.
@@ -13,7 +15,7 @@ const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 5;
 const PING_MS = 2000;
 const TIMEOUT_MS = 9000; // no message for this long = disconnected
-const CONNECT_MS = 12000; // give up joining after this long
+const CONNECT_MS = 20000; // give up joining after this long (a relayed connection can take a while)
 
 export const randomCode = () => Array.from(crypto.getRandomValues(new Uint32Array(CODE_LENGTH)), (n) => CODE_CHARS[n % CODE_CHARS.length]).join('');
 export const cleanCode = (text) => String(text ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, CODE_LENGTH);
@@ -32,13 +34,36 @@ function loadPeerJS() {
   return peerLib;
 }
 
+// How the two browsers find a route to each other. STUN servers let them
+// connect directly through most home routers; when a router or carrier blocks
+// that, TURN relays carry the messages instead (see net-config.js).
+const STUN = [
+  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+  { urls: 'stun:stun.cloudflare.com:3478' },
+];
+const PEERJS_TURN = { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' };
+let relays = null;
+async function iceServers() {
+  relays ??= (async () => {
+    if (!METERED_APP || !METERED_API_KEY) return [];
+    try {
+      const res = await fetch(`https://${METERED_APP}.metered.live/api/v1/turn/credentials?apiKey=${encodeURIComponent(METERED_API_KEY)}`);
+      const list = res.ok ? await res.json() : [];
+      return Array.isArray(list) ? list : [];
+    } catch { relays = null; return []; } // try again next time
+  })();
+  return [...STUN, ...(await relays), PEERJS_TURN];
+}
+export const hasRelay = () => Boolean(METERED_APP && METERED_API_KEY);
+
 // ?peer=host:port uses your own PeerJS server instead of the public one
 // (for testing, or if the public one is down).
-function peerOptions() {
+async function peerOptions() {
+  const config = { iceServers: await iceServers() };
   const custom = new URLSearchParams(location.search).get('peer');
-  if (!custom) return { debug: 0 };
+  if (!custom) return { debug: 0, config };
   const [host, port] = custom.split(':');
-  return { host, port: Number(port) || 9000, path: '/', secure: location.protocol === 'https:', debug: 0 };
+  return { host, port: Number(port) || 9000, path: '/', secure: location.protocol === 'https:', debug: 0, config };
 }
 
 const friendlyError = (err) => {
@@ -94,7 +119,7 @@ export async function hostRoom({ onGuest, onMessage, onClose, onError }) {
   const Peer = await loadPeerJS();
   for (let attempt = 0; attempt < 4; attempt++) {
     const code = randomCode();
-    const peer = new Peer(ID_PREFIX + code, peerOptions());
+    const peer = new Peer(ID_PREFIX + code, await peerOptions());
     const result = await new Promise((resolve) => {
       peer.once('open', () => resolve('open'));
       peer.once('error', (err) => resolve(err));
@@ -127,7 +152,7 @@ export async function hostRoom({ onGuest, onMessage, onClose, onError }) {
 // Join a friend's room. Resolves with { send, close } once connected.
 export async function joinRoom(code, { onMessage, onClose }) {
   const Peer = await loadPeerJS();
-  const peer = new Peer(peerOptions());
+  const peer = new Peer(await peerOptions());
   return new Promise((resolve, reject) => {
     let done = false;
     const fail = (err) => {
