@@ -1049,8 +1049,8 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 /* ---- Online play ---- */
 .start-modes { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
 #overlay .start-modes .battle-btn { margin-top: 0; }
-.friend-btn { background: var(--panel-2); border: 2px solid var(--line-2); }
-.friend-btn:hover:not(:disabled) { border-color: var(--ally); }
+.training-btn { background: var(--panel-2); border: 2px solid var(--line-2); }
+.training-btn:hover:not(:disabled) { border-color: var(--ally); }
 #overlay.lobby .card { max-width: 560px; }
 #overlay.lobby h2 { font-size: 17px; margin: 0 0 4px; }
 #overlay.lobby p { margin: 6px 0; }
@@ -1081,7 +1081,7 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 }
 @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
 .start-modes .battle-btn { font-size: 20px; padding: 14px 30px; }
-.start-modes .friend-btn { animation: none; }
+.start-modes .training-btn { animation: none; }
 
 /* Online: the Fight button counts down the last 10 seconds of planning. */
 #ready.hurry { animation: hurry 0.5s ease-in-out infinite alternate; }
