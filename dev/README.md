@@ -9,7 +9,7 @@ code is PeerJS (MIT, copied into `vendor/`) for online play.
 
 ## Online play
 
-**Battle a Friend** on the start screen. One player taps **Create game** and gets a
+**Battle** on the start screen. One player taps **Create game** and gets a
 5-character code (and an invite link, `?join=CODE`); the other enters it under **Join**.
 
 - When the two connect, a battle-style screen wipe shows both trainers' names.
@@ -27,7 +27,7 @@ code is PeerJS (MIT, copied into `vendor/`) for online play.
   Metered.ca carries the messages (`src/net-config.js`). Its username and password (from
   "New credential" in Metered's TURN dashboard) live in the `METERED_TURN_USERNAME` and
   `METERED_TURN_PASSWORD` repository secrets; the deploy workflow writes them into the site.
-- **Battle a Friend → Check my connection** shows whether the relay login is set and whether
+- **Battle → Check my connection** shows whether the relay login is set and whether
   direct and relayed routes work on that device.
 - `?peer=host:port` uses your own PeerJS server instead of the public one, e.g.
   `npx peerjs --port 9000` for testing two tabs locally.
@@ -57,7 +57,7 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
 
 ## How to play
 
-- **Start:** the game opens on a start screen; **Battle the Bot** goes to team selection (or **Battle a Friend**, above). Pokémon are shown as
+- **Start:** the game opens on a start screen; **Battle** plays a friend online (above); **Training** plays the bot. Pokémon are shown as
   cards (cost in the corner); tap one to pick it, or its **i** for its stats and power.
 - **Team:** before round 1, each player picks 6 Pokémon. Each one puts 4 copies into that player's own
   pool. The board starts empty: everything you field, you buy.

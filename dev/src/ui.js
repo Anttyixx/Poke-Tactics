@@ -2,11 +2,11 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=be57b68';
+import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=03b4835';
 import {
   COPIES_PER_TROOP, LOSS_COINS, MAX_REROLLS, WIN_COINS,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=be57b68';
+} from './game.js?v=03b4835';
 
 const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
 // Attack-effect colour when a unit doesn't set its own "fx" colour in units.json.
@@ -1166,8 +1166,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
         <p class="tagline">Draft a team, place your Pokémon, and watch them battle it out.</p>
         <div class="parade" aria-hidden="true">${parade}</div>
         <div class="start-modes">
-          <button id="battle" class="primary battle-btn">Battle the Bot</button>
-          <button id="friend" class="battle-btn friend-btn">Battle a Friend</button>
+          <button id="friend" class="primary battle-btn">Battle</button>
+          <button id="battle" class="battle-btn training-btn">Training</button>
         </div>
         <div class="start-links">
           <button id="start-help" class="ghost">How to play</button>
@@ -1175,7 +1175,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
         </div>
       </div>`);
     overlay.classList.add('start-screen');
-    overlay.querySelector('#battle').focus();
+    overlay.querySelector('#friend').focus();
   }
 
   function showTeamBuilder() {
@@ -1276,7 +1276,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
         ${data.cancel ? '<button class="ghost" data-lobby="home">Cancel</button>' : ''}`,
       hosting: () => `
         <h1>Your game code</h1>
-        <p class="muted">Send this code to your friend. They open Poke Tactics, tap <b>Battle a Friend</b> and enter it.</p>
+        <p class="muted">Send this code to your friend. They open Poke Tactics, tap <b>Battle</b> and enter it.</p>
         <div class="code-box" aria-label="Game code ${data.code.split('').join(' ')}">${data.code}</div>
         <div class="lobby-actions">
           <button data-copy="${esc(data.code)}">Copy code</button>
