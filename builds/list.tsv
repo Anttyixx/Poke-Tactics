@@ -1,3 +1,4 @@
+e106d6e	dev	2026-10-12 04:38 UTC	Walking: wait the movement speed, then a 0.5s step
 03b4835	dev	2026-10-12 04:33 UTC	Start screen: Battle (online) is the main button, Training plays the bot
 be57b68	dev	2026-10-12 04:30 UTC	Attack range is a square radius around the Pokemon
 a393b25	dev	2026-10-12 04:23 UTC	Online: use a Metered TURN username/password instead of an API key
@@ -27,4 +28,3 @@ b7dee24	dev	2026-10-08 22:20 UTC	Add Combee's sprite
 9b1cd34	dev	2026-10-08 22:15 UTC	Give every Pokémon a power from the power sheet
 4d013b2	dev	2026-10-08 21:17 UTC	Apply round 2 stats from the stat sheet
 587f64a	dev	2026-10-08 21:10 UTC	Remove leaders: pick 6 Pokémon, start with an empty board; new stat model
-6eb1d69	dev	2026-10-08 19:48 UTC	Troops move 1 tile per 0.5s; add a Pokédex

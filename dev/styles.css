@@ -225,7 +225,7 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   height: calc(100% / var(--rows));
   /* A step takes the unit's whole move time (0.5s fast to 1.3s very slow). It
      eases out of one square and into the next, like a hop. */
-  --hop: calc(var(--tick, 100ms) * 5 * var(--step, 1) / var(--speed, 1));
+  --hop: calc(var(--tick, 100ms) * 5 / var(--speed, 1)); /* every step takes 0.5s */
   transition: left var(--hop) var(--glide), top var(--hop) var(--glide);
 }
 #units .unit.dragging { opacity: 0.5; }

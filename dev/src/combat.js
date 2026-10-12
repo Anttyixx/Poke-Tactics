@@ -21,7 +21,10 @@ export const MANA_PER_HIT = 0; // taking hits gives no energy
 export const STAT_SCALE = 1;
 // A critical hit deals 50% more damage. Only basic attacks can crit.
 export const CRIT_PCT = 150;
-// Movement speed tiers, in seconds per square.
+// Walking: a Pokémon waits its movement speed (seconds, below), then takes
+// STEP_TICKS to cross to the next square, then waits again before the next.
+export const STEP_TICKS = 5; // 0.5s per step
+// Movement speed tiers: the wait between steps, in seconds.
 export const MOVE_SPEEDS = { 'very fast': 0.35, fast: 0.5, medium: 0.8, slow: 1.0, 'very slow': 1.3, 'super slow': 2.0 };
 const ticksOf = (seconds) => Math.max(1, Math.round(seconds / TICK_SECONDS));
 
@@ -31,7 +34,7 @@ export function unitStats(def, star) {
     hp: Math.round(def.hp[star] * STAT_SCALE),
     atk: Math.round(def.damage[star] * STAT_SCALE),
     attackCd: ticksOf(def.secPerHit), // ticks per attack
-    moveCd: ticksOf(MOVE_SPEEDS[def.moveSpeed]), // ticks per square
+    moveCd: ticksOf(MOVE_SPEEDS[def.moveSpeed]), // ticks of waiting before each step
     crit: def.critChance ?? 0, // percent
     energy: def.energy,
   };
@@ -91,7 +94,9 @@ function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, in
     power: def.ability,
     shield: 0, stun: 0,
     pendingMana: 0, pendingStun: 0, // applied at the end of the tick
-    atkTimer: stats.attackCd, moveTimer: 0,
+    atkTimer: stats.attackCd,
+    moveTimer: stats.moveCd, // waiting before the next step (it waits before its first one too)
+    stepTimer: 0, // mid-step: ticks until it reaches the square it's walking to
     hasteUntil: 0, hastePct: 0, stealthFrom: 0, stealthUntil: 0,
     hold: 0, // ticks it can't move or attack (riding a Psywave); cooldowns still run
     landStun: 0, // stun applied when the hold ends (it has landed)
@@ -509,6 +514,12 @@ export function simulate(catalog, boards, seed = 0) {
     return null;
   }
 
+  // A step: STEP_TICKS crossing to the new square, then the movement-speed wait.
+  function startStep(u) {
+    u.stepTimer = STEP_TICKS;
+    u.moveTimer = STEP_TICKS + u.moveCd;
+  }
+
   function moveTo(u, cell) {
     u.x = cell.x;
     u.y = cell.y;
@@ -541,6 +552,7 @@ export function simulate(catalog, boards, seed = 0) {
     if (u.stun > 0) { u.stun--; if (u.stun === 0) u.target = null; return; }
     if (u.atkTimer > 0) u.atkTimer--;
     if (u.moveTimer > 0) u.moveTimer--;
+    if (u.stepTimer > 0) u.stepTimer--;
     if (t <= u.morphUntil) return; // transforming
     if (t <= u.dashUntil) return; // mid-dash
     // Tapu Koko's dash has arrived: strike the Pokémon it dashed at (no dashing
@@ -569,6 +581,7 @@ export function simulate(catalog, boards, seed = 0) {
         const e = nearestEnemy(u);
         if (!e) return;
         u.target = e.id;
+        if (u.stepTimer > 0) return; // finish the step first
         if (reach(u, at(e)) <= e.range) {
           u.pendingCopy = e.id;
           u.morphUntil = t + u.power.morph - 1;
@@ -598,7 +611,7 @@ export function simulate(catalog, boards, seed = 0) {
       const cell = far && reach(u, at(far)) > u.range && freeBeside(u, far);
       if (cell) {
         relocate(u, cell, 'teleport');
-        u.moveTimer = 0;
+        u.moveTimer = u.stepTimer = 0;
         target = far;
         u.target = far.id;
       }
@@ -618,7 +631,7 @@ export function simulate(catalog, boards, seed = 0) {
         // to everything; it strikes when it arrives.
         const travel = Math.max(2, Math.max(Math.abs(cell.x - from.x), Math.abs(cell.y - from.y)));
         relocate(u, cell, 'dash', { fromX: from.x, fromY: from.y, duration: travel });
-        u.moveTimer = 0;
+        u.moveTimer = u.stepTimer = 0;
         u.target = far.id;
         u.dashTarget = far.id;
         u.dashUntil = u.immuneUntil = t + travel;
@@ -628,8 +641,8 @@ export function simulate(catalog, boards, seed = 0) {
     }
 
     if (reach(u, at(target)) <= u.range) {
-      // A step takes the unit's whole move time; it can't attack mid-step.
-      if (u.atkTimer > 0 || u.moveTimer > 0) return;
+      // It can't attack mid-step; waiting between steps doesn't stop it.
+      if (u.atkTimer > 0 || u.stepTimer > 0) return;
       if (empowered) {
         powerStrike(u, target);
       } else {
@@ -650,16 +663,16 @@ export function simulate(catalog, boards, seed = 0) {
         if (u.power && u.power.kind !== 'empower' && u.maxMana > 0 && u.mana >= u.maxMana) instantPower(u, target);
       }
       u.atkTimer = cooldown(u);
-    } else if (u.moveTimer === 0 && u.copyOf === null) {
+    } else if (u.moveTimer === 0 && u.stepTimer === 0 && u.copyOf === null) {
       // Out of range: walk around anyone in the way toward the enemy that can
       // be reached soonest (which may not be the one closest as the crow flies).
       const path = findPath(u);
       if (path) {
         u.target = path.target.id;
         moveTo(u, path.next);
-        u.moveTimer = u.moveCd;
+        startStep(u);
       } else if (step(u, target)) {
-        u.moveTimer = u.moveCd;
+        startStep(u);
       }
     }
   }

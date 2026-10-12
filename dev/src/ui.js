@@ -2,11 +2,11 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=03b4835';
+import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=e106d6e';
 import {
   COPIES_PER_TROOP, LOSS_COINS, MAX_REROLLS, WIN_COINS,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=03b4835';
+} from './game.js?v=e106d6e';
 
 const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
 // Attack-effect colour when a unit doesn't set its own "fx" colour in units.json.
@@ -22,7 +22,7 @@ const secs = (ticks) => +(ticks * TICK_SECONDS).toFixed(1);
 const attackTime = (stats) => secs(stats.attackCd);
 const dps = (stats) => (show(stats.atk) / attackTime(stats)).toFixed(1);
 const SPEED_NAME = { 'very fast': 'Very fast', fast: 'Fast', medium: 'Medium', slow: 'Slow', 'very slow': 'Very slow', 'super slow': 'Super slow' };
-const moveText = (def) => `${SPEED_NAME[def.moveSpeed]} (${MOVE_SPEEDS[def.moveSpeed]}s per tile)`;
+const moveText = (def) => `${SPEED_NAME[def.moveSpeed]} (waits ${MOVE_SPEEDS[def.moveSpeed]}s between 0.5s steps)`;
 
 // Internal combat numbers -> the design sheet's units.
 const show = (v) => +(v / STAT_SCALE).toFixed(1);
@@ -181,8 +181,6 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
     const el = document.createElement('div');
     el.className = `unit ${side}${def.sprite ? ' sprite-unit' : ''}${def.summon ? ' summon' : ''}`;
     el.dataset.type = def.type;
-    // Animation pacing follows movement speed (--step 1 = 0.5s per square).
-    el.style.setProperty('--step', unitStats(def, 0).moveCd / 5);
     const bars = '<div class="bars"><div class="hp"><i></i><b></b></div><div class="mana"><i></i></div></div>';
     const stars = `<div class="stars s${star}">${'★'.repeat(star)}</div>`;
     if (def.sprite) {
@@ -865,7 +863,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
           // Hop to the next square over the unit's whole move time, leaning into
           // the move; the walk cycle plays only while it's moving, and a little
           // dust puffs up where it lands.
-          const hopMs = (unitStats(catalog[a.unitId], 0).moveCd * TICK_MS) / speed;
+          const hopMs = (STEP_TICKS * TICK_MS) / speed; // every step takes 0.5s
           a.el.style.setProperty('--mx', Math.sign(p.x - from.x));
           play(a.el, 'hop', hopMs);
           play(a.el, 'moving', hopMs);
@@ -997,7 +995,6 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
         const spr = a.el.querySelector('.sprite');
         const apply = () => {
           if (spr) spr.style.backgroundImage = `url('${ev.sprite}')`;
-          a.el.style.setProperty('--step', ev.moveCd / 5);
           a.el.classList.toggle('copied', Boolean(ev.copy)); // a Ditto-coloured copy
         };
         if (!animate) { apply(); break; }
