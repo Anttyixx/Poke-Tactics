@@ -84,6 +84,7 @@ function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, in
   return {
     id, side, slot, uid: inst.uid, unitId: inst.unitId, star: inst.star,
     x: pos.x, y: pos.y,
+    sp: { x: pos.x, y: pos.y }, // where it stood at the start of the tick (see at())
     hp: stats.hp, maxHp: stats.hp,
     atk: stats.atk, crit: stats.crit,
     armor: def.armor ?? 0, range: def.range,
@@ -121,7 +122,9 @@ const snapshot = (u) => ({
 });
 
 // `seed` decides crits and which side acts first on each tick (see below).
-export function simulate(catalog, boards, seed = 0) {
+// { record: false } skips the event log (faster; for simulations that only
+// need the outcome). The fight itself is identical either way.
+export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
   const units = [];
   boards.forEach((board, side) => {
     [...board].sort((a, b) => a.uid - b.uid)
@@ -131,9 +134,12 @@ export function simulate(catalog, boards, seed = 0) {
   const bySide = [0, 1].map((side) => units.filter((u) => u.side === side));
   const events = [];
   let t = 0;
-  const emit = (type, data) => events.push({ t, type, ...data });
+  const emit = record ? (type, data) => events.push({ t, type, ...data }) : () => {};
   const inside = (x, y) => x >= 0 && y >= 0 && x < COLS && y < ROWS;
-  const unitAt = (x, y) => units.find((u) => u.alive && u.x === x && u.y === y);
+  const unitAt = (x, y) => {
+    for (let i = 0; i < units.length; i++) { const u = units[i]; if (u.alive && u.x === x && u.y === y) return u; }
+    return undefined;
+  };
   const occupied = (x, y) => Boolean(unitAt(x, y));
   // Ticks resolve simultaneously: a unit knocked out this tick (hp 0) still acts
   // this tick (its `alive` flag only clears at the end of the tick), but nobody
@@ -154,17 +160,25 @@ export function simulate(catalog, boards, seed = 0) {
   // all read this, so a unit that moved earlier in the tick isn't seen at its
   // new square until next tick. (Square occupancy stays live: no two units
   // can ever share a square.)
-  const at = (u) => ({ x: u.sx, y: u.sy });
+  const at = (u) => u.sp; // { x, y }, set at the start of each tick (read-only)
   // Side 1's board is point-mirrored, so it reads direction lists mirrored too;
   // otherwise the two sides would break ties differently.
-  const dirs = (u, list = NEIGHBORS) => list.map(([dx, dy]) => (u.side === 1 ? [-dx, -dy] : [dx, dy]));
+  const dirCache = new Map();
+  const dirs = (u, list = NEIGHBORS) => {
+    let pair = dirCache.get(list);
+    if (!pair) dirCache.set(list, (pair = [list, list.map(([dx, dy]) => [-dx, -dy])]));
+    return pair[u.side === 1 ? 1 : 0];
+  };
   const enemiesOf = (u) => units.filter((e) => e.side !== u.side && visible(e));
+  // nearest/farthest scan units in the same order as enemiesOf, without building the list.
 
   function nearestEnemy(u) {
     let best = null;
     let bestDist = Infinity;
-    for (const e of enemiesOf(u)) {
-      const d = dist(u, at(e));
+    for (let i = 0; i < units.length; i++) {
+      const e = units[i];
+      if (e.side === u.side || !visible(e)) continue;
+      const d = dist(u, e.sp);
       if (d < bestDist) { best = e; bestDist = d; }
     }
     return best;
@@ -173,8 +187,10 @@ export function simulate(catalog, boards, seed = 0) {
   function farthestEnemy(u) {
     let best = null;
     let bestDist = -1;
-    for (const e of enemiesOf(u)) {
-      const d = dist(u, at(e));
+    for (let i = 0; i < units.length; i++) {
+      const e = units[i];
+      if (e.side === u.side || !visible(e)) continue;
+      const d = dist(u, e.sp);
       if (d > bestDist) { best = e; bestDist = d; }
     }
     return best;
@@ -378,6 +394,7 @@ export function simulate(catalog, boards, seed = 0) {
     const kin = units.length;
     const star = u.power.summonStar ?? u.star;
     const pal = spawn(catalog, { uid: -kin, unitId: u.power.unit, star, summoned: true }, u.side, kin, bySide[u.side].length, cell);
+    pal.sp = { x: pal.x, y: pal.y };
     pal.sx = pal.x;
     pal.sy = pal.y;
     units.push(pal);
@@ -486,29 +503,40 @@ export function simulate(catalog, boards, seed = 0) {
   // both sides break ties the same way.
   function findPath(u) {
     const enemies = enemiesOf(u);
-    const key = (c) => c.y * COLS + c.x;
-    const start = { x: u.x, y: u.y };
-    const prev = new Map([[key(start), null]]);
-    const queue = [start];
-    for (let i = 0; i < queue.length; i++) {
-      const c = queue[i];
-      if (c !== start) {
-        let reachable = null;
+    const N = COLS * ROWS;
+    // Squares taken right now (live occupancy, like occupied()).
+    const blocked = new Uint8Array(N);
+    for (let i = 0; i < units.length; i++) { const o = units[i]; if (o.alive) blocked[o.y * COLS + o.x] = 1; }
+    const prev = new Int16Array(N).fill(-2); // -2 = unseen, -1 = start
+    const queue = new Int16Array(N);
+    const startK = u.y * COLS + u.x;
+    prev[startK] = -1;
+    queue[0] = startK;
+    let tail = 1;
+    const ds = dirs(u);
+    for (let qi = 0; qi < tail; qi++) {
+      const k = queue[qi];
+      const cx = k % COLS, cy = (k - cx) / COLS;
+      if (k !== startK) {
+        let best = null, bestD = 0;
         for (const e of enemies) {
-          const d = reach(c, at(e));
-          if (d <= u.range && (!reachable || d < reachable.d)) reachable = { e, d };
+          const d = Math.max(Math.abs(cx - e.sp.x), Math.abs(cy - e.sp.y));
+          if (d <= u.range && (!best || d < bestD)) { best = e; bestD = d; }
         }
-        if (reachable) {
-          let first = c;
-          while (prev.get(key(first)) !== start) first = prev.get(key(first));
-          return { next: first, target: reachable.e };
+        if (best) {
+          let first = k;
+          while (prev[first] !== startK) first = prev[first];
+          const fx = first % COLS;
+          return { next: { x: fx, y: (first - fx) / COLS }, target: best };
         }
       }
-      for (const [dx, dy] of dirs(u)) {
-        const n = { x: c.x + dx, y: c.y + dy };
-        if (!inside(n.x, n.y) || prev.has(key(n)) || occupied(n.x, n.y)) continue;
-        prev.set(key(n), c);
-        queue.push(n);
+      for (let di = 0; di < ds.length; di++) {
+        const nx = cx + ds[di][0], ny = cy + ds[di][1];
+        if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS) continue;
+        const nk = ny * COLS + nx;
+        if (prev[nk] !== -2 || blocked[nk]) continue;
+        prev[nk] = k;
+        queue[tail++] = nk;
       }
     }
     return null;
@@ -685,16 +713,20 @@ export function simulate(catalog, boards, seed = 0) {
     return a ? 0 : b ? 1 : null;
   };
 
+  let orders = null;
+  let orderSize = -1; // rebuilt when a summon joins
   let winner = outcome();
   while (winner === undefined && t < MAX_TICKS) {
     t++;
-    for (const u of units) { u.sx = u.x; u.sy = u.y; }
+    // Knocked-out units never move again, so only the living need updating.
+    for (const u of units) if (u.alive) { u.sx = u.x; u.sy = u.y; u.sp.x = u.x; u.sp.y = u.y; }
     // Which side acts first each tick is a seeded coin flip. Attacks, mana and
     // stuns resolve simultaneously anyway; this only decides who claims a
     // contested square first. A fixed pattern (e.g. odd/even) would line up with
     // cooldowns and always favour the same side. Each side keeps its unit order,
     // and units summoned this tick wait until the next one.
-    const order = coin(seed, t) ? [...bySide[0], ...bySide[1]] : [...bySide[1], ...bySide[0]];
+    if (orderSize !== units.length) { orders = [[...bySide[0], ...bySide[1]], [...bySide[1], ...bySide[0]]]; orderSize = units.length; }
+    const order = coin(seed, t) ? orders[0] : orders[1];
     // Battle-start powers go off on the first tick, before anyone acts.
     if (t === 1) for (const u of order) if (u.power?.kind === 'opening' && standing(u)) openingPower(u);
     for (const u of order) if (u.alive) act(u);
@@ -713,6 +745,7 @@ export function simulate(catalog, boards, seed = 0) {
     for (const k of knocks) if (standing(k.target) && !immune(k.target)) land(k.target, k.goal, k.side);
     knocks = [];
     for (const u of units) {
+      if (!u.alive) continue; // out since an earlier tick: nothing left to resolve
       if (u.pendingHeal && u.hp > 0) {
         const gained = Math.min(u.pendingHeal, u.maxHp - u.hp);
         u.hp += gained;
@@ -743,6 +776,7 @@ export function simulate(catalog, boards, seed = 0) {
       u.pendingRevert = false;
     }
     for (const u of units) {
+      if (!u.alive) continue;
       if (u.hp === 0 && !(u.fuse > 0)) u.alive = false; // knocked out this tick (a lit Golem stays)
       u.mana = shownMana(u);
       u.stun = Math.max(u.stun, u.pendingStun);
