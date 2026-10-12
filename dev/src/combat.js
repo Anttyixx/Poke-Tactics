@@ -99,7 +99,8 @@ function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, in
     copyOf: null, // Ditto: id of the unit it is copying
     pendingCopy: null, pendingRevert: false, // Ditto: copy / turn back at the end of the tick
     morphUntil: 0, // mid-transformation (Minior, Ditto) through this tick: it can't act
-    immuneUntil: 0, // Minior: nothing affects it through this tick (damage, stuns, knockbacks)
+    immuneFrom: 0, immuneUntil: 0, // nothing affects it in these ticks (Minior transforming, Tapu Koko dashing)
+    dashTarget: null, dashUntil: 0, // Tapu Koko: who it strikes when its dash arrives
     fuse: 0, fused: false, // Golem: ticks left before it explodes after being knocked out
     target: null, alive: true, summoned: Boolean(inst.summoned),
   };
@@ -137,8 +138,9 @@ export function simulate(catalog, boards, seed = 0) {
   // Mana gained from being hit, and stuns, also wait for the end of the tick, so
   // a unit's action this tick never depends on who happened to act before it.
   // Events report mana as it will be once the tick ends.
-  // Minior can't be hurt, stunned or moved while it changes form.
-  const immune = (u) => t <= u.immuneUntil;
+  // Minior transforming and Tapu Koko dashing can't be hurt, stunned or moved.
+  // Immunity always starts on a new tick, so it never decides a same-tick trade.
+  const immune = (u) => t >= u.immuneFrom && t <= u.immuneUntil;
   const shownMana = (u) => Math.min(u.maxMana, u.mana + u.pendingMana);
   // Where a unit stood at the start of the tick. Targeting, range and pathing
   // all read this, so a unit that moved earlier in the tick isn't seen at its
@@ -537,6 +539,15 @@ export function simulate(catalog, boards, seed = 0) {
     if (u.atkTimer > 0) u.atkTimer--;
     if (u.moveTimer > 0) u.moveTimer--;
     if (t <= u.morphUntil) return; // transforming
+    if (t <= u.dashUntil) return; // mid-dash
+    // Tapu Koko's dash has arrived: strike the Pokémon it dashed at (no dashing
+    // off again before that).
+    const arrived = u.dashTarget !== null;
+    if (arrived) {
+      const far = units[u.dashTarget];
+      u.dashTarget = null;
+      if (visible(far) && dist(u, at(far)) <= u.range) u.target = far.id;
+    }
     if (u.hold > 0) {
       u.hold--;
       if (u.hold === 0) {
@@ -589,7 +600,7 @@ export function simulate(catalog, boards, seed = 0) {
         u.target = far.id;
       }
     }
-    if (empowered && u.power.dash && u.atkTimer === 0) {
+    if (empowered && u.power.dash && u.atkTimer === 0 && !arrived) {
       // Dash in a straight line next to the farthest enemy, stunning every
       // enemy it passes through on the way.
       const far = farthestEnemy(u);
@@ -600,10 +611,16 @@ export function simulate(catalog, boards, seed = 0) {
           const o = unitAt(c.x, c.y);
           if (o && o !== far && o.side !== u.side && standing(o)) stun(o, u.power.stun);
         }
-        relocate(u, cell, 'dash', { fromX: from.x, fromY: from.y });
+        // The dash takes a tick per square, during which Tapu Koko is immune
+        // to everything; it strikes when it arrives.
+        const travel = Math.max(2, Math.max(Math.abs(cell.x - from.x), Math.abs(cell.y - from.y)));
+        relocate(u, cell, 'dash', { fromX: from.x, fromY: from.y, duration: travel });
         u.moveTimer = 0;
-        target = far;
         u.target = far.id;
+        u.dashTarget = far.id;
+        u.dashUntil = u.immuneUntil = t + travel;
+        u.immuneFrom = t + 1;
+        return;
       }
     }
 
@@ -693,6 +710,7 @@ export function simulate(catalog, boards, seed = 0) {
         const m = u.power.morph ?? 0;
         if (m) {
           u.morphUntil = u.immuneUntil = t + m;
+          u.immuneFrom = t + 1;
           u.stun = u.pendingStun = 0;
           emit('morphStart', { id: u.id, duration: m });
         } else applyForm(u, u.power.form);

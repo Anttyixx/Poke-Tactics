@@ -2,11 +2,11 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=c8f6b7a';
+import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=1f977e7';
 import {
   COPIES_PER_TROOP, LOSS_COINS, MAX_REROLLS, WIN_COINS,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=c8f6b7a';
+} from './game.js?v=1f977e7';
 
 const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
 // Attack-effect colour when a unit doesn't set its own "fx" colour in units.json.
@@ -37,7 +37,7 @@ export function describePower(def, star, catalog) {
     case 'empower': {
       const extras = [
         p.teleport && 'teleports next to the farthest enemy and',
-        p.dash && 'dashes in a straight line next to the farthest enemy and',
+        p.dash && 'dashes in a straight line next to the farthest enemy (immune to everything on the way) and',
         `hits for ${p.damagePct}% damage (${show(dmg)})`,
         p.knockback && `, knocking the target back ${p.knockback} squares`,
         p.stun && `${p.knockback ? 'and stunning it' : p.dash ? ', stunning the target and every enemy it dashes through' : 'and stuns the target'} for ${secs(p.stun)}s`,
@@ -996,14 +996,15 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         break;
       }
       case 'dash': {
-        // Tapu Koko: a straight-line dash, crackling along the way.
+        // Tapu Koko: a straight-line dash, crackling along the way (immune until it lands).
         const from = viewPos(ev.fromX, ev.fromY);
         a.x = ev.x;
         a.y = ev.y;
         const p = viewPos(a.x, a.y);
         face(a, p.x - from.x, p.y - from.y);
         if (!animate) { place(a.el, p.x, p.y); break; }
-        const ms = 240 / speed;
+        const ms = ((ev.duration ?? 2) * TICK_SECONDS * 1000) / speed;
+        play(a.el, 'immune', ms);
         a.el.style.transition = `left ${ms}ms cubic-bezier(.6,0,.2,1), top ${ms}ms cubic-bezier(.6,0,.2,1)`;
         place(a.el, p.x, p.y);
         play(a.el, 'dashing', ms + 80);
