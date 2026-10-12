@@ -22,7 +22,7 @@ export const STAT_SCALE = 1;
 // A critical hit deals 50% more damage. Only basic attacks can crit.
 export const CRIT_PCT = 150;
 // Movement speed tiers, in seconds per square.
-export const MOVE_SPEEDS = { 'very fast': 0.35, fast: 0.5, medium: 0.8, slow: 1.0, 'very slow': 1.3 };
+export const MOVE_SPEEDS = { 'very fast': 0.35, fast: 0.5, medium: 0.8, slow: 1.0, 'very slow': 1.3, 'super slow': 2.0 };
 const ticksOf = (seconds) => Math.max(1, Math.round(seconds / TICK_SECONDS));
 
 // A unit's combat stats at a star level, in internal units (integers).
@@ -94,6 +94,9 @@ function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, in
     form: null, // name of the form it has transformed into, if any
     pendingForm: false, // transform at the end of this tick (Minior's low-HP trigger)
     copyOf: null, // Ditto: id of the unit it is copying
+    pendingCopy: null, pendingRevert: false, // Ditto: copy / turn back at the end of the tick
+    morphUntil: 0, // mid-transformation (Minior, Ditto) through this tick: it can't act
+    immuneUntil: 0, // Minior: nothing affects it through this tick (damage, stuns, knockbacks)
     fuse: 0, fused: false, // Golem: ticks left before it explodes after being knocked out
     target: null, alive: true, summoned: Boolean(inst.summoned),
   };
@@ -131,6 +134,8 @@ export function simulate(catalog, boards, seed = 0) {
   // Mana gained from being hit, and stuns, also wait for the end of the tick, so
   // a unit's action this tick never depends on who happened to act before it.
   // Events report mana as it will be once the tick ends.
+  // Minior can't be hurt, stunned or moved while it changes form.
+  const immune = (u) => t <= u.immuneUntil;
   const shownMana = (u) => Math.min(u.maxMana, u.mana + u.pendingMana);
   // Where a unit stood at the start of the tick. Targeting, range and pathing
   // all read this, so a unit that moved earlier in the tick isn't seen at its
@@ -164,7 +169,7 @@ export function simulate(catalog, boards, seed = 0) {
 
   // Returns the damage actually dealt to HP.
   function damage(target, amount, src, crit = false) {
-    if (!standing(target)) return 0;
+    if (!standing(target) || immune(target)) return 0;
     const absorbed = Math.min(target.shield, amount);
     target.shield -= absorbed;
     const before = target.hp;
@@ -174,7 +179,7 @@ export function simulate(catalog, boards, seed = 0) {
     if (target.hp === 0) knockedOut(target);
     // Minior: dropping to its HP threshold transforms it (at the end of the tick).
     const p = target.power;
-    if (target.hp > 0 && p?.kind === 'transform' && p.trigger === 'lowHp' && !target.form && target.hp * 100 <= target.maxHp * p.hpPct) target.pendingForm = true;
+    if (target.hp > 0 && p?.kind === 'transform' && p.trigger === 'lowHp' && !target.form && !target.morphUntil && target.hp * 100 <= target.maxHp * p.hpPct) target.pendingForm = true;
     return before - target.hp;
   }
 
@@ -219,19 +224,30 @@ export function simulate(catalog, boards, seed = 0) {
       moveCd: ticksOf(MOVE_SPEEDS[form.moveSpeed]), range: form.range, sprite: form.sprite,
     }, { name: form.name });
   }
-  // Ditto: copy everything about `e`'s fighting except its power and HP.
+  // Ditto: a new max HP keeps the same share of HP left (never rounding down to 0).
+  const rescaleHp = (u, maxHp) => {
+    u.hp = Math.max(1, Math.round((u.hp * maxHp) / u.maxHp));
+    u.maxHp = maxHp;
+  };
+  // Ditto: copy everything about `e`'s fighting, including its max HP, except
+  // its power and movement (a copied Ditto stands still). Runs at the end of
+  // the tick, since it changes Ditto's HP.
   function copyUnit(u, e) {
     u.copyOf = e.id;
-    setStats(u, { atk: e.atk, attackCd: e.attackCd, moveCd: e.moveCd, range: e.range, crit: e.crit, sprite: e.sprite }, { name: catalog[e.unitId].name, copy: e.unitId });
+    rescaleHp(u, e.maxHp);
+    setStats(u, { atk: e.atk, attackCd: e.attackCd, range: e.range, crit: e.crit, sprite: e.sprite }, { name: catalog[e.unitId].name, copy: e.unitId, hp: u.hp, maxHp: u.maxHp });
   }
   function revertCopy(u) {
     const def = catalog[u.unitId];
     const base = unitStats(def, u.star);
     u.copyOf = null;
-    setStats(u, { atk: base.atk, attackCd: base.attackCd, moveCd: base.moveCd, range: def.range, crit: base.crit, sprite: def.sprite }, { name: def.name, revert: true });
+    u.target = null;
+    rescaleHp(u, base.hp);
+    setStats(u, { atk: base.atk, attackCd: base.attackCd, range: def.range, crit: base.crit, sprite: def.sprite }, { name: def.name, revert: true, hp: u.hp, maxHp: u.maxHp });
   }
 
   function stun(target, duration) {
+    if (immune(target)) return;
     target.pendingStun = Math.max(target.pendingStun, duration);
     emit('stun', { id: target.id, duration });
   }
@@ -517,6 +533,7 @@ export function simulate(catalog, boards, seed = 0) {
     if (u.stun > 0) { u.stun--; if (u.stun === 0) u.target = null; return; }
     if (u.atkTimer > 0) u.atkTimer--;
     if (u.moveTimer > 0) u.moveTimer--;
+    if (t <= u.morphUntil) return; // transforming
     if (u.hold > 0) {
       u.hold--;
       if (u.hold === 0) {
@@ -526,14 +543,28 @@ export function simulate(catalog, boards, seed = 0) {
       return;
     }
 
-    // Ditto: when the Pokémon it copies faints, it turns back and copies the
-    // nearest enemy instead (straight away, no lost time).
+    // Ditto walks (as itself) toward the nearest enemy until it is within that
+    // enemy's range, then takes `morph` ticks to turn into it. A copied Ditto
+    // can't move: when the Pokémon it copied faints, or no enemy is in range,
+    // it turns back into Ditto (at the end of the tick) and walks again.
     if (u.power?.kind === 'copy') {
-      if (u.copyOf !== null && !standing(units[u.copyOf])) revertCopy(u);
       if (u.copyOf === null) {
         const e = nearestEnemy(u);
         if (!e) return;
-        copyUnit(u, e);
+        u.target = e.id;
+        if (dist(u, at(e)) <= e.range) {
+          u.pendingCopy = e.id;
+          u.morphUntil = t + u.power.morph - 1;
+          emit('morphStart', { id: u.id, target: e.id, duration: u.power.morph });
+          return;
+        }
+        u.range = e.range; // walk until it is in reach of its own copy of `e`
+      } else {
+        const inReach = (e) => e && visible(e) && e.side !== u.side && dist(u, at(e)) <= u.range;
+        let e = u.target === null ? null : units[u.target];
+        if (!inReach(e)) e = enemiesOf(u).filter(inReach).sort((a, b) => dist(u, at(a)) - dist(u, at(b)))[0];
+        if (!standing(units[u.copyOf]) || !e) { u.pendingRevert = true; return; }
+        u.target = e.id;
       }
     }
 
@@ -596,7 +627,7 @@ export function simulate(catalog, boards, seed = 0) {
         if (u.power && u.power.kind !== 'empower' && u.maxMana > 0 && u.mana >= u.maxMana) instantPower(u, target);
       }
       u.atkTimer = cooldown(u);
-    } else if (u.moveTimer === 0) {
+    } else if (u.moveTimer === 0 && u.copyOf === null) {
       // Out of range: walk around anyone in the way toward the enemy that can
       // be reached soonest (which may not be the one closest as the crow flies).
       const path = findPath(u);
@@ -637,13 +668,13 @@ export function simulate(catalog, boards, seed = 0) {
       // ignores shields. Same amount for everyone: the weakest fall first.
       const drain = Math.round((SUDDEN_DEATH_HP_PER_SECOND * STAT_SCALE) * TICK_SECONDS);
       for (const u of units) {
-        if (!standing(u)) continue;
+        if (!standing(u) || immune(u)) continue;
         u.hp = Math.max(0, u.hp - drain);
         emit('drain', { id: u.id, amount: drain, hp: u.hp });
         if (u.hp === 0) knockedOut(u);
       }
     }
-    for (const k of knocks) if (standing(k.target)) land(k.target, k.goal, k.side);
+    for (const k of knocks) if (standing(k.target) && !immune(k.target)) land(k.target, k.goal, k.side);
     knocks = [];
     for (const u of units) {
       if (u.pendingHeal && u.hp > 0) {
@@ -652,8 +683,27 @@ export function simulate(catalog, boards, seed = 0) {
         emit('heal', { id: u.id, amount: gained, hp: u.hp });
       }
       u.pendingHeal = 0;
-      if (u.pendingForm && u.hp > 0) { emit('cast', { id: u.id, target: null }); applyForm(u, u.power.form); }
+      // Minior: a low-HP transformation takes `morph` ticks, during which it
+      // is immune to everything; then it becomes its new form.
+      if (u.pendingForm && u.hp > 0) {
+        emit('cast', { id: u.id, target: null });
+        const m = u.power.morph ?? 0;
+        if (m) {
+          u.morphUntil = u.immuneUntil = t + m;
+          u.stun = u.pendingStun = 0;
+          emit('morphStart', { id: u.id, duration: m });
+        } else applyForm(u, u.power.form);
+      }
       u.pendingForm = false;
+      if (u.power?.kind === 'transform' && u.morphUntil === t && u.hp > 0) { applyForm(u, u.power.form); u.target = null; }
+      // Ditto finishes turning into its target (if that one is still standing),
+      // or turns back.
+      if (u.pendingCopy !== null && u.morphUntil === t) {
+        if (u.hp > 0 && standing(units[u.pendingCopy])) copyUnit(u, units[u.pendingCopy]);
+        u.pendingCopy = null;
+      }
+      if (u.pendingRevert && u.hp > 0) revertCopy(u);
+      u.pendingRevert = false;
     }
     for (const u of units) {
       if (u.hp === 0 && !(u.fuse > 0)) u.alive = false; // knocked out this tick (a lit Golem stays)

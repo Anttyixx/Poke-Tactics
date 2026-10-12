@@ -16,8 +16,8 @@
   },
   "vespiquen": {
     "name": "Vespiquen", "sprite": "assets/sprites/vespiquen.png", "fx": "#ffc23d", "type": "ranger", "cost": 3,
-    "hp": [840, 1350, 2155, 3450], "damage": [80, 125, 200, 320], "range": 3, "moveSpeed": "very slow", "secPerHit": 1.42, "critChance": 15, "energy": 7,
-    "ability": {"name": "Attack Order", "kind": "summon", "unit": "combee", "countByStar": [1, 2, 3, 3], "summonStar": 0}
+    "hp": [840, 1350, 2155, 3450], "damage": [80, 125, 200, 320], "range": 3, "moveSpeed": "very slow", "secPerHit": 1.42, "critChance": 15, "energy": 6,
+    "ability": {"name": "Attack Order", "kind": "summon", "unit": "combee", "countByStar": [2, 2, 2, 2]}
   },
   "coalossal": {
     "name": "Coalossal", "sprite": "assets/sprites/coalossal.png", "fx": "#ff7a2f", "type": "warrior", "cost": 5,
@@ -41,13 +41,13 @@
   },
   "greninja": {
     "name": "Greninja", "sprite": "assets/sprites/greninja.png", "fx": "#5ab8ff", "type": "rogue", "cost": 4,
-    "hp": [700, 1190, 2025, 3430], "damage": [80, 136, 231, 392], "range": 2, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 10,
-    "ability": {"name": "Battle Bond", "kind": "transform", "form": {"name": "Ash-Greninja", "sprite": "assets/sprites/ash-greninja.png", "moveSpeed": "fast", "secPerHit": 1.0, "damage": [100, 170, 289, 490], "range": 3}}
+    "hp": [735, 1250, 2126, 3602], "damage": [80, 136, 231, 392], "range": 2, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 10,
+    "ability": {"name": "Battle Bond", "kind": "transform", "form": {"name": "Ash-Greninja", "sprite": "assets/sprites/ash-greninja.png", "moveSpeed": "fast", "secPerHit": 0.8, "damage": [110, 187, 318, 539], "range": 3}}
   },
   "torterra": {
     "name": "Torterra", "sprite": "assets/sprites/torterra.png", "fx": "#7bd36a", "type": "warrior", "cost": 4,
-    "hp": [900, 1530, 2600, 4410], "damage": [125, 212, 361, 612], "range": 1, "moveSpeed": "slow", "secPerHit": 1.8, "critChance": 15, "energy": 10,
-    "ability": {"name": "Earthquake", "kind": "quake", "damagePct": 100, "stun": 10}
+    "hp": [900, 1530, 2600, 4410], "damage": [125, 212, 361, 612], "range": 1, "moveSpeed": "very slow", "secPerHit": 1.8, "critChance": 15, "energy": 10,
+    "ability": {"name": "Earthquake", "kind": "quake", "damagePct": 30, "stun": 10}
   },
   "lilligant": {
     "name": "Lilligant", "sprite": "assets/sprites/lilligant.png", "fx": "#9be07a", "type": "cleric", "cost": 3,
@@ -61,18 +61,18 @@
   },
   "minior": {
     "name": "Minior", "sprite": "assets/sprites/minior.png", "fx": "#ff7aa8", "type": "mage", "cost": 4,
-    "hp": [1350, 2295, 3900, 6615], "damage": [80, 136, 231, 392], "range": 1, "moveSpeed": "very slow", "secPerHit": 2.2, "critChance": 15, "energy": 0,
-    "ability": {"name": "Shining Star", "kind": "transform", "trigger": "lowHp", "hpPct": 10, "form": {"name": "Minior (Star Form)", "sprite": "assets/sprites/minior-star.png", "moveSpeed": "very fast", "secPerHit": 0.7, "damage": [100, 170, 289, 490], "range": 1}}
+    "hp": [1485, 2525, 4290, 7277], "damage": [80, 136, 231, 392], "range": 1, "moveSpeed": "super slow", "secPerHit": 2.2, "critChance": 15, "energy": 0,
+    "ability": {"name": "Shining Star", "kind": "transform", "trigger": "lowHp", "hpPct": 25, "morph": 5, "form": {"name": "Minior (Star Form)", "sprite": "assets/sprites/minior-star.png", "moveSpeed": "very fast", "secPerHit": 0.7, "damage": [100, 170, 289, 490], "range": 1}}
   },
   "tapukoko": {
     "name": "Tapu Koko", "sprite": "assets/sprites/tapukoko.png", "fx": "#ffe14d", "type": "rogue", "cost": 4,
-    "hp": [700, 1190, 2025, 3430], "damage": [100, 170, 289, 490], "range": 1, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 7,
+    "hp": [700, 1190, 2025, 3430], "damage": [100, 170, 289, 490], "range": 1, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 4,
     "ability": {"name": "Wild Charge", "kind": "empower", "damagePct": 150, "dash": true, "stun": 10}
   },
   "ditto": {
     "name": "Ditto", "sprite": "assets/sprites/ditto.png", "fx": "#c9a4ff", "type": "mage", "cost": 3,
-    "hp": [900, 1530, 2600, 4410], "damage": [60, 102, 173, 294], "range": 1, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 0,
-    "ability": {"name": "Transform", "kind": "copy"}
+    "hp": [990, 1683, 2860, 4851], "damage": [60, 102, 173, 294], "range": 1, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 0,
+    "ability": {"name": "Transform", "kind": "copy", "morph": 5}
   },
   "combee": {
     "name": "Combee", "summon": true, "sprite": "assets/sprites/combee.png", "fx": "#ffd35a", "type": "warrior", "cost": 0,

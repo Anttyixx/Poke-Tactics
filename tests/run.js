@@ -455,25 +455,25 @@ test('Thunderbolt (Toxtricity): every 8th attack also zaps the farthest enemy fo
   assert.equal(r.events.find((e) => e.type === 'damage' && e.id === far).amount, Math.floor((catalog.toxtricity.damage[0] * 80) / 100));
 });
 
-test('Attack Order (Vespiquen): summons 1/2/3/3 Combee by star, always 0★, sides first; they never count as survivors', () => {
+test('Attack Order (Vespiquen): always summons 2 Combee at its own star, sides first; they never count as survivors', () => {
   const cat = powerCat();
   cat.target = { ...cat.wall, hp: [1500, 1500, 1500, 1500] };
   // Vespiquen at combat (2,6), the target far up the board out of everyone's way.
   const fight = (star, extra = [], foe = 'wall') => simulate(cat, [[{ uid: 1, unitId: 'vespiquen', star, x: 2, y: 2 }, ...extra], [{ uid: 2, unitId: foe, star: 0, x: 2, y: 0 }]], 1);
   const v0 = unitOf(fight(0), 1).id;
-  for (const [star, n] of [[0, 1], [1, 2], [2, 3], [3, 3]]) {
+  for (const star of [0, 1, 2, 3]) {
     const r = fight(star);
     const first = evs(r, 'summon', v0).filter((e, _, all) => e.t === all[0].t);
-    assert.equal(first.length, n, `${n} Combee at star ${star}`);
-    assert.ok(first.every((e) => e.unit.unitId === 'combee' && e.unit.star === 0 && e.unit.summoned), 'all 0★ Combee');
-    // Order around (2,6) for side 0: left (1,6), right (3,6), back (2,7).
-    assert.deepEqual(first.map((e) => [e.unit.x, e.unit.y]), [[1, 6], [3, 6], [2, 7]].slice(0, n));
+    assert.equal(first.length, 2, `2 Combee at star ${star}`);
+    assert.ok(first.every((e) => e.unit.unitId === 'combee' && e.unit.star === star && e.unit.summoned), 'Combee at Vespiquen\'s star');
+    // Order around (2,6) for side 0: left (1,6), right (3,6).
+    assert.deepEqual(first.map((e) => [e.unit.x, e.unit.y]), [[1, 6], [3, 6]]);
     assert.equal(evs(r, 'attack', v0).filter((e) => e.t <= first[0].t).length, catalog.vespiquen.energy);
   }
   // Sides taken: behind, then in front, then diagonals back to front.
   const walls = [[1, 6], [3, 6]].map(([x, y], i) => ({ uid: 30 + i, unitId: 'wall', star: 0, x, y: y - HALF }));
   const r = fight(3, walls);
-  assert.deepEqual(evs(r, 'summon', v0).slice(0, 3).map((e) => [e.unit.x, e.unit.y]), [[2, 7], [2, 5], [1, 7]]);
+  assert.deepEqual(evs(r, 'summon', v0).slice(0, 2).map((e) => [e.unit.x, e.unit.y]), [[2, 7], [2, 5]]);
   // Combee fight, but never count as survivors.
   const r2 = fight(1, [], 'target');
   assert.ok(evs(r2, 'summon', v0).some((s) => evs(r2, 'attack', s.unit.id).length > 0), 'Combee attack');
@@ -576,7 +576,7 @@ test('Hyperspace Hole (Hoopa): the attack after 6 teleports to the farthest enem
   assert.equal(evs(r, 'heal', g).find((e) => e.t === cast.t).amount, Math.floor(dealt / 10));
 });
 
-test('Earthquake (Torterra): after 10 attacks, hits and stuns every enemy on the board', () => {
+test('Earthquake (Torterra): after 10 attacks, hits every enemy on the board for 30% and stuns them', () => {
   const r = simulate(powerCat(), [
     [{ uid: 1, unitId: 'torterra', star: 0, x: 2, y: 0 }],
     [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'wall', star: 0, x: 0, y: 3 }, { uid: 4, unitId: 'wall', star: 0, x: 4, y: 2 }],
@@ -586,7 +586,7 @@ test('Earthquake (Torterra): after 10 attacks, hits and stuns every enemy on the
   assert.equal(evs(r, 'attack', tt).filter((e) => e.t <= cast.t).length, catalog.torterra.energy, 'with the 10th attack');
   for (const uid of [2, 3, 4]) {
     const id = unitOf(r, uid).id;
-    assert.ok(r.events.some((e) => e.type === 'damage' && e.id === id && e.t === cast.t && e.amount === catalog.torterra.damage[0]), `hits ${uid}`);
+    assert.ok(r.events.some((e) => e.type === 'damage' && e.id === id && e.t === cast.t && e.amount === Math.floor((catalog.torterra.damage[0] * 30) / 100)), `hits ${uid}`);
     assert.ok(evs(r, 'stun', id).some((e) => e.t === cast.t && e.duration === 10), `stuns ${uid}`);
   }
 });
@@ -647,19 +647,27 @@ test('Self-Destruct (Golem): knocked out, it stays put 3s, then explodes on adja
   assert.ok(!r.events.some((e) => e.type === 'damage' && e.id === g && e.t > fuse.t), 'it cannot be hit while the fuse burns');
 });
 
-test('Shining Star (Minior): at 10% HP or less it transforms into its core form', () => {
+test('Shining Star (Minior): at 25% HP or less it spends 0.5s transforming, immune to everything, then takes its core form', () => {
   const cat = powerCat();
-  cat.brute = { ...cat.wall, range: 1, secPerHit: 1, damage: [125, 125, 125, 125] }; // 1350 HP: 10 hits leave 100 (7%)
-  const r = simulate(cat, [[{ uid: 1, unitId: 'minior', star: 0, x: 2, y: 0 }], [{ uid: 2, unitId: 'brute', star: 0, x: 2, y: 0 }]], 1);
-  const m = unitOf(r, 1).id;
-  const tf = evs(r, 'transform', m)[0];
-  assert.ok(tf, 'transforms');
-  const hpBefore = r.events.filter((e) => e.type === 'damage' && e.id === m && e.t <= tf.t).at(-1).hp;
-  const max = catalog.minior.hp[0];
-  assert.ok(hpBefore * 100 <= max * 10 && hpBefore > 0, `at ${hpBefore}/${max}`);
-  const prev = r.events.filter((e) => e.type === 'damage' && e.id === m && e.t < tf.t).at(-1);
-  assert.ok(!prev || prev.hp * 100 > max * 10 || prev.t === tf.t, 'not before the threshold');
-  assert.equal(tf.sprite, catalog.minior.ability.form.sprite);
+  cat.brute = { ...cat.wall, range: 1, secPerHit: 1, damage: [125, 125, 125, 125] }; // 1485 HP: 9 hits leave 360 (24%)
+  cat.stunner = { ...cat.brute, energy: 1, ability: { name: 'Stun', kind: 'empower', damagePct: 100, stun: 10 } };
+  for (const foe of ['brute', 'stunner']) {
+    const r = simulate(cat, [[{ uid: 1, unitId: 'minior', star: 0, x: 2, y: 0 }], [{ uid: 2, unitId: foe, star: 0, x: 2, y: 0 }]], 1);
+    const m = unitOf(r, 1).id;
+    const start = evs(r, 'morphStart', m)[0];
+    assert.ok(start, 'starts transforming');
+    const max = catalog.minior.hp[0];
+    const hits = r.events.filter((e) => e.type === 'damage' && e.id === m);
+    const hpBefore = hits.filter((e) => e.t <= start.t).at(-1).hp;
+    assert.ok(hpBefore * 100 <= max * 25 && hpBefore > 0, `at ${hpBefore}/${max}`);
+    assert.ok(hits.filter((e) => e.t < start.t).every((e) => e.hp * 100 > max * 25 || e === hits.filter((h) => h.t <= start.t).at(-1)), 'not before the threshold');
+    const tf = evs(r, 'transform', m)[0];
+    assert.equal(tf.t, start.t + 5, 'takes 0.5s');
+    assert.equal(tf.sprite, catalog.minior.ability.form.sprite);
+    assert.ok(!hits.some((e) => e.t > start.t && e.t <= tf.t), 'no damage while transforming');
+    assert.ok(!evs(r, 'stun', m).some((e) => e.t > start.t && e.t <= tf.t), 'no stuns while transforming');
+    assert.ok(!r.events.some((e) => e.src === m && e.t > start.t && e.t <= tf.t), 'it does nothing while transforming');
+  }
 });
 
 test('Wild Charge (Tapu Koko): dashes in a line next to the farthest enemy, hits for 150% and stuns everyone it touches', () => {
@@ -683,26 +691,38 @@ test('Wild Charge (Tapu Koko): dashes in a line next to the farthest enemy, hits
   assert.ok(evs(r, 'stun', unitOf(r, 3).id).some((e) => e.t === dash.t), 'the one in its path is stunned');
 });
 
-test('Transform (Ditto): copies the nearest enemy (not its power or HP); when that one faints it turns back and copies the next', () => {
+test('Transform (Ditto): walks into the nearest enemy\'s range, takes 0.5s to copy it (max HP too, keeping its HP %), stands still, and turns back when it faints', () => {
   const cat = powerCat();
   cat.weak = { ...clone(catalog.mawile), hp: [300, 300, 300, 300], moveSpeed: 'statue' };
   cat.far = { ...clone(catalog.coalossal), moveSpeed: 'statue', hp: [1e6, 1e6, 1e6, 1e6] };
   const r = simulate(cat, [
-    [{ uid: 1, unitId: 'ditto', star: 0, x: 2, y: 0 }],
-    [{ uid: 2, unitId: 'weak', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'far', star: 0, x: 2, y: 3 }],
+    [{ uid: 1, unitId: 'ditto', star: 0, x: 2, y: 3 }], // combat (2,7)
+    [{ uid: 2, unitId: 'weak', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'far', star: 0, x: 4, y: 3 }], // combat (2,3), (0,0)
   ], 1);
   const d = unitOf(r, 1).id;
+  const max = catalog.ditto.hp[0];
+  assert.equal(r.initial.find((u) => u.id === d).maxHp, max);
+  const moves = evs(r, 'move', d);
+  const start = evs(r, 'morphStart', d)[0];
+  assert.equal(start.target, unitOf(r, 2).id, 'goes for the nearest');
+  assert.ok(moves.filter((e) => e.t < start.t).length >= 2, 'walks next to it first (range 1)');
+  assert.equal(moves[1].t - moves[0].t, 8, 'at medium speed');
   const tfs = evs(r, 'transform', d);
-  assert.equal(tfs[0].copy, 'weak', 'copies the nearest');
-  assert.equal(tfs[0].t, 1, 'straight away');
+  assert.deepEqual([tfs[0].copy, tfs[0].t, tfs[0].maxHp, tfs[0].hp], ['weak', start.t + 4, 300, 300], 'copies it 0.5s later, with its max HP');
+  assert.ok(!r.events.some((e) => e.src === d && e.t <= tfs[0].t), 'does not attack before copying');
   const first = r.events.find((e) => e.type === 'damage' && e.src === d && !e.crit);
   assert.equal(first.amount, cat.weak.damage[0], "with the copied Pokémon's damage");
   const weakDied = evs(r, 'death', unitOf(r, 2).id)[0];
   const revert = tfs.find((e) => e.revert);
   assert.ok(revert && revert.t > weakDied.t && revert.t <= weakDied.t + 1, 'turns back right after');
+  assert.ok(!moves.some((e) => e.t > tfs[0].t && e.t <= revert.t), 'stands still while copied');
+  const hpThen = r.events.filter((e) => e.type === 'damage' && e.id === d && e.t <= revert.t).at(-1)?.hp ?? 300;
+  assert.equal(revert.maxHp, max);
+  assert.equal(revert.hp, Math.round((hpThen * max) / 300), 'keeps its HP %');
+  assert.ok(moves.some((e) => e.t > revert.t), 'then walks to the next');
   const next = tfs[tfs.indexOf(revert) + 1];
-  assert.deepEqual([next.copy, next.t], ['far', revert.t], 'and copies the next nearest straight away');
-  assert.equal(r.initial.find((u) => u.id === d).maxHp, catalog.ditto.hp[0], 'keeps its own HP');
+  assert.equal(next.copy, 'far', 'and copies it');
+  assert.equal(next.maxHp, 1e6);
 });
 
 test('Blaze (Infernape): after 7 attacks it attacks 50% faster for 3 seconds', () => {

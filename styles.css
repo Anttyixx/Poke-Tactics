@@ -354,7 +354,7 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .unit.cast-charge .body { animation: cast-charge calc(0.5s / var(--speed, 1)) linear; }
 .unit.cast-slam .body { animation: cast-slam calc(0.6s / var(--speed, 1)) ease-in; }
 .unit.land .body { animation: land calc(0.22s / var(--speed, 1)) ease-out; }
-.unit.hit .sprite { filter: brightness(2.6) saturate(0.2); translate: calc(var(--hx, 0) * 7%) calc(var(--hy, 0) * 7%); }
+.unit.hit .sprite { filter: var(--tint) brightness(2.6) saturate(0.2); translate: calc(var(--hx, 0) * 7%) calc(var(--hy, 0) * 7%); }
 .unit.sprite-unit.dead { animation: faint calc(0.6s / var(--speed, 1)) ease-in forwards; pointer-events: none; }
 .unit.sprite-unit.dead .body { animation: none; }
 
@@ -419,7 +419,7 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   100% { opacity: 0; transform: translateY(18%) rotate(-80deg) scale(0.6); }
 }
 /* Stunned: dazed and greyed out, with stars circling over its head. */
-.unit.sprite-unit.stunned .sprite { filter: grayscale(0.55) brightness(0.85); animation-play-state: paused; }
+.unit.sprite-unit.stunned .sprite { filter: var(--tint) grayscale(0.55) brightness(0.85); animation-play-state: paused; }
 .unit.sprite-unit.stunned .body { animation: dazed 1.1s ease-in-out infinite; }
 @keyframes dazed { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
 .stun-fx { display: none; position: absolute; left: 15%; right: 15%; top: -2%; height: 24%; z-index: 4; pointer-events: none; }
@@ -579,7 +579,7 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 /* ---- Power effects ---- */
 .unit.stealthed { opacity: 0.35; }
 .unit.stealthed .bars { visibility: hidden; }
-.unit.hasted .sprite { filter: drop-shadow(0 0 0.35em var(--fx)) saturate(1.4); }
+.unit.hasted .sprite { filter: var(--tint) drop-shadow(0 0 0.35em var(--fx)) saturate(1.4); }
 .unit.blink { transition: none; animation: blink 0.25s ease-out; }
 .unit.knocked .body { animation: knocked 0.35s ease-out; }
 .unit.spawned { animation: spawned 0.45s var(--spring); }
@@ -1017,7 +1017,7 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   100% { transform: scale(1); filter: none; }
 }
 /* Dashing: a stretched, glowing blur. */
-.unit.dashing .sprite { filter: drop-shadow(0 0 6px var(--fx)) brightness(1.4); }
+.unit.dashing .sprite { filter: var(--tint) drop-shadow(0 0 6px var(--fx)) brightness(1.4); }
 .unit.dashing .body { animation: none; transform: scale(1.2, 0.85); }
 /* Golem with its fuse lit: glowing red and trembling. */
 .unit.fusing .sprite { animation: fuse-glow 0.35s ease-in-out infinite alternate; }
@@ -1032,3 +1032,16 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   15% { translate: -6px 2px; } 30% { translate: 5px -3px; } 45% { translate: -4px 2px; } 60% { translate: 3px -1px; } 80% { translate: -1px 1px; }
 }
 @media (prefers-reduced-motion: reduce) { #arena.shake, .unit.fusing .body { animation: none; } }
+
+/* A transformed Ditto: the copied sprite in Ditto's lavender. */
+.unit { --tint: brightness(1); }
+.unit .sprite { filter: var(--tint); }
+.unit.copied { --tint: sepia(1) saturate(1.8) hue-rotate(225deg) brightness(1.05); }
+/* Changing form (Ditto, Minior): a shimmering glow while it takes shape. */
+.unit.morphing .body { animation: morphing calc(0.25s / var(--speed, 1)) ease-in-out infinite alternate; }
+@keyframes morphing {
+  from { transform: scale(1); filter: drop-shadow(0 0 4px var(--fx)) brightness(1.2); }
+  to { transform: scale(1.08, 0.94); filter: drop-shadow(0 0 10px var(--fx)) brightness(1.7); }
+}
+/* Minior can't be touched while it transforms: a bubble around it. */
+.unit.immune .shadow { box-shadow: 0 0 0 3px #fff, 0 0 18px var(--fx); }
