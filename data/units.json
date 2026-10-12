@@ -66,7 +66,7 @@
   },
   "tapukoko": {
     "name": "Tapu Koko", "sprite": "assets/sprites/tapukoko.png", "fx": "#ffe14d", "type": "rogue", "cost": 4,
-    "hp": [700, 1190, 2025, 3430], "damage": [100, 170, 289, 490], "range": 1, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 4,
+    "hp": [805, 1369, 2329, 3945], "damage": [100, 170, 289, 490], "range": 2, "moveSpeed": "medium", "secPerHit": 1.1, "critChance": 15, "energy": 4,
     "ability": {"name": "Wild Charge", "kind": "empower", "damagePct": 150, "dash": true, "stun": 10}
   },
   "ditto": {

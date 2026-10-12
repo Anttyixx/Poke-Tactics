@@ -60,7 +60,7 @@ export function describePower(def, star, catalog) {
     case 'haste': return `${every}, it's enraged: ${p.hastePct}% faster attacks for ${secs(p.duration)}s.`;
     case 'quake': return `With every ${def.energy}th attack, it shakes the whole board: every enemy takes ${p.damagePct}% damage (${show(dmg)})${p.stun ? ` and is stunned for ${secs(p.stun)}s` : ''}.`;
     case 'splashHeal': return `Every attack also heals your Pokémon directly left, right, above and below the square it hits, for ${p.healPct}% of its damage (${show(Math.floor((def.damage[star ?? 0] * STAT_SCALE * p.healPct) / 100))}).`;
-    case 'selfdestruct': return `When it's knocked out, it stays on its square for ${secs(p.delay)}s, then explodes: enemies within ${p.radius} square take ${p.damagePct}% damage (${show(dmg)}).`;
+    case 'selfdestruct': return `When it's knocked out, it stays on its square for ${secs(p.delay)}s, then explodes: enemies ${p.radius === 1 ? "directly left, right, in front and behind" : `within ${p.radius} steps`} take ${p.damagePct}% damage (${show(dmg)}).`;
     case 'copy': return `It walks toward the nearest enemy until it's within that enemy's range, then takes ${secs(p.morph)}s to transform into it: it copies its max HP, damage, attack speed, range and crit (not its power or movement) and keeps the same share of HP it had. Transformed, it doesn't move. When that Pokémon faints or nothing is in range, it turns back and walks to the next nearest.`;
     case 'transform': {
       const f = p.form;
