@@ -66,6 +66,18 @@ node tools/analyze.mjs           # win rates, damage, survival, pairs -> tools/o
 node tools/sweep.mjs             # try stat changes one at a time without editing units.json
 ```
 
+Two specific teams, with each team's stats per Pokémon:
+
+```sh
+node tools/match.mjs "beheeyem,infernape,ditto,vespiquen,lilligant,hoopa" "coalossal,torterra,golem,minior,mawile,decidueye" --games=500 --place=smart
+```
+
+`--place=smart` makes the simulated players reposition before every fight to counter the
+opponent's lineup from the round before (`tools/placer.mjs`), the way a real player would;
+`--place-a` / `--place-b` set each side separately. `balance.mjs --smart` does the same for
+the whole study. All tools use the game's own code (`src/combat.js`, `src/game.js`,
+`src/bot.js`), so they stay accurate as the game changes.
+
 `balance.mjs` also takes a patch file (`node tools/balance.mjs 20000 out.json patch.json`) to
 test a set of changes together. Team styles to pit against each other live in `ARCHETYPES`.
 
