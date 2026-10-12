@@ -15,11 +15,11 @@
 //                  { type: 'refuse', error }           can't play (different versions)
 //                  { type: 'full' }                    someone else already joined
 
-import { createGame, applyIntent } from './game.js?v=5247560';
-import { botTurn } from './bot.js?v=5247560';
-import { createUI } from './ui.js?v=5247560';
-import { hashSeed } from './rng.js?v=5247560';
-import { hostRoom, joinRoom, cleanCode, isCode } from './net.js?v=5247560';
+import { createGame, applyIntent } from './game.js?v=c530611';
+import { botTurn } from './bot.js?v=c530611';
+import { createUI } from './ui.js?v=c530611';
+import { hashSeed } from './rng.js?v=c530611';
+import { hostRoom, joinRoom, cleanCode, isCode, checkConnection } from './net.js?v=c530611';
 
 const BOT = 1;
 // Online, each planning phase lasts this long; then everyone still planning is
@@ -27,7 +27,7 @@ const BOT = 1;
 const PLAN_SECONDS = 30;
 const NAME_KEY = 'poke-tactics-name';
 
-const catalogText = await (await fetch('data/units.json?v=5247560')).text();
+const catalogText = await (await fetch('data/units.json?v=c530611')).text();
 const catalog = JSON.parse(catalogText);
 // Both players must run the same rules and Pokémon. The deploy tags every file
 // with its build (?v=...); locally there's no tag, so compare the data instead.
@@ -138,6 +138,13 @@ function lobby(action, data = {}) {
   }
   if (action === 'cancel') { stopHosting(); return ui.showLobby('menu', { name: savedName() }); }
   if (action === 'leave') return leave();
+  if (action === 'check') {
+    ui.showLobby('checking');
+    return checkConnection().then((result) => {
+      console.info('Connection check', result);
+      if (ui.lobbyView() === 'checking') ui.showLobby('check', result);
+    });
+  }
   if (action === 'home') return goHome();
 }
 

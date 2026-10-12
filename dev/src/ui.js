@@ -2,11 +2,11 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=5247560';
+import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=c530611';
 import {
   COPIES_PER_TROOP, LOSS_COINS, MAX_REROLLS, WIN_COINS,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=5247560';
+} from './game.js?v=c530611';
 
 const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
 // Attack-effect colour when a unit doesn't set its own "fx" colour in units.json.
@@ -1241,7 +1241,34 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
             <button class="primary" data-lobby="join">Join</button>
           </section>
         </div>
-        ${back}`,
+        <div class="lobby-actions">${back}<button class="ghost" data-lobby="check">Check my connection</button></div>`,
+      checking: () => `
+        <h1>Checking your connection</h1>
+        <div class="spinner" aria-hidden="true"></div>
+        <p class="muted">This takes a few seconds.</p>`,
+      check: () => {
+        const c = data;
+        const keyText = {
+          ok: [true, `Relay key accepted (${c.servers} relay servers)`],
+          missing: [false, 'No relay key in this version of the game'],
+          unreachable: [false, 'Couldn\'t reach Metered to check the relay key'],
+        }[c.key] ?? [false, `Metered refused the relay key (${esc(c.key.replace('rejected', '').trim() || 'error')})`];
+        const row = ([ok, text]) => `<li class="${ok ? 'ok' : 'bad'}"><span aria-hidden="true">${ok ? '✓' : '✗'}</span>${text}</li>`;
+        const verdict = c.relay
+          ? 'Online play should work from anywhere: if a direct connection is blocked, the relay takes over.'
+          : c.direct
+            ? 'Direct connections work, but the relay doesn\'t. Friends on some networks (many phone carriers, some home routers) won\'t be able to connect to you.'
+            : 'Only same-network connections will work from here. Try a different network.';
+        return `
+        <h1>Connection check</h1>
+        <ul class="check-list">
+          ${row(keyText)}
+          ${row([c.direct, c.direct ? 'Direct connections through your router work' : 'Direct connections are blocked on this network'])}
+          ${row([c.relay, c.relay ? 'Relay connection works' : 'Relay connection not available'])}
+        </ul>
+        <p>${verdict}</p>
+        <button class="primary" data-lobby="open">Back</button>`;
+      },
       connecting: () => `
         <h1>Battle a Friend</h1>
         <div class="spinner" aria-hidden="true"></div>
@@ -1261,7 +1288,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
       error: () => `
         <h1>Couldn't connect</h1>
         <p>${esc(data.error)}</p>
-        <div class="lobby-actions"><button class="primary" data-lobby="open">Try again</button>${back}</div>`,
+        <div class="lobby-actions"><button class="primary" data-lobby="open">Try again</button><button data-lobby="check">Check my connection</button>${back}</div>`,
       disconnected: () => `
         <h1>Match ended</h1>
         <p>${esc(data.error)}</p>

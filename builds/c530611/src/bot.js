@@ -1,8 +1,8 @@
 // Dummy opponent. It plays through the exact same intent API as a human, so
 // in Phase 3 a remote guest can take its seat without touching the rules.
 
-import { MAX_STAR, boardCap, fieldCount, leaderIds, teamSize, troopIds } from './game.js?v=0208ff5';
-import { COLS, HALF } from './combat.js?v=0208ff5';
+import { MAX_STAR, fielded, teamSize, troopIds } from './game.js?v=c530611';
+import { COLS, HALF } from './combat.js?v=c530611';
 
 // Columns ordered from the centre outwards, e.g. [2, 1, 3, 0, 4] for 5 columns.
 const CENTER_OUT = [...Array(COLS).keys()].sort((a, b) => Math.abs(2 * a - (COLS - 1)) - Math.abs(2 * b - (COLS - 1)) || a - b);
@@ -10,32 +10,32 @@ const CENTER_OUT = [...Array(COLS).keys()].sort((a, b) => Math.abs(2 * a - (COLS
 export function botTurn(state, catalog, p, send) {
   if (state.phase === 'team') {
     // Deterministic per seed and seat, so seeded matches replay identically.
-    const leaders = leaderIds(catalog);
     const troops = troopIds(catalog);
     const start = (state.seed + p) % troops.length;
     const picks = [...troops.slice(start), ...troops.slice(0, start)].slice(0, teamSize(catalog));
-    send({ type: 'chooseTeam', leader: leaders[(state.seed + p) % leaders.length], troops: picks });
+    send({ type: 'chooseTeam', troops: picks });
     return;
   }
   shop(state, catalog, p, send);
   // Rerolls are free but limited; keep rerolling while there are coins left to
-  // spend (at least the price of the dearest troop).
+  // spend (at least the price of the cheapest troop on the team).
   const me = state.players[p];
-  while (me.rerolls > 0 && me.coins >= 3 && send({ type: 'reroll' }).ok) shop(state, catalog, p, send);
+  const cheapest = Math.min(...me.team.map((id) => catalog[id].cost));
+  while (me.rerolls > 0 && me.coins >= cheapest && send({ type: 'reroll' }).ok) shop(state, catalog, p, send);
   send({ type: 'ready' });
 }
 
-// Buy until nothing useful is affordable: stacking a copy onto a troop already
-// on the board comes first (it powers it up without using a board slot), then
-// the most expensive troop that fits on a free square.
+// Buy until nothing useful is affordable: levelling up a troop already on the
+// board comes first, then the most expensive new troop on a free square.
 function shop(state, catalog, p, send) {
   const me = state.players[p];
   for (;;) {
     let best = null;
     me.shop.forEach((id, slot) => {
       if (!id || catalog[id].cost > me.coins) return;
-      const stack = me.board.find((u) => !u.leader && u.unitId === id && u.star < MAX_STAR);
-      const cell = stack ?? (fieldCount(me) < boardCap(state.round) ? freeCell(me, catalog[id].range <= 1) : null);
+      const stack = fielded(me, id);
+      if (stack?.star >= MAX_STAR) return;
+      const cell = stack ?? freeCell(me, catalog[id].range <= 1);
       if (!cell) return;
       const score = (stack ? 100 : 0) + catalog[id].cost;
       if (!best || score > best.score) best = { score, intent: { type: 'buy', slot, x: cell.x, y: cell.y } };
