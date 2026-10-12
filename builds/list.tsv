@@ -1,3 +1,4 @@
+1383648	dev	2026-10-12 22:00 UTC	Start screen: links move to the menu; bigger Battle, smaller Training
 f1199da	dev	2026-10-12 20:11 UTC	Start screen: menu button and version number
 79ad49f	dev	2026-10-12 18:32 UTC	Phones: no sideways scrolling; roomier start-screen parade
 7c0aa74	dev	2026-10-12 17:38 UTC	Balance update and an in-game What's new screen
@@ -27,4 +28,3 @@ f9219d3	dev	2026-10-09 21:47 UTC	Fix diagonal tilt direction for front-facing sp
 82dceda	dev	2026-10-09 21:36 UTC	Displacement rule for Pokémon launched onto an occupied square
 2e65e53	dev	2026-10-09 20:37 UTC	Tilt sprites toward diagonal targets
 c605f62	stable	2026-10-09 16:28 UTC	Phones: Pokémon info as a pop-up; board resizes smoothly
-c979235	dev	2026-10-09 15:48 UTC	Clean up the UI: menu, responsive layout, refreshed look, livelier motion

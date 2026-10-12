@@ -1,5 +1,15 @@
 [
   {
+    "id": "2026-10-12-cleaner-start",
+    "version": "0.6.3",
+    "date": "2026-10-12",
+    "title": "Cleaner start screen",
+    "changes": [
+      { "kind": "change", "text": "What's new, How to play and the Pokédex are in the menu (top right); a dot on the menu button means there's an update you haven't read." },
+      { "kind": "change", "text": "A bigger Battle button, with a smaller Training button under it." }
+    ]
+  },
+  {
     "id": "2026-10-12-start-menu",
     "version": "0.6.2",
     "date": "2026-10-12",
