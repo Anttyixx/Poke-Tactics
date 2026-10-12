@@ -1,3 +1,4 @@
+8afa6fc	dev	2026-10-12 05:40 UTC	Faster simulations: engine hot paths and a smarter placer
 736f06d	dev	2026-10-12 05:24 UTC	Balance tools: two-team matches and smart repositioning
 b12b2de	dev	2026-10-12 05:17 UTC	Add balance-testing tools: full-game simulator, analysis, stat sweeps
 e106d6e	stable	2026-10-12 04:55 UTC	Walking: wait the movement speed, then a 0.5s step
@@ -27,4 +28,3 @@ b085413	dev	2026-10-08 22:52 UTC	Each step takes the unit's whole move time
 4e7d6ca	dev	2026-10-08 22:48 UTC	Psywave crosses the whole board
 764bf9a	dev	2026-10-08 22:42 UTC	Power tweaks: Vespiquen every 7 attacks, Combee stats, fresh start each fight
 b7dee24	dev	2026-10-08 22:20 UTC	Add Combee's sprite
-9b1cd34	dev	2026-10-08 22:15 UTC	Give every Pokémon a power from the power sheet
