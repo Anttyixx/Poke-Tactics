@@ -32,6 +32,8 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
 
 ## How to play
 
+- **Start:** the game opens on a start screen; **Battle** goes to team selection. Pokémon are shown as
+  cards (cost in the corner); tap one to pick it, or its **i** for its stats and power.
 - **Team:** before round 1, each player picks 6 Pokémon. Each one puts 4 copies into that player's own
   pool. The board starts empty: everything you field, you buy.
 - **Coins:** you start with 6. After each battle the winner gets 6 coins and the loser 9 (a draw pays
@@ -52,27 +54,55 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
 - **Board:** your half is 5×4 (the board is 5 wide by 8 tall); the row next to the centre line is the
   front. There is no limit on how many troops you field.
 - **Combat:** units target the nearest enemy they can reach and walk (pathing around anyone in the way)
-  into range one square at a time (up/down/left/right). Movement speed is how long each step takes: fast
-  0.5s per square, medium 0.8s, slow 1.0s, very slow 1.3s. A unit can't attack until it finishes its step. A unit attacks every `secPerHit` seconds; each basic attack
+  into range one square at a time (up/down/left/right). Distance (for range, targeting and area
+  powers) is the number of steps between two squares, so a diagonal neighbour is 2 away. Movement speed is how long each step takes: fast
+  0.5s per square, medium 0.8s, slow 1.0s, very slow 1.3s, super slow 2.0s. A unit can't attack until it finishes its step. A unit attacks every `secPerHit` seconds; each basic attack
   has a `critChance`% chance to crit for 50% more damage (powers never crit). Each tick resolves
   simultaneously, and crit luck is shared slot for slot between the sides, so neither side gets an edge.
 - **Powers:** every Pokémon has one. Most count attacks (the purple bar). Every fight starts with the bar
   empty and a full attack cooldown before anyone's first hit, and progress is never lost mid-fight:
   - Mawile, **Jaw Lock**: after 8 attacks, the next hits for 130% and stuns for 1s.
   - Beheeyem, **Psywave**: at the start of battle, a wave flies down its column to the other end of the
-    board. The first enemy it hits takes 50% and is carried to that end; anyone already there is pushed to
-    the side. Both sit out until the wave lands.
+    board. The first enemy it hits takes 50% and is carried to that end, then is stunned for 1s; anyone
+    already there is pushed to the side. Both sit out until the wave lands.
   - Toxtricity, **Thunderbolt**: every 8th attack also zaps the farthest enemy for 80%.
-  - Vespiquen, **Attack Order**: every 7 attacks, summons a Combee next to it (same star level). Combee
-    fight but never count as survivors for round damage. With no free square, the power stays charged
-    and tries again after the next attack.
+  - Vespiquen, **Attack Order**: every 6 attacks, summons 2 Combee beside it: its sides first, then
+    behind, in front, and the diagonals from back to front. Combee come at Vespiquen's star level. They fight but never count as survivors for round damage. With no free square,
+    the power stays charged and tries again after the next attack.
   - Coalossal, **Heat Crash**: after 6 attacks, the next hits for 130%, knocks the target back 2 squares
-    (or to the closest free square) and stuns it for 1s.
+    and stuns it for 1s.
   - Decidueye, **Phantom Force**: after 8 attacks, invisible for 3s and attacks 30% faster. Enemies can't
     target or follow an invisible unit.
-  - Greninja, **Night Slash**: after 6 attacks, the next teleports beside the farthest enemy (if it's out of
-    reach), hits for 130% and heals 10% of the damage dealt.
   - Infernape, **Blaze**: after 7 attacks, attacks 50% faster for 3s.
+  - Hoopa, **Hyperspace Hole**: after 6 attacks, the next teleports beside the farthest enemy (if it's out
+    of reach), hits for 130% and heals 10% of the damage dealt. (The old Greninja's stats and power.)
+  - Greninja, **Battle Bond**: after 10 attacks, becomes Ash-Greninja for the rest of the fight: fast
+    movement, attacks every 0.8s, more damage, range 3 (same HP).
+  - Torterra, **Earthquake**: with every 10th attack, every enemy on the board takes 30% and is stunned 1s.
+  - Lilligant, **Aromatherapy**: every attack heals your Pokémon directly left, right, above and below the
+    square it hits, for 50% of its damage.
+  - Golem, **Self-Destruct**: when knocked out it stays on its square for 3s (it can't be hit), then
+    explodes for 300% on enemies directly next to it (not diagonals). The fight waits for it.
+  - Minior, **Shining Star**: at 25% HP or less it spends 0.5s transforming, immune to everything
+    (damage, stuns, knockbacks, sudden death), then becomes its star form: very fast movement (0.35s per
+    square), attacks every 0.7s, more damage (same HP).
+  - Tapu Koko (range 2, attacks every 1.1s), **Wild Charge**: after 4 attacks, the next dashes in a straight line to the open square
+    next to the farthest enemy (closest to Tapu Koko). The dash takes 0.1s per square (at least 0.2s),
+    and Tapu Koko is immune to everything on the way. When it arrives it hits for 150%; the target and
+    every enemy it passed through are stunned for 1s.
+  - Ditto, **Transform**: walks (medium speed) toward the nearest enemy until it's within that enemy's
+    range, then takes 0.5s to transform into it, copying its max HP, damage, attack speed, range and crit
+    (not its power or movement). It keeps its share of HP across the change, shows the copied sprite in
+    Ditto's colours, and doesn't move while transformed. When the copied Pokémon faints or no enemy is in
+    range, it turns back into Ditto and walks to the next nearest.
+- **Healing** (Lilligant, Hoopa) lands at the end of each tick, like stuns, so it never depends on who
+  acted first; a Pokémon knocked out that tick stays knocked out.
+- **Stuns:** a stunned Pokémon can't move or attack. When a stun (or a Psywave ride) ends, it picks the
+  nearest enemy as its target again rather than going back to its old one.
+- **Displacement:** when a Pokémon is launched onto an occupied square (Heat Crash, Psywave), the one
+  standing there moves to its own left, else its right, else back (toward its own back row), else
+  forward, else a diagonal (back ones first). If all of those are taken, the launched Pokémon lands
+  on the closest free square instead.
 - **Sudden death:** fights have a 30-second timer. When it runs out, every Pokémon still standing loses
   300 HP per second (the same for everyone, ignoring shields) while the fight carries on, so the weakest
   fall first until one side is knocked out.

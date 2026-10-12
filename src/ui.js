@@ -2,11 +2,11 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=c605f62';
+import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=1f977e7';
 import {
   COPIES_PER_TROOP, LOSS_COINS, MAX_REROLLS, WIN_COINS,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=c605f62';
+} from './game.js?v=1f977e7';
 
 const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
 // Attack-effect colour when a unit doesn't set its own "fx" colour in units.json.
@@ -21,7 +21,7 @@ const secs = (ticks) => +(ticks * TICK_SECONDS).toFixed(1);
 // Seconds between attacks, as the game actually plays it (cooldowns are whole 0.1s ticks).
 const attackTime = (stats) => secs(stats.attackCd);
 const dps = (stats) => (show(stats.atk) / attackTime(stats)).toFixed(1);
-const SPEED_NAME = { fast: 'Fast', medium: 'Medium', slow: 'Slow', 'very slow': 'Very slow' };
+const SPEED_NAME = { 'very fast': 'Very fast', fast: 'Fast', medium: 'Medium', slow: 'Slow', 'very slow': 'Very slow', 'super slow': 'Super slow' };
 const moveText = (def) => `${SPEED_NAME[def.moveSpeed]} (${MOVE_SPEEDS[def.moveSpeed]}s per tile)`;
 
 // Internal combat numbers -> the design sheet's units.
@@ -32,29 +32,61 @@ export function describePower(def, star, catalog) {
   const p = def.ability;
   if (!p) return '';
   const every = `After every ${def.energy} attacks`;
-  const dmg = powerDamage(def, star);
+  const dmg = powerDamage(def, star ?? 0); // no star given (the Pokédex): quote 0★
   switch (p.kind) {
     case 'empower': {
       const extras = [
         p.teleport && 'teleports next to the farthest enemy and',
+        p.dash && 'dashes in a straight line next to the farthest enemy (immune to everything on the way) and',
         `hits for ${p.damagePct}% damage (${show(dmg)})`,
         p.knockback && `, knocking the target back ${p.knockback} squares`,
-        p.stun && `${p.knockback ? 'and stunning it' : 'and stuns the target'} for ${secs(p.stun)}s`,
+        p.stun && `${p.knockback ? 'and stunning it' : p.dash ? ', stunning the target and every enemy it dashes through' : 'and stuns the target'} for ${secs(p.stun)}s`,
         p.lifestealPct && `, healing for ${p.lifestealPct}% of the damage dealt`,
       ].filter(Boolean).join(' ').replace(/ ,/g, ',');
       return `${every}, its next attack ${extras}.`;
     }
     case 'snipe': return `Every ${def.energy}th attack also zaps the farthest enemy for ${p.damagePct}% damage (${show(dmg)}).`;
-    case 'summon': return `${every}, it summons a ${catalog?.[p.unit]?.name ?? p.unit} next to it, at the same star level.`;
+    case 'summon': {
+      const name = catalog?.[p.unit]?.name ?? p.unit;
+      // With no star given (the Pokédex), list the count at every star level.
+      const counts = p.countByStar ?? [1, 1, 1, 1];
+      const n = star === null ? (counts.every((c) => c === counts[0]) ? counts[0] : null) : counts[star];
+      const what = n === null
+        ? `${counts.join(' / ')} ${name} (0★ / ★ / ★★ / ★★★)`
+        : n === 1 ? `a ${name}` : `${n} ${name}`;
+      return `${every}, it summons ${what} beside it (sides first, then behind, in front, and the diagonals).${p.summonStar !== undefined ? ` ${name} ${n === 1 ? 'is' : 'are'} always ${p.summonStar ? '★'.repeat(p.summonStar) : '0★'}.` : ` ${n === 1 ? 'It comes' : 'They come'} at ${def.name}'s star level.`}`;
+    }
     case 'stealth': return `${every}, it turns invisible for ${secs(p.duration)}s${p.hastePct ? ` and attacks ${p.hastePct}% faster` : ''}. Enemies can't target or follow it while it's invisible.`;
     case 'haste': return `${every}, it's enraged: ${p.hastePct}% faster attacks for ${secs(p.duration)}s.`;
-    case 'opening': return `When the battle starts, it fires a wave down its column. The first enemy hit takes ${p.damagePct}% damage (${show(dmg)}) and is carried all the way to the other end of the board. Anyone already there is pushed to the side.`;
+    case 'quake': return `With every ${def.energy}th attack, it shakes the whole board: every enemy takes ${p.damagePct}% damage (${show(dmg)})${p.stun ? ` and is stunned for ${secs(p.stun)}s` : ''}.`;
+    case 'splashHeal': return `Every attack also heals your Pokémon directly left, right, above and below the square it hits, for ${p.healPct}% of its damage (${show(Math.floor((def.damage[star ?? 0] * STAT_SCALE * p.healPct) / 100))}).`;
+    case 'selfdestruct': return `When it's knocked out, it stays on its square for ${secs(p.delay)}s, then explodes: enemies ${p.radius === 1 ? "directly left, right, in front and behind" : `within ${p.radius} steps`} take ${p.damagePct}% damage (${show(dmg)}).`;
+    case 'copy': return `It walks toward the nearest enemy until it's within that enemy's range, then takes ${secs(p.morph)}s to transform into it: it copies its max HP, damage, attack speed, range and crit (not its power or movement) and keeps the same share of HP it had. Transformed, it doesn't move. When that Pokémon faints or nothing is in range, it turns back and walks to the next nearest.`;
+    case 'transform': {
+      const f = p.form;
+      const fs = `${SPEED_NAME[f.moveSpeed].toLowerCase()} movement, attacks every ${f.secPerHit}s for ${show(Math.round(f.damage[star ?? 0] * STAT_SCALE))} damage, range ${f.range}`;
+      const morph = p.morph ? ` It takes ${secs(p.morph)}s to transform and can't be hurt, stunned or moved while it does.` : '';
+      return `${p.trigger === 'lowHp' ? `When its HP drops to ${p.hpPct}% or less` : every}, it transforms into ${f.name} for the rest of the fight (${fs}; HP stays the same).${morph}`;
+    }
+    case 'opening': return `When the battle starts, it fires a wave down its column. The first enemy hit takes ${p.damagePct}% damage (${show(dmg)}) and is carried all the way to the other end of the board${p.stun ? `, stunned for ${secs(p.stun)}s when it lands` : ''}. Anyone already there is pushed to the side.`;
     default: return '';
   }
 }
 
+// Ditto has no fighting stats of its own: it copies the nearest enemy's.
+const isCopycat = (def) => def.ability?.kind === 'copy';
+
 // When a power goes off, as a short tag.
-export const powerCadence = (def) => (!def.ability ? 'No power' : def.ability.kind === 'opening' ? 'Power at battle start' : `Power every ${def.energy} attacks`);
+export const powerCadence = (def) => {
+  const p = def.ability;
+  if (!p) return 'No power';
+  if (p.kind === 'opening') return 'Power at battle start';
+  if (p.kind === 'splashHeal') return 'Heals with every attack';
+  if (p.kind === 'selfdestruct') return 'Power when knocked out';
+  if (p.kind === 'copy') return 'Copies the nearest enemy';
+  if (p.trigger === 'lowHp') return `Power at ${p.hpPct}% HP`;
+  return `Power every ${def.energy} attacks`;
+};
 
 export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   const $ = (id) => document.getElementById(id);
@@ -86,6 +118,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   let shownCoins = null; // last coin count drawn, to animate changes
   let shownShop = ''; // last shop drawn, to deal new cards in
   let seenUids = new Set(); // board units already drawn, to drop new ones in
+  let started = false; // past the start screen (it shows once, when the game loads)
   let peek = null; // unit id shown in the info pop-up (phones), opened with an ⓘ button
   const sheetBackdrop = $('info-backdrop');
 
@@ -154,7 +187,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
       el.style.setProperty('--fx', fxColor(unitId));
       // Cosmetic only: start each unit's idle breathing at a different point.
       el.style.setProperty('--idle-delay', `${(-Math.random() * 1.8).toFixed(2)}s`);
-      el.innerHTML = `<div class="shadow"></div><div class="body"><div class="sprite" ${spriteStyle(def)}></div></div>${stars}${bars}`;
+      el.innerHTML = `<div class="shadow"></div><div class="body"><div class="sprite" ${spriteStyle(def)}></div></div>${stars}${bars}<div class="stun-fx" aria-hidden="true"><i></i><i></i><i></i></div>`;
     } else {
       el.innerHTML = `
         <div class="token"><span>${def.emoji}</span></div>
@@ -171,6 +204,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   }
 
   function showOverlay(html) {
+    overlay.classList.remove('start-screen');
     overlay.querySelector('.card').innerHTML = html;
     overlay.hidden = false;
   }
@@ -284,9 +318,15 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     else openMenu(action); // 'main', 'help', 'new'
   });
   overlay.addEventListener('click', (e) => {
+    const btn = e.target.closest('button, [data-dex-info]');
+    if (btn?.id === 'battle') { started = true; overlay.classList.remove('start-screen'); return showTeamBuilder(); }
+    if (btn?.id === 'start-help') return openMenu('help');
+    if (btn?.id === 'start-dex') return openDex();
+    const info = e.target.closest('[data-dex-info]');
+    if (info) return openDex(info.dataset.dexInfo); // a team card's ⓘ: full stats and power
     if (e.target.id === 'open-dex') return openDex();
     if (e.target.id === 'continue') { e.target.disabled = true; onIntent({ type: 'continue' }); }
-    if (e.target.id === 'play-again') onNewGame();
+    if (e.target.id === 'play-again') { started = true; onNewGame(); }
     if (state?.phase !== 'team' || me().ready) return;
     const troop = e.target.closest('[data-pick-troop]');
     if (troop) {
@@ -351,7 +391,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     }
     overlay.hidden = true;
     renderPlanning();
-    if (state.phase === 'team') showTeamBuilder();
+    if (state.phase === 'team') { if (started) showTeamBuilder(); else showStart(); }
     if (state.phase === 'gameover') showGameOver();
   }
 
@@ -569,12 +609,13 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
       ${hint}
       <dl class="stats">
         <dt>HP</dt><dd>${show(stats.hp)}</dd>
+        ${isCopycat(def) ? `<dt>Movement</dt><dd>${SPEED_NAME[def.moveSpeed]}</dd><dt>Everything else</dt><dd>Copies its target</dd>` : `
         <dt>Damage per hit</dt><dd>${show(stats.atk)}</dd>
         <dt>Attacks every</dt><dd>${attackTime(stats)}s</dd>
         <dt>Crit chance</dt><dd>${stats.crit}%</dd>
         <dt>DPS</dt><dd>${dps(stats)}</dd>
         <dt>Range</dt><dd>${def.range}</dd>
-        <dt>Movement</dt><dd>${SPEED_NAME[def.moveSpeed]}</dd>
+        <dt>Movement</dt><dd>${SPEED_NAME[def.moveSpeed]}</dd>`}
       </dl>
       ${def.ability ? `<p class="ability"><b>${esc(def.ability.name)}:</b> ${describePower(def, star, catalog)}</p>` : ''}
       ${inst && canPlan()
@@ -697,10 +738,24 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   }
 
   // Sprites face along the dominant axis of movement or attack.
+  // Sprites only have 4 facings, so a target off the straight lines (a diagonal
+  // attack) is shown by tilting the sprite: it turns from the way it faces
+  // toward the target, i.e. by the signed angle between the two (clockwise on
+  // screen is positive, as for CSS rotate). An exact diagonal (45°) tilts
+  // MAX_TILT degrees, shallower angles less. Straight lines (every step is one)
+  // give no tilt.
+  const MAX_TILT = 16;
+  const SHOVE_MS = 200; // shoved aside by someone landing on its square
+  const KNOCK_MS = 300; // knocked back by a hit (up to 2 squares)
+  const FACING_VEC = { down: [0, 1], up: [0, -1], left: [-1, 0], right: [1, 0] };
   function face(a, dx, dy) {
     if (!a.el.dataset.facing) return;
     const horizontal = Math.abs(dx) >= Math.abs(dy);
-    a.el.dataset.facing = facingFor(horizontal ? dx : 0, horizontal ? 0 : dy, a.el.dataset.facing);
+    const facing = facingFor(horizontal ? dx : 0, horizontal ? 0 : dy, a.el.dataset.facing);
+    a.el.dataset.facing = facing;
+    const [fx, fy] = FACING_VEC[facing];
+    const angle = (Math.atan2(fx * dy - fy * dx, fx * dx + fy * dy) * 180) / Math.PI; // -45..45
+    a.el.style.setProperty('--tilt', `${((angle * MAX_TILT) / 45).toFixed(1)}deg`);
   }
 
   function pulse(el, cls) {
@@ -726,12 +781,13 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     if (p.knockback) return { cls: 'cast-slam', ms: 600, impact: 510 };
     if (p.kind === 'empower') return { cls: 'cast-strike', ms: 500, impact: 325 };
     if (p.kind === 'snipe') return { cls: 'cast-charge', ms: 500, impact: 250 };
+    if (p.kind === 'quake') return { cls: 'cast-slam', ms: 600, impact: 510 };
     return { cls: 'cast-channel', ms: 550, impact: 275 };
   }
 
   const flightMs = (from, to) => Math.max(160, 90 * Math.max(Math.abs(to.x - from.x), Math.abs(to.y - from.y))) / speed;
 
-  const rangeOf = (a) => catalog[a.unitId].range;
+  const rangeOf = (a) => a.range ?? catalog[a.unitId].range; // a transformed unit's range can change
   const fxColor = (unitId) => catalog[unitId].fx ?? TYPE_FX[catalog[unitId].type] ?? '#fff';
 
   // One-shot visual effect centred on a board square; `cells` sets its size in squares.
@@ -778,6 +834,10 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     const at = () => viewPos(a.x, a.y);
     switch (ev.type) {
       case 'move': {
+        // A shove still waiting for its hit to land happens now, so this step
+        // starts from the square the unit was shoved to.
+        a.pendingKnock?.(true);
+        a.el.style.transition = '';
         const from = viewPos(a.x, a.y);
         a.x = ev.x;
         a.y = ev.y;
@@ -831,6 +891,11 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         play(a.el, motion.cls, motion.ms / speed);
         floatText(a, p.name, 'cast');
         const color = fxColor(a.unitId);
+        if (p.kind === 'quake') {
+          // The whole board shakes as it lands.
+          later(motion.impact / speed, () => { pulse(arena, 'shake'); fx(from.x, from.y, 'ring', color, 5); });
+          break;
+        }
         if (!to) { fx(from.x, from.y, 'ring', color, 1.6); break; } // self buffs and summons
         a.el.style.setProperty('--dx', Math.sign(to.x - from.x));
         a.el.style.setProperty('--dy', Math.sign(to.y - from.y));
@@ -878,9 +943,22 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
           });
           break;
         }
-        // Thrown by a hit: lands when the hit does (or, pushed aside by the wave, when it arrives).
-        const delay = !animate ? 0 : wave ? wave.arrive : ctx.hitDelay.get(a.id) ?? 0;
-        later(delay, () => { place(a.el, p.x, p.y); if (animate) play(a.el, 'knocked', 350 / speed); });
+        // Thrown by a hit: lands when the hit does. Shoved aside by someone landing
+        // on its square: moves when they land (for the wave, when it arrives).
+        // Either way it's a quick slide, not the unit's (slower) walking pace.
+        const delay = !animate ? 0 : wave ? wave.arrive : ctx.hitDelay.get(ev.by ?? a.id) ?? 0;
+        const ms = animate ? (ev.by !== undefined ? SHOVE_MS : KNOCK_MS) / speed : 0;
+        const job = (instant) => {
+          if (a.pendingKnock !== job) return; // already done, or replaced by a newer one
+          a.pendingKnock = null;
+          a.el.style.transition = instant || !ms ? 'none' : `left ${ms}ms cubic-bezier(.2,.8,.3,1), top ${ms}ms cubic-bezier(.2,.8,.3,1)`;
+          place(a.el, p.x, p.y);
+          if (instant || !ms) { void a.el.offsetWidth; a.el.style.transition = ''; return; }
+          play(a.el, 'knocked', ms + 150 / speed);
+          setTimeout(() => { if (!a.pendingKnock) a.el.style.transition = ''; }, ms);
+        };
+        a.pendingKnock = job;
+        later(delay, () => job(false));
         break;
       }
       case 'teleport': {
@@ -890,6 +968,77 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         const p = viewPos(a.x, a.y);
         if (animate) { fx(from.x, from.y, 'burst', fxColor(a.unitId), 1.2); play(a.el, 'blink', 250 / speed); }
         place(a.el, p.x, p.y);
+        break;
+      }
+      case 'transform': {
+        // Battle Bond, Shining Star, Ditto copying or turning back: a quick
+        // morph, then the new sprite. A Ditto that turns back and copies again in
+        // the same moment shows its own form briefly in between.
+        a.range = ev.range;
+        // Ditto takes on the copied Pokémon's max HP (keeping its share of HP).
+        if (ev.maxHp && newest()) { a.maxHp = ev.maxHp; a.hp = ev.hp; bars(a); }
+        const spr = a.el.querySelector('.sprite');
+        const apply = () => {
+          if (spr) spr.style.backgroundImage = `url('${ev.sprite}')`;
+          a.el.style.setProperty('--step', ev.moveCd / 5);
+          a.el.classList.toggle('copied', Boolean(ev.copy)); // a Ditto-coloured copy
+        };
+        if (!animate) { apply(); break; }
+        const delay = !ev.revert && a.revertedAt === ev.t ? 450 / speed : 0;
+        if (ev.revert) a.revertedAt = ev.t;
+        later(delay, () => {
+          play(a.el, 'morph', 500 / speed);
+          setTimeout(apply, 200 / speed);
+          const p = at();
+          fx(p.x, p.y, 'burst', fxColor(a.unitId), 1.5);
+          floatText(a, ev.revert ? ev.name : ev.copy ? `→ ${ev.name}` : ev.name, 'cast');
+        });
+        break;
+      }
+      case 'dash': {
+        // Tapu Koko: a straight-line dash, crackling along the way (immune until it lands).
+        const from = viewPos(ev.fromX, ev.fromY);
+        a.x = ev.x;
+        a.y = ev.y;
+        const p = viewPos(a.x, a.y);
+        face(a, p.x - from.x, p.y - from.y);
+        if (!animate) { place(a.el, p.x, p.y); break; }
+        const ms = ((ev.duration ?? 2) * TICK_SECONDS * 1000) / speed;
+        play(a.el, 'immune', ms);
+        a.el.style.transition = `left ${ms}ms cubic-bezier(.6,0,.2,1), top ${ms}ms cubic-bezier(.6,0,.2,1)`;
+        place(a.el, p.x, p.y);
+        play(a.el, 'dashing', ms + 80);
+        const steps = Math.max(Math.abs(p.x - from.x), Math.abs(p.y - from.y));
+        for (let i = 1; i <= steps; i++) {
+          const k = i / (steps + 1);
+          setTimeout(() => fx(from.x + (p.x - from.x) * k, from.y + (p.y - from.y) * k, 'zap', fxColor(a.unitId), 1), (ms * k));
+        }
+        setTimeout(() => { a.el.style.transition = ''; }, ms);
+        break;
+      }
+      case 'morphStart': { // Minior (immune) or Ditto changing form
+        if (!animate) break;
+        const immune = catalog[a.unitId].ability?.kind === 'transform';
+        const cls = immune ? ['morphing', 'immune'] : ['morphing'];
+        a.el.classList.add(...cls);
+        setTimeout(() => a.el.classList.remove(...cls), (ev.duration * TICK_SECONDS * 1000) / speed);
+        if (immune) setTimeout(() => floatText(a, 'Immune', 'shield'), 300 / speed);
+        break;
+      }
+      case 'fuse': // Golem knocked out: it stays, glowing, until it explodes
+        if (newest()) { a.hp = 0; bars(a); }
+        later(ctx.hitDelay.get(a.id) ?? 0, () => {
+          a.el.classList.add('fusing');
+          if (animate) floatText(a, '!!', 'crit');
+        });
+        break;
+      case 'explode': {
+        a.el.classList.remove('fusing');
+        if (!animate) break;
+        const p = at();
+        fx(p.x, p.y, 'ring', '#ff7a2f', ev.radius * 2 + 1.4);
+        fx(p.x, p.y, 'burst', '#ffd36b', ev.radius * 2 + 0.6);
+        pulse(arena, 'shake');
         break;
       }
       case 'stealth':
@@ -939,7 +1088,10 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         break;
       case 'stun':
         a.stunUntil = ev.t + ev.duration;
-        later(ctx.hitDelay.get(a.id) ?? 0, () => a.el.classList.add('stunned'));
+        later(ctx.hitDelay.get(a.id) ?? 0, () => {
+          a.el.classList.add('stunned');
+          if (animate) { const p = at(); fx(p.x, p.y, 'stunpop', '#ffe14d', 1.2); }
+        });
         break;
       case 'death':
         later(ctx.hitDelay.get(a.id) ?? 0, () => {
@@ -974,29 +1126,51 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     overlay.querySelector('#continue')?.focus();
   }
 
-  function teamCard(id, picked) {
+  // Team cards look like the shop's: portrait, name, type and the cost in the
+  // corner. Stats live behind the ⓘ button (the Pokédex entry).
+  function teamCard(id, picked, i) {
     const def = catalog[id];
-    const stats = unitStats(def, 0);
-    return `<button class="leader-card${picked ? ' chosen' : ''}" data-pick-troop="${id}" data-type="${def.type}" ${me().ready ? 'disabled' : ''}>
+    return `<button class="team-card${picked ? ' chosen' : ''}" style="--i:${i}" data-pick-troop="${id}" data-type="${def.type}" ${me().ready ? 'disabled' : ''} aria-pressed="${picked}">
+      <span class="cost c${def.cost}" title="${def.cost} coins">${def.cost}</span>
+      <span class="info-btn" data-dex-info="${id}" role="button" aria-label="${esc(def.name)} info">i</span>
       ${portrait(def)}
-      <b>${esc(def.name)}</b>
-      <span class="muted">${def.cost} coins · ${def.range > 1 ? `Ranged (${def.range})` : 'Melee'} · ${show(stats.hp)} HP · ${show(stats.atk)} dmg every ${attackTime(stats)}s</span>
-      <small><b>${esc(def.ability.name)}:</b> ${describePower(def, 0, catalog)}</small>
+      <span class="check" aria-hidden="true">✓</span>
+      <span class="name">${esc(def.name)}</span>
+      <span class="type">${def.type}</span>
     </button>`;
+  }
+
+  function showStart() {
+    const ids = troopIds(catalog);
+    const parade = ids.map((id, i) => `<span class="walker" style="--i:${i};--n:${ids.length}" data-facing="right"><span class="sprite" ${spriteStyle(catalog[id])}></span></span>`).join('');
+    showOverlay(`
+      <div class="start">
+        <div class="logo"><span>Poke</span><span>Tactics</span></div>
+        <p class="tagline">Draft a team, place your Pokémon, and watch them battle it out.</p>
+        <div class="parade" aria-hidden="true">${parade}</div>
+        <button id="battle" class="primary battle-btn">Battle</button>
+        <div class="start-links">
+          <button id="start-help" class="ghost">How to play</button>
+          <button id="start-dex" class="ghost">Pokédex</button>
+        </div>
+      </div>`);
+    overlay.classList.add('start-screen');
+    overlay.querySelector('#battle').focus();
   }
 
   function showTeamBuilder() {
     const need = teamSize(catalog);
     const waiting = me().ready;
     const ready = draft.troops.length === need;
+    const fresh = !overlay.querySelector('.team-grid');
     showOverlay(`
-      <h1>Build your team</h1>
-      <p class="muted">Pick ${need} Pokémon. Each one adds ${COPIES_PER_TROOP} copies to your pool, and your shop draws from it. Your board starts empty. <button id="open-dex" class="linkish">Compare them in the Pokédex</button></p>
-      <h2 class="pick-title">Team ${draft.troops.length}/${need}</h2>
-      <div class="pick-grid">${troopIds(catalog).map((id) => teamCard(id, draft.troops.includes(id))).join('')}</div>
+      <h1>Choose your team</h1>
+      <p class="muted">Pick ${need} Pokémon. Each puts ${COPIES_PER_TROOP} copies in your pool for the shop. Tap <span class="info-btn inline">i</span> for a Pokémon's stats.</p>
+      <div class="team-count">${Array.from({ length: need }, (_, k) => `<i class="${k < draft.troops.length ? 'on' : ''}"></i>`).join('')}<span>${draft.troops.length}/${need}</span></div>
+      <div class="team-grid${fresh ? ' fresh' : ''}">${troopIds(catalog).map((id, i) => teamCard(id, draft.troops.includes(id), i)).join('')}</div>
       ${waiting
         ? '<p class="muted">Waiting for opponent…</p>'
-        : `<button id="start-team" class="primary" ${ready ? '' : 'disabled'}>${ready ? 'Start match' : `Pick ${need - draft.troops.length} more`}</button>`}`);
+        : `<button id="start-team" class="primary" ${ready ? '' : 'disabled'}>${ready ? 'Start battle' : `Pick ${need - draft.troops.length} more`}</button>`}`);
   }
 
   function showGameOver() {
@@ -1035,11 +1209,13 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     }).join('')}</div>`;
     const summons = Object.keys(catalog).filter((id) => catalog[id].summon).sort();
     const def = catalog[dexPick];
+    const form = def.ability?.form;
     const rows = [0, 1, 2, 3].map((star) => {
       const st = unitStats(def, star);
       return {
         star, hp: show(st.hp), dmg: show(st.atk), crit: show(Math.floor((st.atk * CRIT_PCT) / 100)), dps: dps(st),
         sup: powerDamage(def, star) === null ? '—' : show(powerDamage(def, star)),
+        form: form ? show(Math.round(form.damage[star] * STAT_SCALE)) : '',
       };
     });
     const col = (label, key) => `<tr><th>${label}</th>${rows.map((r) => `<td>${r[key]}</td>`).join('')}</tr>`;
@@ -1056,10 +1232,11 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
               <h2>${esc(def.name)}</h2>
               <p class="dex-tags">
                 <span>${def.summon ? 'Summoned' : `${def.cost} coins`}</span>
+                ${isCopycat(def) ? `<span>Moves: ${moveText(def)}</span><span>Copies the nearest enemy's stats</span>` : `
                 <span>${def.range > 1 ? `Ranged · ${def.range} tiles` : 'Melee · 1 tile'}</span>
                 <span>Moves: ${moveText(def)}</span>
                 <span>Attacks every ${attackTime(stats0)}s</span>
-                <span>Crit ${stats0.crit}%</span>
+                <span>Crit ${stats0.crit}%</span>`}
                 <span>${powerCadence(def)}</span>
               </p>
             </div>
@@ -1068,15 +1245,14 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
             <thead><tr><th></th>${rows.map((r) => `<th>${r.star ? '★'.repeat(r.star) : '0★'}</th>`).join('')}</tr></thead>
             <tbody>
               ${col('HP', 'hp')}
-              ${col('Damage per hit', 'dmg')}
-              ${col('Crit damage', 'crit')}
-              ${col('DPS', 'dps')}
-              ${def.ability ? col(`${esc(def.ability.name)} damage`, 'sup') : ''}
+              ${isCopycat(def) ? '' : `${col('Damage per hit', 'dmg')}${col('Crit damage', 'crit')}${col('DPS', 'dps')}`}
+              ${form ? col(`${esc(form.name)} damage`, 'form') : ''}
+              ${def.ability && powerDamage(def, 0) !== null ? col(`${esc(def.ability.name)} damage`, 'sup') : ''}
             </tbody>
           </table>
           <p class="muted">Copies on the board: 1 = 0★, 2 = ★, 3 = ★★, 4 = ★★★. A crit deals 50% more damage.</p>
           ${def.ability ? `<h3>Power: ${esc(def.ability.name)}</h3>
-          <p>${describePower(def, 0, catalog)}</p>` : `<p>${esc(def.name)} can't be picked: it's summoned in battle.</p>`}
+          <p>${describePower(def, null, catalog)}</p>` : `<p>${esc(def.name)} can't be picked: it's summoned in battle.</p>`}
         </section>
       </div>`;
   }

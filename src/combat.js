@@ -22,15 +22,16 @@ export const STAT_SCALE = 1;
 // A critical hit deals 50% more damage. Only basic attacks can crit.
 export const CRIT_PCT = 150;
 // Movement speed tiers, in seconds per square.
-export const MOVE_SPEEDS = { fast: 0.5, medium: 0.8, slow: 1.0, 'very slow': 1.3 };
+export const MOVE_SPEEDS = { 'very fast': 0.35, fast: 0.5, medium: 0.8, slow: 1.0, 'very slow': 1.3, 'super slow': 2.0 };
+const ticksOf = (seconds) => Math.max(1, Math.round(seconds / TICK_SECONDS));
 
 // A unit's combat stats at a star level, in internal units (integers).
 export function unitStats(def, star) {
   return {
     hp: Math.round(def.hp[star] * STAT_SCALE),
     atk: Math.round(def.damage[star] * STAT_SCALE),
-    attackCd: Math.max(1, Math.round(def.secPerHit / TICK_SECONDS)), // ticks per attack
-    moveCd: Math.max(1, Math.round(MOVE_SPEEDS[def.moveSpeed] / TICK_SECONDS)), // ticks per square
+    attackCd: ticksOf(def.secPerHit), // ticks per attack
+    moveCd: ticksOf(MOVE_SPEEDS[def.moveSpeed]), // ticks per square
     crit: def.critChance ?? 0, // percent
     energy: def.energy,
   };
@@ -48,7 +49,6 @@ export function toCombatPos(side, x, y) {
 // Fixed order = deterministic tie-breaking when choosing where to step.
 // Units walk one square at a time, up/down/left/right only (no diagonal steps).
 const NEIGHBORS = [[0, -1], [0, 1], [-1, 0], [1, 0]];
-const DIAGONALS = [[-1, -1], [1, -1], [-1, 1], [1, 1]];
 // Psywave's wind-up before the wave leaves Beheeyem, in ticks.
 const WAVE_WINDUP = 3;
 
@@ -66,8 +66,11 @@ const coin = (seed, t) => hash(seed, t) & 1;
 // share the same rolls slot for slot, so luck never favours a side.
 const critRoll = (seed, t, slot) => hash(seed, t, slot + 1) % 100;
 
-const dist = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+// Distance is the number of steps between two squares: units walk
+// up/down/left/right, so a diagonal neighbour is 2 away. Range, targeting and
+// area powers all use it.
 const manhattan = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+const dist = manhattan;
 
 function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, inst.y)) {
   const def = catalog[inst.unitId];
@@ -88,6 +91,17 @@ function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, in
     atkTimer: stats.attackCd, moveTimer: 0,
     hasteUntil: 0, hastePct: 0, stealthFrom: 0, stealthUntil: 0,
     hold: 0, // ticks it can't move or attack (riding a Psywave); cooldowns still run
+    landStun: 0, // stun applied when the hold ends (it has landed)
+    pendingHeal: 0, // healing lands at the end of the tick, like stuns
+    sprite: def.sprite, // changes when it transforms (Ash-Greninja, Minior, Ditto)
+    form: null, // name of the form it has transformed into, if any
+    pendingForm: false, // transform at the end of this tick (Minior's low-HP trigger)
+    copyOf: null, // Ditto: id of the unit it is copying
+    pendingCopy: null, pendingRevert: false, // Ditto: copy / turn back at the end of the tick
+    morphUntil: 0, // mid-transformation (Minior, Ditto) through this tick: it can't act
+    immuneFrom: 0, immuneUntil: 0, // nothing affects it in these ticks (Minior transforming, Tapu Koko dashing)
+    dashTarget: null, dashUntil: 0, // Tapu Koko: who it strikes when its dash arrives
+    fuse: 0, fused: false, // Golem: ticks left before it explodes after being knocked out
     target: null, alive: true, summoned: Boolean(inst.summoned),
   };
 }
@@ -124,6 +138,9 @@ export function simulate(catalog, boards, seed = 0) {
   // Mana gained from being hit, and stuns, also wait for the end of the tick, so
   // a unit's action this tick never depends on who happened to act before it.
   // Events report mana as it will be once the tick ends.
+  // Minior transforming and Tapu Koko dashing can't be hurt, stunned or moved.
+  // Immunity always starts on a new tick, so it never decides a same-tick trade.
+  const immune = (u) => t >= u.immuneFrom && t <= u.immuneUntil;
   const shownMana = (u) => Math.min(u.maxMana, u.mana + u.pendingMana);
   // Where a unit stood at the start of the tick. Targeting, range and pathing
   // all read this, so a unit that moved earlier in the tick isn't seen at its
@@ -157,35 +174,125 @@ export function simulate(catalog, boards, seed = 0) {
 
   // Returns the damage actually dealt to HP.
   function damage(target, amount, src, crit = false) {
-    if (!standing(target)) return 0;
+    if (!standing(target) || immune(target)) return 0;
     const absorbed = Math.min(target.shield, amount);
     target.shield -= absorbed;
     const before = target.hp;
     target.hp = Math.max(0, target.hp - (amount - absorbed));
     if (target.hp > 0) target.pendingMana += MANA_PER_HIT;
     emit('damage', { id: target.id, src: src.id, amount, hp: target.hp, shield: target.shield, mana: shownMana(target), ...(crit && { crit }) });
-    if (target.hp === 0) emit('death', { id: target.id });
+    if (target.hp === 0) knockedOut(target);
+    // Minior: dropping to its HP threshold transforms it (at the end of the tick).
+    const p = target.power;
+    if (target.hp > 0 && p?.kind === 'transform' && p.trigger === 'lowHp' && !target.form && !target.morphUntil && target.hp * 100 <= target.maxHp * p.hpPct) target.pendingForm = true;
     return before - target.hp;
   }
 
+  // Healing lands at the end of the tick (see the main loop), so it never
+  // depends on who acted first, and a Pokémon knocked out this tick stays out.
   function heal(target, amount) {
-    if (!standing(target)) return; // knocked out this tick: no coming back
-    const gained = Math.min(amount, target.maxHp - target.hp);
-    target.hp += gained;
-    emit('heal', { id: target.id, amount: gained, hp: target.hp });
+    if (standing(target) && amount > 0) target.pendingHeal += amount;
+  }
+
+  // HP reached 0. Usually that's a knockout; a Golem instead lights its fuse:
+  // it stays on its square (it can't be hit or targeted) and explodes later.
+  function knockedOut(u) {
+    if (u.power?.kind === 'selfdestruct' && !u.fused) {
+      u.fused = true;
+      u.fuse = u.power.delay;
+      u.fusedAt = t; // it still acts this tick, like anyone knocked out mid-tick
+      emit('fuse', { id: u.id, duration: u.power.delay });
+    } else {
+      emit('death', { id: u.id });
+    }
+  }
+
+  function explode(u) {
+    const p = u.power;
+    emit('explode', { id: u.id, radius: p.radius });
+    const amount = Math.floor((u.atk * p.damagePct) / 100);
+    for (const e of units) if (e.side !== u.side && standing(e) && dist(u, e) <= p.radius) damage(e, amount, u);
+    emit('death', { id: u.id });
+  }
+
+  // Change a unit's fighting stats: transforming (Battle Bond, Shining Star) or
+  // Ditto copying. `stats` = { atk, attackCd, moveCd, range, crit?, sprite }.
+  function setStats(u, stats, info) {
+    Object.assign(u, stats);
+    emit('transform', { id: u.id, sprite: u.sprite, range: u.range, moveCd: u.moveCd, ...info });
+  }
+  function applyForm(u, form) {
+    u.form = form.name;
+    u.maxMana = 0; // its power is spent: no more counting
+    setStats(u, {
+      atk: Math.round(form.damage[u.star] * STAT_SCALE), attackCd: ticksOf(form.secPerHit),
+      moveCd: ticksOf(MOVE_SPEEDS[form.moveSpeed]), range: form.range, sprite: form.sprite,
+    }, { name: form.name });
+  }
+  // Ditto: a new max HP keeps the same share of HP left (never rounding down to 0).
+  const rescaleHp = (u, maxHp) => {
+    u.hp = Math.max(1, Math.round((u.hp * maxHp) / u.maxHp));
+    u.maxHp = maxHp;
+  };
+  // Ditto: copy everything about `e`'s fighting, including its max HP, except
+  // its power and movement (a copied Ditto stands still). Runs at the end of
+  // the tick, since it changes Ditto's HP.
+  function copyUnit(u, e) {
+    u.copyOf = e.id;
+    rescaleHp(u, e.maxHp);
+    setStats(u, { atk: e.atk, attackCd: e.attackCd, range: e.range, crit: e.crit, sprite: e.sprite }, { name: catalog[e.unitId].name, copy: e.unitId, hp: u.hp, maxHp: u.maxHp });
+  }
+  function revertCopy(u) {
+    const def = catalog[u.unitId];
+    const base = unitStats(def, u.star);
+    u.copyOf = null;
+    u.target = null;
+    rescaleHp(u, base.hp);
+    setStats(u, { atk: base.atk, attackCd: base.attackCd, range: def.range, crit: base.crit, sprite: def.sprite }, { name: def.name, revert: true, hp: u.hp, maxHp: u.maxHp });
   }
 
   function stun(target, duration) {
+    if (immune(target)) return;
     target.pendingStun = Math.max(target.pendingStun, duration);
     emit('stun', { id: target.id, duration });
   }
 
   // Shove `u` to (x, y) without walking: knockbacks and teleports.
-  function relocate(u, cell, type) {
+  function relocate(u, cell, type, extra) {
     if (u.x === cell.x && u.y === cell.y) return;
     u.x = cell.x;
     u.y = cell.y;
-    emit(type, { id: u.id, x: u.x, y: u.y });
+    emit(type, { id: u.id, x: u.x, y: u.y, ...extra });
+  }
+
+  // Where a Pokémon goes when something is launched onto its square, in order:
+  // its own left, its own right, back (toward its own back row), forward, then
+  // the diagonals (back ones first). Directions are from the displaced
+  // Pokémon's point of view, so both sides are treated the same. Null if all
+  // eight squares are taken or off the board.
+  // The free squares around `o`, in order: its own left, its own right, back
+  // (toward its own back row), forward, then the diagonals from back to front.
+  // Directions are from o's point of view, so both sides are treated the same.
+  function freeAround(o) {
+    const back = o.side === 0 ? 1 : -1; // side 0's back row is the bottom of the board
+    const left = o.side === 0 ? -1 : 1;
+    const order = [[left, 0], [-left, 0], [0, back], [0, -back], [left, back], [-left, back], [left, -back], [-left, -back]];
+    return order.map(([dx, dy]) => ({ x: o.x + dx, y: o.y + dy })).filter((c) => inside(c.x, c.y) && !occupied(c.x, c.y));
+  }
+  const displaceSpot = (o) => freeAround(o)[0] ?? null;
+
+  // Land a launched Pokémon on `goal`. Whoever stands there is displaced (see
+  // displaceSpot); if they have nowhere to go, the launched one lands on the
+  // closest free square instead. Returns the displaced Pokémon, if any.
+  function land(target, goal, side) {
+    const o = unitAt(goal.x, goal.y);
+    if (o && o !== target) {
+      const spot = displaceSpot(o);
+      if (!spot) { relocate(target, closestFree(goal, target, target, side), 'knock'); return null; }
+      relocate(o, spot, 'knock', { by: target.id });
+    }
+    relocate(target, goal, 'knock');
+    return o && o !== target ? o : null;
   }
 
   // The free square closest to `goal` (ties: closest to `from`, then a fixed
@@ -214,6 +321,34 @@ export function simulate(catalog, boards, seed = 0) {
     return null;
   }
 
+  // Tapu Koko's dash: the open square around `target` (all 8) closest to `u` in a
+  // straight line; ties go by a side-mirrored order so both sides match.
+  const AROUND = [[0, -1], [0, 1], [-1, 0], [1, 0], [-1, -1], [1, -1], [-1, 1], [1, 1]];
+  function dashSpot(u, target) {
+    const p = at(target);
+    let best = null;
+    let bestD = Infinity;
+    for (const [dx, dy] of dirs(u, AROUND)) {
+      const c = { x: p.x + dx, y: p.y + dy };
+      if (!inside(c.x, c.y) || occupied(c.x, c.y)) continue;
+      const d = (c.x - u.x) ** 2 + (c.y - u.y) ** 2;
+      if (d < bestD) { best = c; bestD = d; }
+    }
+    return best;
+  }
+  // The squares a straight line from `a` to `b` passes through (centre to
+  // centre), not counting `a`.
+  function lineCells(a, b) {
+    const n = 12 * Math.max(Math.abs(b.x - a.x), Math.abs(b.y - a.y), 1);
+    const seen = new Map();
+    for (let i = 1; i <= n; i++) {
+      const x = Math.floor(a.x + 0.5 + ((b.x - a.x) * i) / n);
+      const y = Math.floor(a.y + 0.5 + ((b.y - a.y) * i) / n);
+      if ((x !== a.x || y !== a.y) && inside(x, y)) seen.set(y * COLS + x, { x, y });
+    }
+    return [...seen.values()];
+  }
+
   // Knockbacks from attacks land at the end of the tick (like stuns), so a unit
   // hit early in the tick still acts from where it stood.
   let knocks = [];
@@ -227,13 +362,14 @@ export function simulate(catalog, boards, seed = 0) {
     knocks.push({ target, goal, side: u.side });
   }
 
-  const summonCell = (u) => [...dirs(u), ...dirs(u, DIAGONALS)]
-    .map(([dx, dy]) => ({ x: u.x + dx, y: u.y + dy }))
-    .find((c) => inside(c.x, c.y) && !occupied(c.x, c.y));
+  // How many a summon power brings at the summoner's star level, and at what
+  // star the summoned units come (fixed, or the summoner's own).
+  const summonCount = (u) => u.power.countByStar?.[u.star] ?? 1;
 
   function summon(u, cell) {
     const kin = units.length;
-    const pal = spawn(catalog, { uid: -kin, unitId: u.power.unit, star: u.star, summoned: true }, u.side, kin, bySide[u.side].length, cell);
+    const star = u.power.summonStar ?? u.star;
+    const pal = spawn(catalog, { uid: -kin, unitId: u.power.unit, star, summoned: true }, u.side, kin, bySide[u.side].length, cell);
     pal.sx = pal.x;
     pal.sy = pal.y;
     units.push(pal);
@@ -246,8 +382,9 @@ export function simulate(catalog, boards, seed = 0) {
     const p = u.power;
     // A charged power is never wasted: with no free square to summon into, it
     // stays charged and tries again after the next attack.
-    const cell = p.kind === 'summon' ? summonCell(u) : null;
-    if (p.kind === 'summon' && !cell) return;
+    // Summons take the free squares around the summoner in freeAround's order.
+    const cells = p.kind === 'summon' ? freeAround(u).slice(0, summonCount(u)) : [];
+    if (p.kind === 'summon' && !cells.length) return;
     u.mana = 0;
     switch (p.kind) {
       case 'snipe': {
@@ -258,7 +395,7 @@ export function simulate(catalog, boards, seed = 0) {
       }
       case 'summon':
         emit('cast', { id: u.id, target: null });
-        summon(u, cell);
+        for (const cell of cells) summon(u, cell);
         break;
       case 'stealth':
         emit('cast', { id: u.id, target: null });
@@ -272,6 +409,21 @@ export function simulate(catalog, boards, seed = 0) {
         u.hasteUntil = t + p.duration;
         u.hastePct = p.hastePct;
         emit('haste', { id: u.id, duration: p.duration });
+        break;
+      case 'quake': {
+        // Every enemy on the board, visible or not.
+        emit('cast', { id: u.id, target: null });
+        const amount = Math.floor((u.atk * p.damagePct) / 100);
+        for (const e of units) {
+          if (e.side === u.side || !standing(e)) continue;
+          damage(e, amount, u);
+          if (standing(e) && p.stun) stun(e, p.stun);
+        }
+        break;
+      }
+      case 'transform':
+        emit('cast', { id: u.id, target: null });
+        applyForm(u, p.form);
         break;
       default:
         throw new Error(`Unknown power kind "${p.kind}"`);
@@ -311,16 +463,10 @@ export function simulate(catalog, boards, seed = 0) {
     const travel = WAVE_WINDUP + Math.abs(end - at(u).y);
     damage(target, Math.floor((u.atk * p.damagePct) / 100), u);
     if (!standing(target) || target.y === end) return;
-    const blocker = unitAt(u.x, end);
-    if (blocker) {
-      const side = dirs(u, [[-1, 0], [1, 0]]).map(([dx]) => ({ x: u.x + dx, y: end })).find((c) => inside(c.x, c.y) && !occupied(c.x, c.y));
-      if (side) { relocate(blocker, side, 'knock'); blocker.hold = travel; }
-    }
-    // If the end square is still taken, land as close to it as possible in the column.
-    let y = end;
-    while (y !== target.y && occupied(u.x, y)) y -= dy;
-    relocate(target, { x: u.x, y }, 'knock');
+    const shoved = land(target, { x: u.x, y: end }, u.side);
     target.hold = travel;
+    target.landStun = p.stun ?? 0; // stunned once it lands (see act)
+    if (shoved) shoved.hold = travel;
   }
 
   const cooldown = (u) => (u.hasteUntil > t ? Math.max(1, Math.round((u.attackCd * 100) / (100 + u.hastePct))) : u.attackCd);
@@ -385,10 +531,56 @@ export function simulate(catalog, boards, seed = 0) {
   }
 
   function act(u) {
-    if (u.stun > 0) { u.stun--; return; }
+    // A Golem knocked out with its fuse lit just counts down, then explodes.
+    if (u.fuse > 0 && u.fusedAt < t) { u.fuse--; if (u.fuse === 0) explode(u); return; }
+    // Coming out of a stun (or landing after being carried), a Pokémon looks
+    // around again and picks the nearest enemy rather than its old target.
+    if (u.stun > 0) { u.stun--; if (u.stun === 0) u.target = null; return; }
     if (u.atkTimer > 0) u.atkTimer--;
     if (u.moveTimer > 0) u.moveTimer--;
-    if (u.hold > 0) { u.hold--; return; }
+    if (t <= u.morphUntil) return; // transforming
+    if (t <= u.dashUntil) return; // mid-dash
+    // Tapu Koko's dash has arrived: strike the Pokémon it dashed at (no dashing
+    // off again before that).
+    const arrived = u.dashTarget !== null;
+    if (arrived) {
+      const far = units[u.dashTarget];
+      u.dashTarget = null;
+      if (visible(far) && dist(u, at(far)) <= u.range) u.target = far.id;
+    }
+    if (u.hold > 0) {
+      u.hold--;
+      if (u.hold === 0) {
+        u.target = null;
+        if (u.landStun) { stun(u, u.landStun); u.landStun = 0; }
+      }
+      return;
+    }
+
+    // Ditto walks (as itself) toward the nearest enemy until it is within that
+    // enemy's range, then takes `morph` ticks to turn into it. A copied Ditto
+    // can't move: when the Pokémon it copied faints, or no enemy is in range,
+    // it turns back into Ditto (at the end of the tick) and walks again.
+    if (u.power?.kind === 'copy') {
+      if (u.copyOf === null) {
+        const e = nearestEnemy(u);
+        if (!e) return;
+        u.target = e.id;
+        if (dist(u, at(e)) <= e.range) {
+          u.pendingCopy = e.id;
+          u.morphUntil = t + u.power.morph - 1;
+          emit('morphStart', { id: u.id, target: e.id, duration: u.power.morph });
+          return;
+        }
+        u.range = e.range; // walk until it is in reach of its own copy of `e`
+      } else {
+        const inReach = (e) => e && visible(e) && e.side !== u.side && dist(u, at(e)) <= u.range;
+        let e = u.target === null ? null : units[u.target];
+        if (!inReach(e)) e = enemiesOf(u).filter(inReach).sort((a, b) => dist(u, at(a)) - dist(u, at(b)))[0];
+        if (!standing(units[u.copyOf]) || !e) { u.pendingRevert = true; return; }
+        u.target = e.id;
+      }
+    }
 
     let target = u.target === null ? null : units[u.target];
     if (!target || !visible(target) || target.side === u.side || dist(u, at(target)) > u.range) target = nearestEnemy(u);
@@ -403,8 +595,32 @@ export function simulate(catalog, boards, seed = 0) {
       const cell = far && dist(u, at(far)) > u.range && freeBeside(u, far);
       if (cell) {
         relocate(u, cell, 'teleport');
+        u.moveTimer = 0;
         target = far;
         u.target = far.id;
+      }
+    }
+    if (empowered && u.power.dash && u.atkTimer === 0 && !arrived) {
+      // Dash in a straight line next to the farthest enemy, stunning every
+      // enemy it passes through on the way.
+      const far = farthestEnemy(u);
+      const cell = far && dist(u, at(far)) > u.range && dashSpot(u, far);
+      if (cell) {
+        const from = { x: u.x, y: u.y };
+        for (const c of lineCells(from, cell)) {
+          const o = unitAt(c.x, c.y);
+          if (o && o !== far && o.side !== u.side && standing(o)) stun(o, u.power.stun);
+        }
+        // The dash takes a tick per square, during which Tapu Koko is immune
+        // to everything; it strikes when it arrives.
+        const travel = Math.max(2, Math.max(Math.abs(cell.x - from.x), Math.abs(cell.y - from.y)));
+        relocate(u, cell, 'dash', { fromX: from.x, fromY: from.y, duration: travel });
+        u.moveTimer = 0;
+        u.target = far.id;
+        u.dashTarget = far.id;
+        u.dashUntil = u.immuneUntil = t + travel;
+        u.immuneFrom = t + 1;
+        return;
       }
     }
 
@@ -419,10 +635,19 @@ export function simulate(catalog, boards, seed = 0) {
         const crit = critRoll(seed, t, u.slot) < u.crit;
         const hit = crit ? Math.floor((u.atk * CRIT_PCT) / 100) : u.atk;
         damage(target, Math.max(1, Math.floor((hit * 100) / (100 + target.armor))), u, crit);
+        // Lilligant: each attack also heals its allies next to the square it hit.
+        if (u.power?.kind === 'splashHeal') {
+          const p = at(target);
+          const amount = Math.floor((u.atk * u.power.healPct) / 100);
+          for (const [dx, dy] of NEIGHBORS) {
+            const o = unitAt(p.x + dx, p.y + dy);
+            if (o && o.side === u.side) heal(o, amount);
+          }
+        }
         if (u.power && u.power.kind !== 'empower' && u.maxMana > 0 && u.mana >= u.maxMana) instantPower(u, target);
       }
       u.atkTimer = cooldown(u);
-    } else if (u.moveTimer === 0) {
+    } else if (u.moveTimer === 0 && u.copyOf === null) {
       // Out of range: walk around anyone in the way toward the enemy that can
       // be reached soonest (which may not be the one closest as the crow flies).
       const path = findPath(u);
@@ -463,16 +688,46 @@ export function simulate(catalog, boards, seed = 0) {
       // ignores shields. Same amount for everyone: the weakest fall first.
       const drain = Math.round((SUDDEN_DEATH_HP_PER_SECOND * STAT_SCALE) * TICK_SECONDS);
       for (const u of units) {
-        if (!standing(u)) continue;
+        if (!standing(u) || immune(u)) continue;
         u.hp = Math.max(0, u.hp - drain);
         emit('drain', { id: u.id, amount: drain, hp: u.hp });
-        if (u.hp === 0) emit('death', { id: u.id });
+        if (u.hp === 0) knockedOut(u);
       }
     }
-    for (const k of knocks) if (standing(k.target)) relocate(k.target, closestFree(k.goal, k.target, k.target, k.side), 'knock');
+    for (const k of knocks) if (standing(k.target) && !immune(k.target)) land(k.target, k.goal, k.side);
     knocks = [];
     for (const u of units) {
-      if (u.hp === 0) u.alive = false; // knocked out this tick
+      if (u.pendingHeal && u.hp > 0) {
+        const gained = Math.min(u.pendingHeal, u.maxHp - u.hp);
+        u.hp += gained;
+        emit('heal', { id: u.id, amount: gained, hp: u.hp });
+      }
+      u.pendingHeal = 0;
+      // Minior: a low-HP transformation takes `morph` ticks, during which it
+      // is immune to everything; then it becomes its new form.
+      if (u.pendingForm && u.hp > 0) {
+        emit('cast', { id: u.id, target: null });
+        const m = u.power.morph ?? 0;
+        if (m) {
+          u.morphUntil = u.immuneUntil = t + m;
+          u.immuneFrom = t + 1;
+          u.stun = u.pendingStun = 0;
+          emit('morphStart', { id: u.id, duration: m });
+        } else applyForm(u, u.power.form);
+      }
+      u.pendingForm = false;
+      if (u.power?.kind === 'transform' && u.morphUntil === t && u.hp > 0) { applyForm(u, u.power.form); u.target = null; }
+      // Ditto finishes turning into its target (if that one is still standing),
+      // or turns back.
+      if (u.pendingCopy !== null && u.morphUntil === t) {
+        if (u.hp > 0 && standing(units[u.pendingCopy])) copyUnit(u, units[u.pendingCopy]);
+        u.pendingCopy = null;
+      }
+      if (u.pendingRevert && u.hp > 0) revertCopy(u);
+      u.pendingRevert = false;
+    }
+    for (const u of units) {
+      if (u.hp === 0 && !(u.fuse > 0)) u.alive = false; // knocked out this tick (a lit Golem stays)
       u.mana = shownMana(u);
       u.stun = Math.max(u.stun, u.pendingStun);
       u.pendingMana = 0;
