@@ -670,24 +670,28 @@ test('Shining Star (Minior): at 25% HP or less it spends 0.5s transforming, immu
   }
 });
 
-test('Wild Charge (Tapu Koko): dashes in a line next to the farthest enemy, hits for 150% and stuns everyone it touches', () => {
+test('Wild Charge (Tapu Koko): dashes in a line next to the farthest enemy, immune on the way, then hits for 150%; stuns everyone it touches', () => {
   const cat = powerCat();
-  // Tapu Koko at combat (2,7). Nearest enemy (to keep it busy) at (1,6)... actually adjacent at (2,6);
-  // the farthest enemy at (2,0), and another enemy in the straight line at (2,3).
+  cat.pecker = { ...cat.wall, secPerHit: 0.1 }; // never moves, hits anyone for 1 every tick
+  // Tapu Koko at combat (1,7); the farthest enemy at (1,0) and another in the straight line at (1,3).
   const toOwn = ([x, y]) => ({ x: COLS - 1 - x, y: HALF - 1 - y });
   const r = simulate(cat, [
     [{ uid: 1, unitId: 'tapukoko', star: 0, x: 1, y: 3 }], // combat (1,7)
-    [{ uid: 2, unitId: 'wall', star: 0, ...toOwn([1, 0]) }, { uid: 3, unitId: 'wall', star: 0, ...toOwn([1, 3]) }, { uid: 4, unitId: 'wall', star: 0, ...toOwn([0, 7]) }],
+    [{ uid: 2, unitId: 'pecker', star: 0, ...toOwn([1, 0]) }, { uid: 3, unitId: 'pecker', star: 0, ...toOwn([1, 3]) }, { uid: 4, unitId: 'pecker', star: 0, ...toOwn([0, 7]) }],
   ], 1);
   const k = unitOf(r, 1).id;
   const dash = evs(r, 'dash', k)[0];
   assert.ok(dash, 'it dashes');
   const far = unitOf(r, 2);
   assert.equal(Math.max(Math.abs(dash.x - far.x), Math.abs(dash.y - far.y)), 1, `lands next to the farthest enemy, at (${dash.x},${dash.y})`);
+  assert.ok(dash.duration >= 2, 'the dash takes time');
   const cast = evs(r, 'cast', k)[0];
-  assert.equal(cast.t, dash.t);
+  assert.equal(cast.t, dash.t + dash.duration + 1, 'strikes when it arrives');
   assert.equal(r.events.find((e) => e.type === 'damage' && e.src === k && e.t === cast.t).amount, Math.floor((catalog.tapukoko.damage[0] * 150) / 100));
-  assert.ok(evs(r, 'stun', far.id).some((e) => e.t === dash.t), 'the target is stunned');
+  const hitsOnKoko = r.events.filter((e) => e.type === 'damage' && e.id === k);
+  assert.ok(hitsOnKoko.some((e) => e.t <= dash.t) && hitsOnKoko.some((e) => e.t > dash.t + dash.duration), 'it is hit before and after');
+  assert.ok(!hitsOnKoko.some((e) => e.t > dash.t && e.t <= dash.t + dash.duration), 'but not while dashing');
+  assert.ok(evs(r, 'stun', far.id).some((e) => e.t === cast.t), 'the target is stunned');
   assert.ok(evs(r, 'stun', unitOf(r, 3).id).some((e) => e.t === dash.t), 'the one in its path is stunned');
 });
 

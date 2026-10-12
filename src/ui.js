@@ -37,7 +37,7 @@ export function describePower(def, star, catalog) {
     case 'empower': {
       const extras = [
         p.teleport && 'teleports next to the farthest enemy and',
-        p.dash && 'dashes in a straight line next to the farthest enemy and',
+        p.dash && 'dashes in a straight line next to the farthest enemy (immune to everything on the way) and',
         `hits for ${p.damagePct}% damage (${show(dmg)})`,
         p.knockback && `, knocking the target back ${p.knockback} squares`,
         p.stun && `${p.knockback ? 'and stunning it' : p.dash ? ', stunning the target and every enemy it dashes through' : 'and stuns the target'} for ${secs(p.stun)}s`,
@@ -996,14 +996,15 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         break;
       }
       case 'dash': {
-        // Tapu Koko: a straight-line dash, crackling along the way.
+        // Tapu Koko: a straight-line dash, crackling along the way (immune until it lands).
         const from = viewPos(ev.fromX, ev.fromY);
         a.x = ev.x;
         a.y = ev.y;
         const p = viewPos(a.x, a.y);
         face(a, p.x - from.x, p.y - from.y);
         if (!animate) { place(a.el, p.x, p.y); break; }
-        const ms = 240 / speed;
+        const ms = ((ev.duration ?? 2) * TICK_SECONDS * 1000) / speed;
+        play(a.el, 'immune', ms);
         a.el.style.transition = `left ${ms}ms cubic-bezier(.6,0,.2,1), top ${ms}ms cubic-bezier(.6,0,.2,1)`;
         place(a.el, p.x, p.y);
         play(a.el, 'dashing', ms + 80);

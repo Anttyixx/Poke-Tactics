@@ -87,8 +87,9 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
     (damage, stuns, knockbacks, sudden death), then becomes its star form: very fast movement (0.35s per
     square), attacks every 0.7s, more damage (same HP).
   - Tapu Koko (range 2, attacks every 1.1s), **Wild Charge**: after 4 attacks, the next dashes in a straight line to the open square
-    next to the farthest enemy (closest to Tapu Koko), hits for 150%, and stuns the target and every
-    enemy it passes through for 1s.
+    next to the farthest enemy (closest to Tapu Koko). The dash takes 0.1s per square (at least 0.2s),
+    and Tapu Koko is immune to everything on the way. When it arrives it hits for 150%; the target and
+    every enemy it passed through are stunned for 1s.
   - Ditto, **Transform**: walks (medium speed) toward the nearest enemy until it's within that enemy's
     range, then takes 0.5s to transform into it, copying its max HP, damage, attack speed, range and crit
     (not its power or movement). It keeps its share of HP across the change, shows the copied sprite in
