@@ -2,11 +2,11 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=8afa6fc';
+import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=3237921';
 import {
   COPIES_PER_TROOP, LOSS_COINS, MAX_REROLLS, WIN_COINS,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=8afa6fc';
+} from './game.js?v=3237921';
 
 const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
 // Attack-effect colour when a unit doesn't set its own "fx" colour in units.json.
@@ -88,7 +88,7 @@ export const powerCadence = (def) => {
   return `Power every ${def.energy} attacks`;
 };
 
-export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
+export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog }) {
   const $ = (id) => document.getElementById(id);
   const arena = $('arena');
   const layer = $('units');
@@ -318,6 +318,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
     else if (action === 'dex') { closeMenu(); openDex(); }
     else if (action === 'new-confirmed') { closeMenu(); onNewGame(); }
     else if (action === 'leave-confirmed') { closeMenu(); onLobby('leave'); }
+    else if (action === 'copy-log') copyLog(btn);
     else openMenu(action); // 'main', 'help', 'new'
   });
   overlay.addEventListener('click', (e) => {
@@ -335,6 +336,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
     if (e.target.id === 'continue') { e.target.disabled = true; onIntent({ type: 'continue' }); }
     if (e.target.id === 'play-again') { started = true; if (online) { e.target.disabled = true; e.target.textContent = 'Waiting for the host…'; } onNewGame(); }
     if (e.target.id === 'leave-match') return onLobby('leave');
+    if (e.target.id === 'game-log') return openMenu('log');
     if (state?.phase !== 'team' || me().ready) return;
     const troop = e.target.closest('[data-pick-troop]');
     if (troop) {
@@ -453,6 +455,14 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
           <li><b>Win</b> by bringing your opponent from 100 HP to 0. The loser of a battle loses HP for every Pokémon still standing.</li>
         </ul>
         <p class="muted">Keys: <kbd>D</kbd> reroll · <kbd>F</kbd> fight · <kbd>E</kbd> sell · <kbd>Space</kbd> skip · <kbd>P</kbd> Pokédex · <kbd>M</kbd> menu</p>`;
+    } else if (view === 'log') {
+      panel.innerHTML = `${close}${back}<h1>Match log</h1>
+        <p class="muted">Every move both players made this match. Paste it to Claude to analyse the match or test stat changes.</p>
+        <label class="field log-notes" for="log-notes">Your notes (optional)
+          <textarea id="log-notes" rows="4" placeholder="e.g. Mawile felt useless; Tapu Koko's dash won round 6"></textarea></label>
+        <button class="primary" data-menu="copy-log">Copy match log</button>
+        <p class="muted" id="log-status" aria-live="polite"></p>
+        <textarea id="log-text" class="log-text" rows="6" readonly hidden></textarea>`;
     } else if (view === 'leave') {
       panel.innerHTML = `${close}<h1>Leave the match?</h1>
         <p class="muted">Your friend will be told you left, and the match ends.</p>
@@ -467,6 +477,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
           <button data-menu="close"><span>▶</span><div>Resume</div></button>
           <button data-menu="help"><span>?</span><div>How to play<small>Rules, controls and keys</small></div></button>
           <button data-menu="dex"><span>◎</span><div>Pokédex<small>Every Pokémon's stats and power</small></div></button>
+          <button data-menu="log"><span>⧉</span><div>Match log<small>Copy every move this match, with notes</small></div></button>
           ${online
             ? '<button data-menu="leave"><span>⏏</span><div>Leave match<small>Disconnect from your friend</small></div></button>'
             : '<button data-menu="new"><span>↻</span><div>New game<small>Start over with a new team</small></div></button>'}
@@ -474,6 +485,28 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
     }
     menuEl.hidden = false;
     panel.querySelector('button:not(.menu-close)')?.focus();
+  }
+
+  async function copyLog(btn) {
+    const status = menuEl.querySelector('#log-status');
+    btn.disabled = true;
+    status.textContent = 'Getting the match log…';
+    const log = await getLog?.();
+    btn.disabled = false;
+    if (!log?.intents?.length) { status.textContent = 'No moves recorded yet. Start a match first.'; return; }
+    const notes = menuEl.querySelector('#log-notes').value.trim();
+    const text = JSON.stringify({ ...log, notes, viewer: log.names[viewer], copied: new Date().toISOString() });
+    try {
+      await navigator.clipboard.writeText(text);
+      status.textContent = `Copied ${log.intents.length} moves. Paste them into your chat with Claude.`;
+    } catch {
+      const box = menuEl.querySelector('#log-text');
+      box.hidden = false;
+      box.value = text;
+      box.focus();
+      box.select();
+      status.textContent = 'Copying was blocked here. The log is selected below: copy it yourself.';
+    }
   }
 
   function closeMenu() {
@@ -1198,6 +1231,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
       ${online && viewer === 1
         ? '<button id="play-again" class="primary">Ask for a rematch</button>'
         : `<button id="play-again" class="primary">${online ? 'Rematch' : 'Play again'}</button>`}
+      <button id="game-log" class="ghost">Copy match log</button>
       ${online ? '<button id="leave-match" class="ghost">Leave</button>' : ''}`);
   }
 
