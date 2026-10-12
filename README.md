@@ -62,12 +62,15 @@ entry at the **top** for every update players should hear about; a new `id` show
 unread dot until they open it.
 
 ```json
-{ "id": "2026-10-12-balance", "date": "2026-10-12", "title": "Balance update",
+{ "id": "2026-10-12-balance", "version": "0.6.0", "date": "2026-10-12", "title": "Balance update",
   "intro": "Optional sentence.",
   "changes": [ { "pokemon": "mawile", "kind": "buff", "text": "Cost 5 → 4." } ] }
 ```
 
 `kind` is `buff`, `nerf`, `new`, `change` or `fix`; `pokemon` (optional) shows its sprite.
+The newest entry's `version` is the game's version, shown on the start screen and in its menu
+(with the build), so bump it with each entry: patch (0.6.1 → 0.6.2) for fixes and small changes,
+minor (0.6 → 0.7) for bigger updates.
 
 ## Balance testing
 

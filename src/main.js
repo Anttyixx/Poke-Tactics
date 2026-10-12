@@ -61,6 +61,8 @@ const ui = createUI({
   onLobby: lobby,
   getLog,
   changelog,
+  version: changelog[0]?.version ?? null,
+  build: new URL(import.meta.url).searchParams.get('v'),
 });
 
 function getLog() {

@@ -1,6 +1,17 @@
 [
   {
+    "id": "2026-10-12-start-menu",
+    "version": "0.6.2",
+    "date": "2026-10-12",
+    "title": "Start screen menu",
+    "changes": [
+      { "kind": "new", "text": "A menu button on the start screen, with Battle, Training, What's new, How to play and the Pokédex." },
+      { "kind": "new", "text": "The game's version is shown in the corner of the start screen." }
+    ]
+  },
+  {
     "id": "2026-10-12-mobile",
+    "version": "0.6.1",
     "date": "2026-10-12",
     "title": "Phone fixes",
     "changes": [
@@ -11,6 +22,7 @@
   },
   {
     "id": "2026-10-12-balance",
+    "version": "0.6.0",
     "date": "2026-10-12",
     "title": "Balance update",
     "intro": "Tested over thousands of simulated games where both players reposition every round. Every Pokémon now wins between 46% and 56% of games.",
@@ -27,6 +39,7 @@
   },
   {
     "id": "2026-10-12-online",
+    "version": "0.5.0",
     "date": "2026-10-12",
     "title": "Battle your friends",
     "changes": [
@@ -40,6 +53,7 @@
   },
   {
     "id": "2026-10-11-new-pokemon",
+    "version": "0.4.0",
     "date": "2026-10-11",
     "title": "New Pokémon",
     "changes": [
