@@ -55,6 +55,20 @@ The tests cover what Phase 3 depends on. A full bot-vs-bot match is identical fo
 same seed. State survives JSON round-trips. `simulate()` is pure. `applyIntent()` rejects
 malformed or out-of-phase intents and leaves state unchanged when it does.
 
+## Balance testing
+
+`tools/` plays thousands of full bot-vs-bot games (team pick, shop, every round) and
+summarizes what each Pokémon did. It's for development only and isn't deployed.
+
+```sh
+node tools/balance.mjs 20000     # random-team games + archetype games -> tools/out/balance.json
+node tools/analyze.mjs           # win rates, damage, survival, pairs -> tools/out/summary.json
+node tools/sweep.mjs             # try stat changes one at a time without editing units.json
+```
+
+`balance.mjs` also takes a patch file (`node tools/balance.mjs 20000 out.json patch.json`) to
+test a set of changes together. Team styles to pit against each other live in `ARCHETYPES`.
+
 ## How to play
 
 - **Start:** the game opens on a start screen; **Battle** plays a friend online (above); **Training** plays the bot. Pokémon are shown as
