@@ -6,7 +6,7 @@
 // notices a friend who closed the tab or lost their connection, since WebRTC
 // doesn't always report that on its own.
 
-import { METERED_APP, METERED_API_KEY } from './net-config.js?v=55fd3da';
+import { METERED_APP, METERED_API_KEY } from './net-config.js?v=5247560';
 
 const PEERJS_SRC = 'vendor/peerjs-1.5.4.min.js';
 const ID_PREFIX = 'poke-tactics-';
