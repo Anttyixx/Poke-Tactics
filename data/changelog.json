@@ -1,5 +1,15 @@
 [
   {
+    "id": "2026-10-12-mobile",
+    "date": "2026-10-12",
+    "title": "Phone fixes",
+    "changes": [
+      { "kind": "fix", "text": "The start screen no longer scrolls sideways on phones." },
+      { "kind": "fix", "text": "The Pokédex stats table fits on the smallest phones." },
+      { "kind": "change", "text": "The Pokémon walking across the start screen are spaced out more." }
+    ]
+  },
+  {
     "id": "2026-10-12-balance",
     "date": "2026-10-12",
     "title": "Balance update",
