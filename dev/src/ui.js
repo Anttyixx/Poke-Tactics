@@ -2,11 +2,11 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=79ad49f';
+import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=f1199da';
 import {
   COPIES_PER_TROOP, LOSS_COINS, MAX_REROLLS, WIN_COINS,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=79ad49f';
+} from './game.js?v=f1199da';
 
 const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
 // Attack-effect colour when a unit doesn't set its own "fx" colour in units.json.
@@ -88,7 +88,7 @@ export const powerCadence = (def) => {
   return `Power every ${def.energy} attacks`;
 };
 
-export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog, changelog = [] }) {
+export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog, changelog = [], version = null, build = null }) {
   const $ = (id) => document.getElementById(id);
   const arena = $('arena');
   const layer = $('units');
@@ -126,6 +126,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
   const latestUpdate = changelog[0]?.id ?? null;
   const seenUpdate = () => { try { return localStorage.getItem(SEEN_KEY); } catch { return null; } };
   const hasUnread = () => latestUpdate !== null && seenUpdate() !== latestUpdate;
+  // "v0.6.1 · dev 79ad49f": the game version (newest What's new entry) and build.
+  const channel = /\/builds\//.test(location.pathname) ? 'build' : /\/dev\//.test(location.pathname) ? 'dev' : null;
+  const versionText = [version && `v${version}`, build && (channel ? `${channel} ${build}` : build)].filter(Boolean).join(' · ');
   let deadline = null; // online: when planning auto-locks (Date.now() ms), or null
   let peek = null; // unit id shown in the info pop-up (phones), opened with an ⓘ button
   const sheetBackdrop = $('info-backdrop');
@@ -324,6 +327,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
     else if (action === 'new-confirmed') { closeMenu(); onNewGame(); }
     else if (action === 'leave-confirmed') { closeMenu(); onLobby('leave'); }
     else if (action === 'copy-log') copyLog(btn);
+    else if (action === 'start-battle') { closeMenu(); onLobby('open'); }
+    else if (action === 'start-training') { closeMenu(); started = true; overlay.classList.remove('start-screen'); showTeamBuilder(); }
     else openMenu(action); // 'main', 'help', 'new'
   });
   overlay.addEventListener('click', (e) => {
@@ -335,6 +340,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
     if (btn?.id === 'share-link') return navigator.share?.({ title: 'Poke Tactics', text: `Battle me in Poke Tactics! Code: ${btn.dataset.code}`, url: btn.dataset.url }).catch(() => {});
     if (btn?.id === 'start-help') return openMenu('help');
     if (btn?.id === 'start-news') return openMenu('news');
+    if (btn?.id === 'start-menu') return openMenu('main');
     if (btn?.id === 'start-dex') return openDex();
     const info = e.target.closest('[data-dex-info]');
     if (info) return openDex(info.dataset.dexInfo); // a team card's ⓘ: full stats and power
@@ -481,6 +487,17 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
       panel.innerHTML = `${close}<h1>New game?</h1>
         <p class="muted">This match will be lost.</p>
         <div class="confirm-row"><button data-menu="main">Keep playing</button><button class="danger" data-menu="new-confirmed">Start a new game</button></div>`;
+    } else if (!started) {
+      // From the start screen: everything a player can start from here.
+      panel.innerHTML = `${close}<h1>Menu</h1>
+        <div class="menu-list">
+          <button data-menu="start-battle"><span>⚔</span><div>Battle<small>Play a friend online</small></div></button>
+          <button data-menu="start-training"><span>▶</span><div>Training<small>Play against the bot</small></div></button>
+          <button data-menu="news" class="${hasUnread() ? 'unread' : ''}"><span>★</span><div>What's new<small>${esc(changelog[0]?.title ?? 'Updates to the game')}</small></div></button>
+          <button data-menu="help"><span>?</span><div>How to play<small>Rules, controls and keys</small></div></button>
+          <button data-menu="dex"><span>◎</span><div>Pokédex<small>Every Pokémon's stats and power</small></div></button>
+        </div>
+        ${versionText ? `<p class="menu-version">${esc(versionText)}</p>` : ''}`;
     } else {
       panel.innerHTML = `${close}<h1>Menu</h1>
         <div class="menu-list">
@@ -1227,6 +1244,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
           <button id="friend" class="primary battle-btn">Battle</button>
           <button id="battle" class="battle-btn training-btn">Training</button>
         </div>
+        <button id="start-menu" class="icon-btn start-menu" title="Menu (M)" aria-label="Menu">${ICON_MENU}</button>
+        ${versionText ? `<div class="start-version">${esc(versionText)}</div>` : ''}
         <div class="start-links">
           <button id="start-news" class="ghost${hasUnread() ? ' unread' : ''}">What's new</button>
           <button id="start-help" class="ghost">How to play</button>
