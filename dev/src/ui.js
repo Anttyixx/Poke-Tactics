@@ -2,11 +2,11 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=f4cd70e';
+import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=823cf9c';
 import {
   COPIES_PER_TROOP, LOSS_COINS, MAX_REROLLS, WIN_COINS,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=f4cd70e';
+} from './game.js?v=823cf9c';
 
 const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
 // Attack-effect colour when a unit doesn't set its own "fx" colour in units.json.
@@ -121,6 +121,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
   let started = false; // past the start screen (it shows once, when the game loads)
   let online = false; // playing a friend (the menu offers Leave instead of New game)
   let lobbyView = null; // which online-lobby screen is showing, if any
+  let deadline = null; // online: when planning auto-locks (Date.now() ms), or null
   let peek = null; // unit id shown in the info pop-up (phones), opened with an ⓘ button
   const sheetBackdrop = $('info-backdrop');
 
@@ -573,7 +574,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
     rerollBtn.textContent = p.rerolls > 0 ? `Reroll (${p.rerolls} left)` : 'No rerolls left';
     rerollBtn.disabled = !canPlan() || p.rerolls <= 0;
     readyBtn.disabled = !canPlan();
-    readyBtn.textContent = state.phase === 'planning' && p.ready ? 'Waiting for opponent…' : 'Fight!';
+    readyBtn.dataset.base = state.phase === 'planning' && p.ready ? 'Waiting for opponent…' : 'Fight!';
+    tickDeadline();
   }
 
   function portrait(def) {
@@ -1282,10 +1284,51 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
     if (e.target.id === 'lobby-code') onLobby('join', lobbyValues());
   });
 
+  // ---- online: planning countdown and the battle intro ----------------------
+
+  // Online, planning locks in automatically at `ms` (Date.now() time); null = no timer.
+  let deadlineTimer = 0;
+  function setDeadline(ms) {
+    deadline = ms;
+    clearInterval(deadlineTimer);
+    if (ms) deadlineTimer = setInterval(tickDeadline, 250);
+    tickDeadline();
+  }
+  function tickDeadline() {
+    const base = readyBtn.dataset.base || readyBtn.textContent;
+    const live = deadline && state?.phase === 'planning';
+    const left = live ? Math.max(0, Math.ceil((deadline - Date.now()) / 1000)) : null;
+    readyBtn.textContent = live ? `${base} 0:${String(left).padStart(2, '0')}` : base;
+    readyBtn.classList.toggle('hurry', live && left <= 10);
+    if (live && left === 0) clearInterval(deadlineTimer);
+  }
+
+  // A Pokémon-battle screen wipe: black bars sweep across, the two trainers'
+  // names meet over a Poké Ball, then the bars sweep away.
+  function playIntro(names) {
+    document.querySelector('#wipe')?.remove();
+    const el = document.createElement('div');
+    el.id = 'wipe';
+    el.setAttribute('aria-live', 'polite');
+    const bars = Array.from({ length: 8 }, (_, i) => `<i style="--i:${i}"></i>`).join('');
+    el.innerHTML = `<div class="bars">${bars}</div>
+      <div class="vs-card">
+        <span class="trainer left">${esc(names[0])}</span>
+        <span class="ball" aria-hidden="true"></span>
+        <span class="trainer right">${esc(names[1])}</span>
+        <span class="vs-text">VS</span>
+      </div>`;
+    el.setAttribute('aria-label', `${names[0]} versus ${names[1]}`);
+    document.body.append(el);
+    setTimeout(() => el.classList.add('out'), 2300);
+    setTimeout(() => el.remove(), 3100);
+  }
+
   // Switch between playing the bot (null) and playing a friend as `viewer`.
   function setOnline(opts) {
     online = Boolean(opts);
     viewer = opts?.viewer ?? 0;
+    setDeadline(null);
     started = online;
     playback?.cancel();
     playback = null;
@@ -1370,5 +1413,5 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
       </div>`;
   }
 
-  return { render, toast, showLobby, setOnline, lobbyView: () => lobbyView };
+  return { render, toast, showLobby, setOnline, setDeadline, playIntro, lobbyView: () => lobbyView };
 }

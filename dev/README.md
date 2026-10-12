@@ -12,6 +12,9 @@ code is PeerJS (MIT, copied into `vendor/`) for online play.
 **Battle a Friend** on the start screen. One player taps **Create game** and gets a
 5-character code (and an invite link, `?join=CODE`); the other enters it under **Join**.
 
+- When the two connect, a battle-style screen wipe shows both trainers' names.
+- Each planning phase lasts 30 seconds (the Fight button counts down, red for the last 10).
+  When time runs out, anyone still planning is locked in as they are. The host's clock decides.
 - Browsers connect directly over WebRTC (`src/net.js`); PeerJS's free public server only
   introduces them. Strict networks (some school/work Wi-Fi, some mobile data) can block
   direct connections; then the join fails with a message suggesting another network.

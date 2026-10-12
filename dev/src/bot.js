@@ -1,8 +1,8 @@
 // Dummy opponent. It plays through the exact same intent API as a human, so
 // in Phase 3 a remote guest can take its seat without touching the rules.
 
-import { MAX_STAR, fielded, teamSize, troopIds } from './game.js?v=f4cd70e';
-import { COLS, HALF } from './combat.js?v=f4cd70e';
+import { MAX_STAR, fielded, teamSize, troopIds } from './game.js?v=823cf9c';
+import { COLS, HALF } from './combat.js?v=823cf9c';
 
 // Columns ordered from the centre outwards, e.g. [2, 1, 3, 0, 4] for 5 columns.
 const CENTER_OUT = [...Array(COLS).keys()].sort((a, b) => Math.abs(2 * a - (COLS - 1)) - Math.abs(2 * b - (COLS - 1)) || a - b);
