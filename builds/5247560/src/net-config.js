@@ -9,4 +9,4 @@
 // METERED_API_KEY repository secret. Without it, online play still works
 // whenever the players can connect directly.
 export const METERED_APP = 'poke-tactics';
-export const METERED_API_KEY = ''; // set at deploy time
+export const METERED_API_KEY = 'pk_live_d61a3fb98d891151cd0a6e22e4e5e2c10a846cb4'; // set at deploy time
