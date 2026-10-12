@@ -1,7 +1,11 @@
 // Balance testing: plays thousands of complete bot-vs-bot games (team pick,
 // shop, placement, every round to 0 HP) and records what each Pokémon did.
 //
-//   node tools/balance.mjs [games=4000] [out=tools/out/balance.json] [patch.json] [--random-only]
+//   node tools/balance.mjs [games=4000] [out=tools/out/balance.json] [patch.json] [--random-only] [--smart]
+//
+// --smart: both players reposition before every fight to counter the
+// opponent's last lineup (tools/placer.mjs), like a real player would. Slower
+// (about 1s of CPU per game) but closer to real play.
 //
 // patch.json tries a stat change without editing units.json: an object of
 // Pokémon id -> fields to replace, e.g. {"mawile": {"hp": [720, 1300, 2350, 4240]}};
@@ -23,6 +27,7 @@ import { cpus } from 'node:os';
 import { createGame, applyIntent, troopIds } from '../src/game.js';
 import { botTurn } from '../src/bot.js';
 import { hashSeed } from '../src/rng.js';
+import { bestLayout, applyLayout } from './placer.mjs';
 
 const catalog = JSON.parse(readFileSync(new URL('../data/units.json', import.meta.url), 'utf8'));
 export function applyPatch(cat, patch = {}) {
@@ -46,7 +51,9 @@ export const ARCHETYPES = {
 
 // ---- one game ----------------------------------------------------------------
 
-function playGame(seed, teams) {
+// placement[p]: 'default' = the game's bot layout (melee front, ranged back);
+// 'smart' = rearrange before each fight to counter the opponent's last lineup.
+export function playGame(seed, teams, placement = ['default', 'default']) {
   const state = createGame({ seed, catalog, names: ['A', 'B'] });
   teams.forEach((troops, p) => {
     const res = applyIntent(state, catalog, p, { type: 'chooseTeam', troops });
@@ -55,7 +62,16 @@ function playGame(seed, teams) {
   const fights = [];
   while (state.phase !== 'gameover' && state.round <= MAX_ROUNDS) {
     if (state.phase === 'planning') {
-      for (const p of [0, 1]) if (!state.players[p].ready) botTurn(state, catalog, p, (i) => applyIntent(state, catalog, p, i));
+      for (const p of [0, 1]) {
+        if (state.players[p].ready) continue;
+        const send = (i) => applyIntent(state, catalog, p, i);
+        if (placement[p] !== 'smart') { botTurn(state, catalog, p, send); continue; }
+        // Shop like the bot, then reposition before locking in.
+        botTurn(state, catalog, p, (i) => (i.type === 'ready' ? { ok: true } : send(i)));
+        const layout = bestLayout(catalog, state, p);
+        if (layout) applyLayout(layout, send);
+        send({ type: 'ready' });
+      }
     } else if (state.phase === 'combat') {
       fights.push(summarizeFight(state.combat.result, state.round, state.players.map((pl) => pl.coins)));
       for (const p of [0, 1]) applyIntent(state, catalog, p, { type: 'continue' });
@@ -97,7 +113,8 @@ function summarizeFight(result, round) {
 
 // ---- jobs ------------------------------------------------------------------------
 
-export function makeJobs(games, { randomOnly = false } = {}) {
+export function makeJobs(games, { randomOnly = false, smart = false } = {}) {
+  const placement = smart ? ['smart', 'smart'] : ['default', 'default'];
   const troops = troopIds(catalog);
   for (const [name, team] of Object.entries(ARCHETYPES)) {
     if (team.length !== 6 || new Set(team).size !== 6 || !team.every((t) => troops.includes(t))) throw new Error(`Archetype "${name}" is not 6 distinct troops`);
@@ -107,7 +124,7 @@ export function makeJobs(games, { randomOnly = false } = {}) {
   for (let i = 0; i < games; i++) {
     const seed = hashSeed(`random-${i}`);
     const pick = (salt) => [...troops].map((t, k) => [hashSeed(`${seed}-${salt}-${t}-${k}`), t]).sort((a, b) => a[0] - b[0]).slice(0, 6).map((x) => x[1]);
-    jobs.push({ kind: 'random', seed, teams: [pick('a'), pick('b')] });
+    jobs.push({ kind: 'random', seed, teams: [pick('a'), pick('b')], placement });
   }
   if (randomOnly) return jobs;
   // Archetypes: every ordered pair (so each plays both sides), several seeds.
@@ -115,7 +132,7 @@ export function makeJobs(games, { randomOnly = false } = {}) {
   const per = Math.max(10, Math.round(games / 40));
   for (const a of names) for (const b of names) {
     if (a === b) continue;
-    for (let k = 0; k < per; k++) jobs.push({ kind: 'archetype', seed: hashSeed(`arch-${a}-${b}-${k}`), teams: [ARCHETYPES[a], ARCHETYPES[b]], arche: [a, b] });
+    for (let k = 0; k < per; k++) jobs.push({ kind: 'archetype', seed: hashSeed(`arch-${a}-${b}-${k}`), teams: [ARCHETYPES[a], ARCHETYPES[b]], arche: [a, b], placement });
   }
   return jobs;
 }
@@ -135,14 +152,14 @@ export async function runJobs(jobs, patch = null) {
 
 if (!isMainThread) {
   applyPatch(catalog, workerData.patch ?? {});
-  const out = workerData.jobs.map((job) => ({ ...job, ...playGame(job.seed, job.teams) }));
+  const out = workerData.jobs.map((job) => ({ ...job, ...playGame(job.seed, job.teams, job.placement) }));
   parentPort.postMessage(out);
 } else if (process.argv[1] && new URL(import.meta.url).pathname === process.argv[1]) {
   const args = process.argv.slice(2).filter((a) => !a.startsWith('--'));
   const games = Number(args[0] ?? 4000);
   const outPath = args[1] ?? new URL('./out/balance.json', import.meta.url).pathname;
   const patch = args[2] ? JSON.parse(readFileSync(args[2], 'utf8')) : null;
-  const jobs = makeJobs(games, { randomOnly: process.argv.includes('--random-only') });
+  const jobs = makeJobs(games, { randomOnly: process.argv.includes('--random-only'), smart: process.argv.includes('--smart') });
   const t0 = Date.now();
   const results = await runJobs(jobs, patch);
   mkdirSync(dirname(outPath), { recursive: true });
