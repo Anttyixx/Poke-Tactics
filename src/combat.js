@@ -67,10 +67,13 @@ const coin = (seed, t) => hash(seed, t) & 1;
 const critRoll = (seed, t, slot) => hash(seed, t, slot + 1) % 100;
 
 // Distance is the number of steps between two squares: units walk
-// up/down/left/right, so a diagonal neighbour is 2 away. Range, targeting and
-// area powers all use it.
+// up/down/left/right, so a diagonal neighbour is 2 away. "Nearest" and
+// "farthest" enemy use it.
 const manhattan = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 const dist = manhattan;
+// Attack range (and blast radius) is a square around the Pokémon instead:
+// range 1 = the 3x3 around it (diagonals included), range 2 = the 5x5, ...
+const reach = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 
 function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, inst.y)) {
   const def = catalog[inst.unitId];
@@ -211,7 +214,7 @@ export function simulate(catalog, boards, seed = 0) {
     const p = u.power;
     emit('explode', { id: u.id, radius: p.radius });
     const amount = Math.floor((u.atk * p.damagePct) / 100);
-    for (const e of units) if (e.side !== u.side && standing(e) && dist(u, e) <= p.radius) damage(e, amount, u);
+    for (const e of units) if (e.side !== u.side && standing(e) && reach(u, e) <= p.radius) damage(e, amount, u);
     emit('death', { id: u.id });
   }
 
@@ -487,7 +490,7 @@ export function simulate(catalog, boards, seed = 0) {
       if (c !== start) {
         let reachable = null;
         for (const e of enemies) {
-          const d = dist(c, at(e));
+          const d = reach(c, at(e));
           if (d <= u.range && (!reachable || d < reachable.d)) reachable = { e, d };
         }
         if (reachable) {
@@ -546,7 +549,7 @@ export function simulate(catalog, boards, seed = 0) {
     if (arrived) {
       const far = units[u.dashTarget];
       u.dashTarget = null;
-      if (visible(far) && dist(u, at(far)) <= u.range) u.target = far.id;
+      if (visible(far) && reach(u, at(far)) <= u.range) u.target = far.id;
     }
     if (u.hold > 0) {
       u.hold--;
@@ -566,7 +569,7 @@ export function simulate(catalog, boards, seed = 0) {
         const e = nearestEnemy(u);
         if (!e) return;
         u.target = e.id;
-        if (dist(u, at(e)) <= e.range) {
+        if (reach(u, at(e)) <= e.range) {
           u.pendingCopy = e.id;
           u.morphUntil = t + u.power.morph - 1;
           emit('morphStart', { id: u.id, target: e.id, duration: u.power.morph });
@@ -574,7 +577,7 @@ export function simulate(catalog, boards, seed = 0) {
         }
         u.range = e.range; // walk until it is in reach of its own copy of `e`
       } else {
-        const inReach = (e) => e && visible(e) && e.side !== u.side && dist(u, at(e)) <= u.range;
+        const inReach = (e) => e && visible(e) && e.side !== u.side && reach(u, at(e)) <= u.range;
         let e = u.target === null ? null : units[u.target];
         if (!inReach(e)) e = enemiesOf(u).filter(inReach).sort((a, b) => dist(u, at(a)) - dist(u, at(b)))[0];
         if (!standing(units[u.copyOf]) || !e) { u.pendingRevert = true; return; }
@@ -583,7 +586,7 @@ export function simulate(catalog, boards, seed = 0) {
     }
 
     let target = u.target === null ? null : units[u.target];
-    if (!target || !visible(target) || target.side === u.side || dist(u, at(target)) > u.range) target = nearestEnemy(u);
+    if (!target || !visible(target) || target.side === u.side || reach(u, at(target)) > u.range) target = nearestEnemy(u);
     if (!target) return;
     u.target = target.id;
 
@@ -592,7 +595,7 @@ export function simulate(catalog, boards, seed = 0) {
     if (empowered && u.power.teleport && u.atkTimer === 0) {
       // No need to teleport if the farthest enemy is already in reach.
       const far = farthestEnemy(u);
-      const cell = far && dist(u, at(far)) > u.range && freeBeside(u, far);
+      const cell = far && reach(u, at(far)) > u.range && freeBeside(u, far);
       if (cell) {
         relocate(u, cell, 'teleport');
         u.moveTimer = 0;
@@ -604,7 +607,7 @@ export function simulate(catalog, boards, seed = 0) {
       // Dash in a straight line next to the farthest enemy, stunning every
       // enemy it passes through on the way.
       const far = farthestEnemy(u);
-      const cell = far && dist(u, at(far)) > u.range && dashSpot(u, far);
+      const cell = far && reach(u, at(far)) > u.range && dashSpot(u, far);
       if (cell) {
         const from = { x: u.x, y: u.y };
         for (const c of lineCells(from, cell)) {
@@ -624,7 +627,7 @@ export function simulate(catalog, boards, seed = 0) {
       }
     }
 
-    if (dist(u, at(target)) <= u.range) {
+    if (reach(u, at(target)) <= u.range) {
       // A step takes the unit's whole move time; it can't attack mid-step.
       if (u.atkTimer > 0 || u.moveTimer > 0) return;
       if (empowered) {

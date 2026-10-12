@@ -743,14 +743,16 @@ test('Blaze (Infernape): after 7 attacks it attacks 50% faster for 3 seconds', (
   assert.equal(later[1] - later[0], base, 'back to normal afterwards');
 });
 
-test('distance is counted in steps (up/down/left/right): a diagonal neighbour is 2 away', () => {
+test('attack range is a square: range 1 = the 3x3 around it (diagonals too), range 2 = the 5x5', () => {
   const cat = powerCat();
   cat.poker = { ...cat.stalker, moveSpeed: 'statue' }; // range 1, never moves
   cat.spear = { ...cat.poker, range: 2 };
-  // Side 0 at combat (2,4), side 1's wall at combat (1,3): diagonal neighbours.
-  const fight = (id) => simulate(cat, [[{ uid: 1, unitId: id, star: 0, x: 2, y: 0 }], [{ uid: 2, unitId: 'wall', star: 0, x: 3, y: 0 }]], 1);
-  assert.equal(evs(fight('poker'), 'attack', 0).length, 0, 'range 1 cannot reach a diagonal');
-  assert.ok(evs(fight('spear'), 'attack', 0).length > 0, 'range 2 can');
+  // Side 0 at combat (2,4); side 1's wall at own (x, y) = combat (4 - x, 3 - y).
+  const attacks = (id, wx, wy) => evs(simulate(cat, [[{ uid: 1, unitId: id, star: 0, x: 2, y: 0 }], [{ uid: 2, unitId: 'wall', star: 0, x: wx, y: wy }]], 1), 'attack', 0).length > 0;
+  assert.ok(attacks('poker', 3, 0), 'range 1 reaches a diagonal neighbour (1,3)');
+  assert.ok(!attacks('poker', 2, 1), 'range 1 does not reach 2 squares straight ahead (2,2)');
+  assert.ok(attacks('spear', 4, 1), 'range 2 reaches the far corner of its 5x5 (0,2)');
+  assert.ok(!attacks('spear', 2, 2), 'range 2 does not reach 3 squares ahead (2,1)');
 });
 
 test('units walk one square at a time (no diagonal steps), at their own pace', () => {
