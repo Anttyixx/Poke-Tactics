@@ -27,6 +27,7 @@ import { cpus } from 'node:os';
 import { createGame, applyIntent, troopIds } from '../src/game.js';
 import { botTurn } from '../src/bot.js';
 import { hashSeed } from '../src/rng.js';
+import { COLS, HALF } from '../src/combat.js';
 import { bestLayout, applyLayout } from './placer.mjs';
 
 const catalog = JSON.parse(readFileSync(new URL('../data/units.json', import.meta.url), 'utf8'));
@@ -53,7 +54,9 @@ export const ARCHETYPES = {
 
 // placement[p]: 'default' = the game's bot layout (melee front, ranged back);
 // 'smart' = rearrange before each fight to counter the opponent's last lineup.
-export function playGame(seed, teams, placement = ['default', 'default']) {
+// opts.explore = { player, unitId }: before every fight, put that player's
+// `unitId` on a random square of its half (to map where it does best).
+export function playGame(seed, teams, placement = ['default', 'default'], opts = {}) {
   const state = createGame({ seed, catalog, names: ['A', 'B'] });
   teams.forEach((troops, p) => {
     const res = applyIntent(state, catalog, p, { type: 'chooseTeam', troops });
@@ -65,11 +68,18 @@ export function playGame(seed, teams, placement = ['default', 'default']) {
       for (const p of [0, 1]) {
         if (state.players[p].ready) continue;
         const send = (i) => applyIntent(state, catalog, p, i);
-        if (placement[p] !== 'smart') { botTurn(state, catalog, p, send); continue; }
-        // Shop like the bot, then reposition before locking in.
+        // Shop like the bot, then (smart) reposition before locking in.
         botTurn(state, catalog, p, (i) => (i.type === 'ready' ? { ok: true } : send(i)));
-        const layout = bestLayout(catalog, state, p);
-        if (layout) applyLayout(layout, send);
+        if (placement[p] === 'smart') {
+          const layout = bestLayout(catalog, state, p);
+          if (layout) applyLayout(layout, send);
+        }
+        const ex = opts.explore;
+        if (ex && ex.player === p) {
+          const unit = state.players[p].board.find((u) => u.unitId === ex.unitId);
+          const k = hashSeed(`${seed}:${state.round}:explore`) % (COLS * HALF);
+          if (unit) send({ type: 'move', uid: unit.uid, x: k % COLS, y: Math.floor(k / COLS) });
+        }
         send({ type: 'ready' });
       }
     } else if (state.phase === 'combat') {
@@ -81,12 +91,15 @@ export function playGame(seed, teams, placement = ['default', 'default']) {
 }
 
 // Per-unit stats for one fight. Summoned units (Combee) count for their summoner.
-function summarizeFight(result, round) {
+export function summarizeFight(result, round) {
   const owner = new Map(); // unit id -> id of the Pokémon it counts for
   const units = new Map();
   for (const u of result.initial) {
     owner.set(u.id, u.id);
-    units.set(u.id, { side: u.side, unitId: u.unitId, star: u.star, dmg: 0, taken: 0, kills: 0, casts: 0, survived: true });
+    // Start square in the owner's own coordinates (y 0 = front row, x as they see it).
+    const ox = u.side === 0 ? u.x : COLS - 1 - u.x;
+    const oy = u.side === 0 ? u.y - HALF : HALF - 1 - u.y;
+    units.set(u.id, { side: u.side, unitId: u.unitId, star: u.star, x: ox, y: oy, dmg: 0, taken: 0, kills: 0, casts: 0, survived: true, killedBy: null, victims: [] });
   }
   const lastHit = new Map();
   for (const e of result.events) {
@@ -102,7 +115,7 @@ function summarizeFight(result, round) {
       const u = units.get(e.id);
       if (u) u.survived = false;
       const killer = units.get(owner.get(lastHit.get(e.id)));
-      if (killer && units.has(e.id)) killer.kills++;
+      if (killer && units.has(e.id)) { killer.kills++; killer.victims.push(units.get(e.id).unitId); u.killedBy = killer.unitId; }
     } else if (e.type === 'cast') {
       const u = units.get(e.id);
       if (u) u.casts++;
@@ -152,7 +165,7 @@ export async function runJobs(jobs, patch = null) {
 
 if (!isMainThread) {
   applyPatch(catalog, workerData.patch ?? {});
-  const out = workerData.jobs.map((job) => ({ ...job, ...playGame(job.seed, job.teams, job.placement) }));
+  const out = workerData.jobs.map((job) => ({ ...job, ...playGame(job.seed, job.teams, job.placement, { explore: job.explore }) }));
   parentPort.postMessage(out);
 } else if (process.argv[1] && new URL(import.meta.url).pathname === process.argv[1]) {
   const args = process.argv.slice(2).filter((a) => !a.startsWith('--'));

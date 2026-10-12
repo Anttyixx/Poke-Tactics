@@ -14,6 +14,8 @@
 //                  { type: 'reject', error }           the guest's intent was refused
 //                  { type: 'refuse', error }           can't play (different versions)
 //                  { type: 'full' }                    someone else already joined
+//                  { type: 'log', log }                the match log (at game over, or on request)
+//   guest -> host  { type: 'getLog' }                  ask for the match log mid-match
 
 import { createGame, applyIntent } from './game.js';
 import { botTurn } from './bot.js';
@@ -42,6 +44,12 @@ let names = ['You', 'Bot'];
 let me = 0; // which player this browser is
 let timerKey = null; // the planning phase the countdown belongs to ("seed:round")
 let lockTimer = 0;
+// Every move both players make, in order. With the game's seed this rebuilds
+// the whole match exactly (tools/replay.mjs), for analysis after a PvP game.
+// Kept where the rules run (host, or bot games); the guest gets a copy.
+let matchLog = null;
+let logWaiters = []; // guest: callbacks waiting for the host's copy
+const BUILD = new URL(import.meta.url).searchParams.get('v') ?? 'local';
 
 const ui = createUI({
   catalog,
@@ -49,7 +57,19 @@ const ui = createUI({
   onIntent: (intent) => (mode === 'guest' ? sendIntent(intent) : dispatch(me, intent)),
   onNewGame: () => (mode === 'guest' ? link?.send({ type: 'rematch' }) : newGame()),
   onLobby: lobby,
+  getLog,
 });
+
+function getLog() {
+  if (mode !== 'guest') return Promise.resolve(matchLog);
+  return new Promise((resolve) => {
+    logWaiters.push(resolve);
+    link?.send({ type: 'getLog' });
+    setTimeout(() => { logWaiters = logWaiters.filter((w) => w !== resolve); resolve(matchLog); }, 4000);
+  });
+}
+
+const record = (player, intent) => matchLog?.intents.push([player, intent]);
 
 function newGame() {
   const params = new URLSearchParams(location.search);
@@ -60,6 +80,11 @@ function newGame() {
   // ?unit=<id> puts that unit in the first slot of every shop (for testing new units).
   const featured = mode === 'bot' ? params.get('unit')?.toLowerCase() || null : null;
   state = createGame({ seed, catalog, names, featured });
+  matchLog = {
+    format: 'poke-tactics-match', v: 1, build: BUILD, catalogHash: hashSeed(catalogText),
+    mode: mode === 'bot' ? 'training' : 'pvp', started: new Date().toISOString(),
+    seed: state.seed, names: [...names], featured: state.featured, intents: [],
+  };
   if (featured && !state.featured) setTimeout(() => ui.toast(`Unknown unit "${featured}" in ?unit=`), 0);
   runBot();
   show();
@@ -68,6 +93,7 @@ function newGame() {
 
 function dispatch(player, intent) {
   const res = applyIntent(state, catalog, player, intent);
+  if (res.ok) record(player, intent);
   if (!res.ok) {
     if (player === me) ui.toast(res.error);
     else if (mode === 'host') link?.send({ type: 'reject', error: res.error });
@@ -82,7 +108,11 @@ function dispatch(player, intent) {
 
 function runBot() {
   if (mode !== 'bot' || state.players[BOT].ready) return;
-  const send = (intent) => applyIntent(state, catalog, BOT, intent);
+  const send = (intent) => {
+    const res = applyIntent(state, catalog, BOT, intent);
+    if (res.ok) record(BOT, intent);
+    return res;
+  };
   if (state.phase === 'planning' || state.phase === 'team') botTurn(state, catalog, BOT, send);
   else if (state.phase === 'combat') send({ type: 'continue' });
 }
@@ -107,7 +137,11 @@ function planClock() {
   }, PLAN_SECONDS * 1000);
 }
 
-const broadcast = () => { if (mode === 'host') link?.send({ type: 'state', state }); };
+const broadcast = () => {
+  if (mode !== 'host') return;
+  link?.send({ type: 'state', state });
+  if (state.phase === 'gameover') link?.send({ type: 'log', log: matchLog });
+};
 
 // The guest can't check intents itself (the host has the real state), so it
 // reports success; a refusal comes back as a toast.
@@ -190,6 +224,8 @@ function hostMessage(msg, l) {
     // Not in a match yet: ignore anything else.
   } else if (msg.type === 'intent') {
     dispatch(1, msg.intent);
+  } else if (msg.type === 'getLog') {
+    l.send({ type: 'log', log: matchLog });
   } else if (msg.type === 'rematch' && state.phase === 'gameover') {
     newGame();
   }
@@ -213,6 +249,11 @@ async function join(code, name) {
           state = msg.state;
           show();
         } else if (msg.type === 'reject') ui.toast(msg.error);
+        else if (msg.type === 'log') {
+          matchLog = msg.log;
+          for (const w of logWaiters) w(matchLog);
+          logWaiters = [];
+        }
         else if (msg.type === 'refuse' || msg.type === 'full') {
           link?.close();
           link = null;

@@ -78,6 +78,25 @@ opponent's lineup from the round before (`tools/placer.mjs`), the way a real pla
 the whole study. All tools use the game's own code (`src/combat.js`, `src/game.js`,
 `src/bot.js`), so they stay accurate as the game changes.
 
+One Pokémon in depth (best squares, rows and columns, hardest and easiest opponents, best
+teammates, who knocks it out, stats by star), as a console summary and an HTML report:
+
+```sh
+node tools/focus.mjs mawile --games=4000 [--smart]   # -> tools/out/focus-mawile.html
+```
+
+A real match: in the game, **Menu → Match log** (or **Copy match log** after a match) copies
+the game's seed and every move both players made, plus your notes. Save it to a file, then:
+
+```sh
+node tools/replay.mjs match.json [--patch=patch.json]
+```
+
+It rebuilds the match exactly with the stats of the build it was played on (read from git
+history) and, for every fight, checks how much was luck (the same boards with other seeds),
+whether the loser could have won with a different arrangement of the same Pokémon, and, with
+`--patch`, whether changed stats would have changed the result.
+
 `balance.mjs` also takes a patch file (`node tools/balance.mjs 20000 out.json patch.json`) to
 test a set of changes together. Team styles to pit against each other live in `ARCHETYPES`.
 
