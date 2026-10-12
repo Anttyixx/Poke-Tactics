@@ -55,7 +55,7 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
   front. There is no limit on how many troops you field.
 - **Combat:** units target the nearest enemy they can reach and walk (pathing around anyone in the way)
   into range one square at a time (up/down/left/right). Movement speed is how long each step takes: fast
-  0.5s per square, medium 0.8s, slow 1.0s, very slow 1.3s. A unit can't attack until it finishes its step. A unit attacks every `secPerHit` seconds; each basic attack
+  0.5s per square, medium 0.8s, slow 1.0s, very slow 1.3s, super slow 2.0s. A unit can't attack until it finishes its step. A unit attacks every `secPerHit` seconds; each basic attack
   has a `critChance`% chance to crit for 50% more damage (powers never crit). Each tick resolves
   simultaneously, and crit luck is shared slot for slot between the sides, so neither side gets an edge.
 - **Powers:** every Pokémon has one. Most count attacks (the purple bar). Every fight starts with the bar
@@ -65,33 +65,34 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
     board. The first enemy it hits takes 50% and is carried to that end, then is stunned for 1s; anyone
     already there is pushed to the side. Both sit out until the wave lands.
   - Toxtricity, **Thunderbolt**: every 8th attack also zaps the farthest enemy for 80%.
-  - Vespiquen, **Attack Order**: every 7 attacks, summons 1 / 2 / 3 / 3 Combee (at 0★ / ★ / ★★ / ★★★)
-    beside it: its sides first, then behind, in front, and the diagonals from back to front. Combee are
-    always 0★ (188 HP). They fight but never count as survivors for round damage. With no free square,
+  - Vespiquen, **Attack Order**: every 6 attacks, summons 2 Combee beside it: its sides first, then
+    behind, in front, and the diagonals from back to front. Combee come at Vespiquen's star level. They fight but never count as survivors for round damage. With no free square,
     the power stays charged and tries again after the next attack.
   - Coalossal, **Heat Crash**: after 6 attacks, the next hits for 130%, knocks the target back 2 squares
     and stuns it for 1s.
   - Decidueye, **Phantom Force**: after 8 attacks, invisible for 3s and attacks 30% faster. Enemies can't
     target or follow an invisible unit.
-  - Greninja, **Night Slash**: after 6 attacks, the next teleports beside the farthest enemy (if it's out of
-    reach), hits for 130% and heals 10% of the damage dealt.
   - Infernape, **Blaze**: after 7 attacks, attacks 50% faster for 3s.
   - Hoopa, **Hyperspace Hole**: after 6 attacks, the next teleports beside the farthest enemy (if it's out
     of reach), hits for 130% and heals 10% of the damage dealt. (The old Greninja's stats and power.)
   - Greninja, **Battle Bond**: after 10 attacks, becomes Ash-Greninja for the rest of the fight: fast
-    movement, attacks every 1.0s, more damage, range 3 (same HP).
-  - Torterra, **Earthquake**: with every 10th attack, every enemy on the board takes 100% and is stunned 1s.
+    movement, attacks every 0.8s, more damage, range 3 (same HP).
+  - Torterra, **Earthquake**: with every 10th attack, every enemy on the board takes 30% and is stunned 1s.
   - Lilligant, **Aromatherapy**: every attack heals your Pokémon directly left, right, above and below the
     square it hits, for 50% of its damage.
   - Golem, **Self-Destruct**: when knocked out it stays on its square for 3s (it can't be hit), then
     explodes for 300% on enemies within 1 square. The fight waits for it.
-  - Minior, **Shining Star**: at 10% HP or less it becomes its star form: very fast movement (0.35s per
+  - Minior, **Shining Star**: at 25% HP or less it spends 0.5s transforming, immune to everything
+    (damage, stuns, knockbacks, sudden death), then becomes its star form: very fast movement (0.35s per
     square), attacks every 0.7s, more damage (same HP).
-  - Tapu Koko, **Wild Charge**: after 7 attacks, the next dashes in a straight line to the open square
+  - Tapu Koko, **Wild Charge**: after 4 attacks, the next dashes in a straight line to the open square
     next to the farthest enemy (closest to Tapu Koko), hits for 150%, and stuns the target and every
     enemy it passes through for 1s.
-  - Ditto, **Transform**: copies the nearest enemy's damage, attack speed, movement, range and crit (not
-    its power or HP). When that Pokémon faints, it turns back and copies the next nearest.
+  - Ditto, **Transform**: walks (medium speed) toward the nearest enemy until it's within that enemy's
+    range, then takes 0.5s to transform into it, copying its max HP, damage, attack speed, range and crit
+    (not its power or movement). It keeps its share of HP across the change, shows the copied sprite in
+    Ditto's colours, and doesn't move while transformed. When the copied Pokémon faints or no enemy is in
+    range, it turns back into Ditto and walks to the next nearest.
 - **Healing** (Lilligant, Hoopa) lands at the end of each tick, like stuns, so it never depends on who
   acted first; a Pokémon knocked out that tick stays knocked out.
 - **Stuns:** a stunned Pokémon can't move or attack. When a stun (or a Psywave ride) ends, it picks the

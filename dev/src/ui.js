@@ -2,11 +2,11 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=d18c3f8';
+import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=54dd4eb';
 import {
   COPIES_PER_TROOP, LOSS_COINS, MAX_REROLLS, WIN_COINS,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=d18c3f8';
+} from './game.js?v=54dd4eb';
 
 const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
 // Attack-effect colour when a unit doesn't set its own "fx" colour in units.json.
@@ -21,7 +21,7 @@ const secs = (ticks) => +(ticks * TICK_SECONDS).toFixed(1);
 // Seconds between attacks, as the game actually plays it (cooldowns are whole 0.1s ticks).
 const attackTime = (stats) => secs(stats.attackCd);
 const dps = (stats) => (show(stats.atk) / attackTime(stats)).toFixed(1);
-const SPEED_NAME = { 'very fast': 'Very fast', fast: 'Fast', medium: 'Medium', slow: 'Slow', 'very slow': 'Very slow' };
+const SPEED_NAME = { 'very fast': 'Very fast', fast: 'Fast', medium: 'Medium', slow: 'Slow', 'very slow': 'Very slow', 'super slow': 'Super slow' };
 const moveText = (def) => `${SPEED_NAME[def.moveSpeed]} (${MOVE_SPEEDS[def.moveSpeed]}s per tile)`;
 
 // Internal combat numbers -> the design sheet's units.
@@ -49,22 +49,24 @@ export function describePower(def, star, catalog) {
     case 'summon': {
       const name = catalog?.[p.unit]?.name ?? p.unit;
       // With no star given (the Pokédex), list the count at every star level.
-      const n = star === null ? null : p.countByStar?.[star] ?? 1;
+      const counts = p.countByStar ?? [1, 1, 1, 1];
+      const n = star === null ? (counts.every((c) => c === counts[0]) ? counts[0] : null) : counts[star];
       const what = n === null
-        ? `${(p.countByStar ?? [1, 1, 1, 1]).join(' / ')} ${name} (0★ / ★ / ★★ / ★★★)`
+        ? `${counts.join(' / ')} ${name} (0★ / ★ / ★★ / ★★★)`
         : n === 1 ? `a ${name}` : `${n} ${name}`;
-      return `${every}, it summons ${what} beside it (sides first, then behind, in front, and the diagonals).${p.summonStar !== undefined ? ` ${name} ${n === 1 ? 'is' : 'are'} always ${p.summonStar ? '★'.repeat(p.summonStar) : '0★'}.` : ''}`;
+      return `${every}, it summons ${what} beside it (sides first, then behind, in front, and the diagonals).${p.summonStar !== undefined ? ` ${name} ${n === 1 ? 'is' : 'are'} always ${p.summonStar ? '★'.repeat(p.summonStar) : '0★'}.` : ` ${n === 1 ? 'It comes' : 'They come'} at ${def.name}'s star level.`}`;
     }
     case 'stealth': return `${every}, it turns invisible for ${secs(p.duration)}s${p.hastePct ? ` and attacks ${p.hastePct}% faster` : ''}. Enemies can't target or follow it while it's invisible.`;
     case 'haste': return `${every}, it's enraged: ${p.hastePct}% faster attacks for ${secs(p.duration)}s.`;
     case 'quake': return `With every ${def.energy}th attack, it shakes the whole board: every enemy takes ${p.damagePct}% damage (${show(dmg)})${p.stun ? ` and is stunned for ${secs(p.stun)}s` : ''}.`;
     case 'splashHeal': return `Every attack also heals your Pokémon directly left, right, above and below the square it hits, for ${p.healPct}% of its damage (${show(Math.floor((def.damage[star ?? 0] * STAT_SCALE * p.healPct) / 100))}).`;
     case 'selfdestruct': return `When it's knocked out, it stays on its square for ${secs(p.delay)}s, then explodes: enemies within ${p.radius} square take ${p.damagePct}% damage (${show(dmg)}).`;
-    case 'copy': return `It turns into the nearest enemy, copying its damage, attack speed, movement, range and crit (not its power or HP). When that Pokémon faints, it turns back and copies the next nearest.`;
+    case 'copy': return `It walks toward the nearest enemy until it's within that enemy's range, then takes ${secs(p.morph)}s to transform into it: it copies its max HP, damage, attack speed, range and crit (not its power or movement) and keeps the same share of HP it had. Transformed, it doesn't move. When that Pokémon faints or nothing is in range, it turns back and walks to the next nearest.`;
     case 'transform': {
       const f = p.form;
       const fs = `${SPEED_NAME[f.moveSpeed].toLowerCase()} movement, attacks every ${f.secPerHit}s for ${show(Math.round(f.damage[star ?? 0] * STAT_SCALE))} damage, range ${f.range}`;
-      return `${p.trigger === 'lowHp' ? `When its HP drops to ${p.hpPct}% or less` : every}, it transforms into ${f.name} for the rest of the fight (${fs}; HP stays the same).`;
+      const morph = p.morph ? ` It takes ${secs(p.morph)}s to transform and can't be hurt, stunned or moved while it does.` : '';
+      return `${p.trigger === 'lowHp' ? `When its HP drops to ${p.hpPct}% or less` : every}, it transforms into ${f.name} for the rest of the fight (${fs}; HP stays the same).${morph}`;
     }
     case 'opening': return `When the battle starts, it fires a wave down its column. The first enemy hit takes ${p.damagePct}% damage (${show(dmg)}) and is carried all the way to the other end of the board${p.stun ? `, stunned for ${secs(p.stun)}s when it lands` : ''}. Anyone already there is pushed to the side.`;
     default: return '';
@@ -607,7 +609,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
       ${hint}
       <dl class="stats">
         <dt>HP</dt><dd>${show(stats.hp)}</dd>
-        ${isCopycat(def) ? '<dt>Everything else</dt><dd>Copies its target</dd>' : `
+        ${isCopycat(def) ? `<dt>Movement</dt><dd>${SPEED_NAME[def.moveSpeed]}</dd><dt>Everything else</dt><dd>Copies its target</dd>` : `
         <dt>Damage per hit</dt><dd>${show(stats.atk)}</dd>
         <dt>Attacks every</dt><dd>${attackTime(stats)}s</dd>
         <dt>Crit chance</dt><dd>${stats.crit}%</dd>
@@ -973,10 +975,13 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         // morph, then the new sprite. A Ditto that turns back and copies again in
         // the same moment shows its own form briefly in between.
         a.range = ev.range;
+        // Ditto takes on the copied Pokémon's max HP (keeping its share of HP).
+        if (ev.maxHp && newest()) { a.maxHp = ev.maxHp; a.hp = ev.hp; bars(a); }
         const spr = a.el.querySelector('.sprite');
         const apply = () => {
           if (spr) spr.style.backgroundImage = `url('${ev.sprite}')`;
           a.el.style.setProperty('--step', ev.moveCd / 5);
+          a.el.classList.toggle('copied', Boolean(ev.copy)); // a Ditto-coloured copy
         };
         if (!animate) { apply(); break; }
         const delay = !ev.revert && a.revertedAt === ev.t ? 450 / speed : 0;
@@ -1008,6 +1013,15 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
           setTimeout(() => fx(from.x + (p.x - from.x) * k, from.y + (p.y - from.y) * k, 'zap', fxColor(a.unitId), 1), (ms * k));
         }
         setTimeout(() => { a.el.style.transition = ''; }, ms);
+        break;
+      }
+      case 'morphStart': { // Minior (immune) or Ditto changing form
+        if (!animate) break;
+        const immune = catalog[a.unitId].ability?.kind === 'transform';
+        const cls = immune ? ['morphing', 'immune'] : ['morphing'];
+        a.el.classList.add(...cls);
+        setTimeout(() => a.el.classList.remove(...cls), (ev.duration * TICK_SECONDS * 1000) / speed);
+        if (immune) setTimeout(() => floatText(a, 'Immune', 'shield'), 300 / speed);
         break;
       }
       case 'fuse': // Golem knocked out: it stays, glowing, until it explodes
@@ -1217,7 +1231,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
               <h2>${esc(def.name)}</h2>
               <p class="dex-tags">
                 <span>${def.summon ? 'Summoned' : `${def.cost} coins`}</span>
-                ${isCopycat(def) ? '<span>Copies the nearest enemy\'s stats</span>' : `
+                ${isCopycat(def) ? `<span>Moves: ${moveText(def)}</span><span>Copies the nearest enemy's stats</span>` : `
                 <span>${def.range > 1 ? `Ranged · ${def.range} tiles` : 'Melee · 1 tile'}</span>
                 <span>Moves: ${moveText(def)}</span>
                 <span>Attacks every ${attackTime(stats0)}s</span>
