@@ -54,7 +54,8 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
 - **Board:** your half is 5×4 (the board is 5 wide by 8 tall); the row next to the centre line is the
   front. There is no limit on how many troops you field.
 - **Combat:** units target the nearest enemy they can reach and walk (pathing around anyone in the way)
-  into range one square at a time (up/down/left/right). Movement speed is how long each step takes: fast
+  into range one square at a time (up/down/left/right). Distance (for range, targeting and area
+  powers) is the number of steps between two squares, so a diagonal neighbour is 2 away. Movement speed is how long each step takes: fast
   0.5s per square, medium 0.8s, slow 1.0s, very slow 1.3s, super slow 2.0s. A unit can't attack until it finishes its step. A unit attacks every `secPerHit` seconds; each basic attack
   has a `critChance`% chance to crit for 50% more damage (powers never crit). Each tick resolves
   simultaneously, and crit luck is shared slot for slot between the sides, so neither side gets an edge.
@@ -81,11 +82,11 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
   - Lilligant, **Aromatherapy**: every attack heals your Pokémon directly left, right, above and below the
     square it hits, for 50% of its damage.
   - Golem, **Self-Destruct**: when knocked out it stays on its square for 3s (it can't be hit), then
-    explodes for 300% on enemies within 1 square. The fight waits for it.
+    explodes for 300% on enemies directly next to it (not diagonals). The fight waits for it.
   - Minior, **Shining Star**: at 25% HP or less it spends 0.5s transforming, immune to everything
     (damage, stuns, knockbacks, sudden death), then becomes its star form: very fast movement (0.35s per
     square), attacks every 0.7s, more damage (same HP).
-  - Tapu Koko, **Wild Charge**: after 4 attacks, the next dashes in a straight line to the open square
+  - Tapu Koko (range 2, attacks every 1.1s), **Wild Charge**: after 4 attacks, the next dashes in a straight line to the open square
     next to the farthest enemy (closest to Tapu Koko), hits for 150%, and stuns the target and every
     enemy it passes through for 1s.
   - Ditto, **Transform**: walks (medium speed) toward the nearest enemy until it's within that enemy's

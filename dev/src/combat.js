@@ -66,8 +66,11 @@ const coin = (seed, t) => hash(seed, t) & 1;
 // share the same rolls slot for slot, so luck never favours a side.
 const critRoll = (seed, t, slot) => hash(seed, t, slot + 1) % 100;
 
-const dist = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+// Distance is the number of steps between two squares: units walk
+// up/down/left/right, so a diagonal neighbour is 2 away. Range, targeting and
+// area powers all use it.
 const manhattan = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+const dist = manhattan;
 
 function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, inst.y)) {
   const def = catalog[inst.unitId];

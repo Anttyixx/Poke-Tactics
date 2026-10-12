@@ -1,3 +1,4 @@
+c8f6b7a	dev	2026-10-12 01:00 UTC	Count distance in steps; Tapu Koko range 2, 1.1s attacks, +15% HP
 54dd4eb	dev	2026-10-12 00:47 UTC	Apply review notes: Ditto walks then copies, Minior immune morph, stat tweaks
 d18c3f8	dev	2026-10-11 23:53 UTC	Add Torterra, Lilligant, Hoopa, Golem, Minior, Tapu Koko, Ditto; new Greninja
 4548b84	dev	2026-10-11 18:10 UTC	Vespiquen: more Combee at higher stars, placed sides-first
@@ -27,4 +28,3 @@ ceb7713	dev	2026-10-08 08:28 UTC	All troops move at the same speed (1 second per
 697a54f	dev	2026-10-08 08:24 UTC	Units walk one square at a time, no diagonals, at a slower pace
 ddc8c92	dev	2026-10-08 08:21 UTC	Apply updated ranges; Decidueye's Super reaches the whole board
 d4fed02	dev	2026-10-08 08:14 UTC	Use the design-sheet stats for leaders and troops
-68173d0	dev	2026-10-08 07:45 UTC	Team building, personal pools, 3-slot shop and copy-based stars
