@@ -88,7 +88,7 @@ export const powerCadence = (def) => {
   return `Power every ${def.energy} attacks`;
 };
 
-export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog }) {
+export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog, changelog = [] }) {
   const $ = (id) => document.getElementById(id);
   const arena = $('arena');
   const layer = $('units');
@@ -121,6 +121,11 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
   let started = false; // past the start screen (it shows once, when the game loads)
   let online = false; // playing a friend (the menu offers Leave instead of New game)
   let lobbyView = null; // which online-lobby screen is showing, if any
+  // What's new: the newest entry the player has opened, to flag unread updates.
+  const SEEN_KEY = 'poke-tactics-seen-update';
+  const latestUpdate = changelog[0]?.id ?? null;
+  const seenUpdate = () => { try { return localStorage.getItem(SEEN_KEY); } catch { return null; } };
+  const hasUnread = () => latestUpdate !== null && seenUpdate() !== latestUpdate;
   let deadline = null; // online: when planning auto-locks (Date.now() ms), or null
   let peek = null; // unit id shown in the info pop-up (phones), opened with an ⓘ button
   const sheetBackdrop = $('info-backdrop');
@@ -329,6 +334,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
     if (btn?.dataset.copy) return copyText(btn.dataset.copy, btn);
     if (btn?.id === 'share-link') return navigator.share?.({ title: 'Poke Tactics', text: `Battle me in Poke Tactics! Code: ${btn.dataset.code}`, url: btn.dataset.url }).catch(() => {});
     if (btn?.id === 'start-help') return openMenu('help');
+    if (btn?.id === 'start-news') return openMenu('news');
     if (btn?.id === 'start-dex') return openDex();
     const info = e.target.closest('[data-dex-info]');
     if (info) return openDex(info.dataset.dexInfo); // a team card's ⓘ: full stats and power
@@ -428,7 +434,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
       <div class="duel">${hpBox(p, 'ally')}<span class="vs">VS</span>${hpBox(foe(), 'enemy')}</div>
       <div class="hud-actions">
         <button id="open-dex" class="icon-btn dex-button" title="Every Pokémon's stats (P)">${ICON_DEX}<span class="label-text">Pokédex</span></button>
-        <button id="open-menu" class="icon-btn" title="Menu (M)" aria-label="Menu">${ICON_MENU}<span class="label-text">Menu</span></button>
+        <button id="open-menu" class="icon-btn${hasUnread() ? ' unread' : ''}" title="Menu (M)" aria-label="Menu">${ICON_MENU}<span class="label-text">Menu</span></button>
       </div>`;
   }
 
@@ -455,6 +461,10 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
           <li><b>Win</b> by bringing your opponent from 100 HP to 0. The loser of a battle loses HP for every Pokémon still standing.</li>
         </ul>
         <p class="muted">Keys: <kbd>D</kbd> reroll · <kbd>F</kbd> fight · <kbd>E</kbd> sell · <kbd>Space</kbd> skip · <kbd>P</kbd> Pokédex · <kbd>M</kbd> menu</p>`;
+    } else if (view === 'news') {
+      try { localStorage.setItem(SEEN_KEY, latestUpdate); } catch {}
+      hudEl.querySelector('#open-menu')?.classList.remove('unread');
+      panel.innerHTML = `${close}${back}<h1>What's new</h1>${changelogHTML()}`;
     } else if (view === 'log') {
       panel.innerHTML = `${close}${back}<h1>Match log</h1>
         <p class="muted">Every move both players made this match. Paste it to Claude to analyse the match or test stat changes.</p>
@@ -475,6 +485,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
       panel.innerHTML = `${close}<h1>Menu</h1>
         <div class="menu-list">
           <button data-menu="close"><span>▶</span><div>Resume</div></button>
+          <button data-menu="news" class="${hasUnread() ? 'unread' : ''}"><span>★</span><div>What's new<small>${esc(changelog[0]?.title ?? 'Updates to the game')}</small></div></button>
           <button data-menu="help"><span>?</span><div>How to play<small>Rules, controls and keys</small></div></button>
           <button data-menu="dex"><span>◎</span><div>Pokédex<small>Every Pokémon's stats and power</small></div></button>
           <button data-menu="log"><span>⧉</span><div>Match log<small>Copy every move this match, with notes</small></div></button>
@@ -485,6 +496,23 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
     }
     menuEl.hidden = false;
     panel.querySelector('button:not(.menu-close)')?.focus();
+  }
+
+  const KIND = { buff: 'Buff', nerf: 'Nerf', new: 'New', change: 'Change', fix: 'Fix' };
+  function changelogHTML() {
+    if (!changelog.length) return '<p class="muted">No updates yet.</p>';
+    const date = (d) => { try { return new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }); } catch { return d; } };
+    return `<div class="news">${changelog.map((u) => `
+      <section class="news-entry">
+        <div class="news-date">${esc(date(u.date))}</div>
+        <h2>${esc(u.title)}</h2>
+        ${u.intro ? `<p class="muted">${esc(u.intro)}</p>` : ''}
+        <ul>${u.changes.map((c) => {
+          const def = c.pokemon && catalog[c.pokemon];
+          return `<li>${def ? portrait(def) : '<span class="news-dot" aria-hidden="true"></span>'}
+            <div>${c.kind ? `<span class="tag ${c.kind}">${KIND[c.kind] ?? esc(c.kind)}</span>` : ''}${def && !c.text.startsWith(def.name) ? `<b>${esc(def.name)}</b> ` : ''}${esc(c.text)}</div></li>`;
+        }).join('')}</ul>
+      </section>`).join('')}</div>`;
   }
 
   async function copyLog(btn) {
@@ -1200,6 +1228,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
           <button id="battle" class="battle-btn training-btn">Training</button>
         </div>
         <div class="start-links">
+          <button id="start-news" class="ghost${hasUnread() ? ' unread' : ''}">What's new</button>
           <button id="start-help" class="ghost">How to play</button>
           <button id="start-dex" class="ghost">Pokédex</button>
         </div>

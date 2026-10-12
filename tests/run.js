@@ -576,14 +576,14 @@ test('Hyperspace Hole (Hoopa): the attack after 6 teleports to the farthest enem
   assert.equal(evs(r, 'heal', g).find((e) => e.t === cast.t).amount, Math.floor(dealt / 10));
 });
 
-test('Earthquake (Torterra): after 10 attacks, hits every enemy on the board for 30% and stuns them', () => {
+test('Earthquake (Torterra): after 5 attacks, hits every enemy on the board for 30% and stuns them', () => {
   const r = simulate(powerCat(), [
     [{ uid: 1, unitId: 'torterra', star: 0, x: 2, y: 0 }],
     [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'wall', star: 0, x: 0, y: 3 }, { uid: 4, unitId: 'wall', star: 0, x: 4, y: 2 }],
   ], 1);
   const tt = unitOf(r, 1).id;
   const cast = evs(r, 'cast', tt)[0];
-  assert.equal(evs(r, 'attack', tt).filter((e) => e.t <= cast.t).length, catalog.torterra.energy, 'with the 10th attack');
+  assert.equal(evs(r, 'attack', tt).filter((e) => e.t <= cast.t).length, catalog.torterra.energy, 'with the 5th attack');
   for (const uid of [2, 3, 4]) {
     const id = unitOf(r, uid).id;
     assert.ok(r.events.some((e) => e.type === 'damage' && e.id === id && e.t === cast.t && e.amount === Math.floor((catalog.torterra.damage[0] * 30) / 100)), `hits ${uid}`);
@@ -611,7 +611,7 @@ test('Aromatherapy (Lilligant): each attack heals allies next to the square it h
   assert.equal(evs(r, 'heal', unitOf(r, 3).id).length, 0, 'an ally elsewhere is not');
 });
 
-test('Battle Bond (Greninja): after 10 attacks it becomes Ash-Greninja (faster, harder hitting, range 3)', () => {
+test('Battle Bond (Greninja): after 5 attacks it becomes Ash-Greninja (faster, harder hitting, range 3)', () => {
   const r = simulate(powerCat(), [[{ uid: 1, unitId: 'greninja', star: 1, x: 2, y: 0 }], [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }]], 1);
   const g = unitOf(r, 1).id;
   const tf = evs(r, 'transform', g)[0];

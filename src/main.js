@@ -31,6 +31,8 @@ const NAME_KEY = 'poke-tactics-name';
 
 const catalogText = await (await fetch('data/units.json')).text();
 const catalog = JSON.parse(catalogText);
+// What's new: newest first. Add an entry to data/changelog.json with each update.
+const changelog = await fetch('data/changelog.json').then((r) => (r.ok ? r.json() : [])).catch(() => []);
 // Both players must run the same rules and Pokémon. The deploy tags every file
 // with its build (?v=...); locally there's no tag, so compare the data instead.
 const VERSION = `${new URL(import.meta.url).searchParams.get('v') ?? 'local'}:${hashSeed(catalogText)}`;
@@ -58,6 +60,7 @@ const ui = createUI({
   onNewGame: () => (mode === 'guest' ? link?.send({ type: 'rematch' }) : newGame()),
   onLobby: lobby,
   getLog,
+  changelog,
 });
 
 function getLog() {

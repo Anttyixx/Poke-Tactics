@@ -55,6 +55,20 @@ The tests cover what Phase 3 depends on. A full bot-vs-bot match is identical fo
 same seed. State survives JSON round-trips. `simulate()` is pure. `applyIntent()` rejects
 malformed or out-of-phase intents and leaves state unchanged when it does.
 
+## What's new (changelog)
+
+`data/changelog.json` feeds the in-game **What's new** screen (start screen and Menu). Add an
+entry at the **top** for every update players should hear about; a new `id` shows players an
+unread dot until they open it.
+
+```json
+{ "id": "2026-10-12-balance", "date": "2026-10-12", "title": "Balance update",
+  "intro": "Optional sentence.",
+  "changes": [ { "pokemon": "mawile", "kind": "buff", "text": "Cost 5 → 4." } ] }
+```
+
+`kind` is `buff`, `nerf`, `new`, `change` or `fix`; `pokemon` (optional) shows its sprite.
+
 ## Balance testing
 
 `tools/` plays thousands of full bot-vs-bot games (team pick, shop, every round) and
@@ -149,9 +163,9 @@ test a set of changes together. Team styles to pit against each other live in `A
   - Infernape, **Blaze**: after 7 attacks, attacks 50% faster for 3s.
   - Hoopa, **Hyperspace Hole**: after 6 attacks, the next teleports beside the farthest enemy (if it's out
     of reach), hits for 130% and heals 10% of the damage dealt. (The old Greninja's stats and power.)
-  - Greninja, **Battle Bond**: after 10 attacks, becomes Ash-Greninja for the rest of the fight: fast
+  - Greninja, **Battle Bond**: after 5 attacks, becomes Ash-Greninja for the rest of the fight: fast
     movement, attacks every 0.8s, more damage, range 3 (same HP).
-  - Torterra, **Earthquake**: with every 10th attack, every enemy on the board takes 30% and is stunned 1s.
+  - Torterra, **Earthquake**: with every 5th attack, every enemy on the board takes 30% and is stunned 1s.
   - Lilligant, **Aromatherapy**: every attack heals your Pokémon directly left, right, above and below the
     square it hits, for 50% of its damage.
   - Golem, **Self-Destruct**: when knocked out it stays on its square for 3s (it can't be hit), then

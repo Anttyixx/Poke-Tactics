@@ -1,17 +1,17 @@
 {
   "mawile": {
-    "name": "Mawile", "sprite": "assets/sprites/mawile.png", "fx": "#d4dae6", "type": "warrior", "cost": 5,
-    "hp": [450, 815, 1470, 2650], "damage": [113, 200, 365, 655], "range": 1, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 8,
+    "name": "Mawile", "sprite": "assets/sprites/mawile.png", "fx": "#d4dae6", "type": "warrior", "cost": 4,
+    "hp": [810, 1467, 2646, 4770], "damage": [113, 200, 365, 655], "range": 1, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 8,
     "ability": {"name": "Jaw Lock", "kind": "empower", "damagePct": 130, "stun": 10}
   },
   "beheeyem": {
-    "name": "Beheeyem", "sprite": "assets/sprites/beheeyem.png", "fx": "#ff7ad9", "type": "mage", "cost": 2,
-    "hp": [700, 1145, 1565, 2350], "damage": [116, 175, 261, 390], "range": 3, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 0,
+    "name": "Beheeyem", "sprite": "assets/sprites/beheeyem.png", "fx": "#ff7ad9", "type": "mage", "cost": 3,
+    "hp": [700, 1145, 1565, 2350], "damage": [116, 175, 261, 390], "range": 2, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 0,
     "ability": {"name": "Psywave", "kind": "opening", "damagePct": 50, "stun": 10}
   },
   "toxtricity": {
     "name": "Toxtricity", "sprite": "assets/sprites/toxtricity.png", "fx": "#ffe14d", "type": "ranger", "cost": 4,
-    "hp": [1000, 1700, 2890, 4900], "damage": [100, 170, 290, 490], "range": 1, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 8,
+    "hp": [1000, 1700, 2890, 4900], "damage": [110, 187, 319, 539], "range": 1, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 8,
     "ability": {"name": "Thunderbolt", "kind": "snipe", "damagePct": 80}
   },
   "vespiquen": {
@@ -31,22 +31,22 @@
   },
   "hoopa": {
     "name": "Hoopa", "sprite": "assets/sprites/hoopa.png", "fx": "#ff8ad8", "type": "mage", "cost": 3,
-    "hp": [600, 975, 1560, 2500], "damage": [75, 125, 195, 315], "range": 1, "moveSpeed": "medium", "secPerHit": 1.11, "critChance": 15, "energy": 6,
+    "hp": [840, 1365, 2184, 3500], "damage": [75, 125, 195, 315], "range": 1, "moveSpeed": "medium", "secPerHit": 1.11, "critChance": 15, "energy": 6,
     "ability": {"name": "Hyperspace Hole", "kind": "empower", "damagePct": 130, "teleport": "farthest", "lifestealPct": 10}
   },
   "infernape": {
-    "name": "Infernape", "sprite": "assets/sprites/infernape.png", "fx": "#ff8a2a", "type": "warrior", "cost": 2,
+    "name": "Infernape", "sprite": "assets/sprites/infernape.png", "fx": "#ff8a2a", "type": "warrior", "cost": 3,
     "hp": [945, 1415, 2125, 3190], "damage": [118, 180, 265, 400], "range": 1, "moveSpeed": "medium", "secPerHit": 1.11, "critChance": 15, "energy": 7,
     "ability": {"name": "Blaze", "kind": "haste", "duration": 30, "hastePct": 50}
   },
   "greninja": {
     "name": "Greninja", "sprite": "assets/sprites/greninja.png", "fx": "#5ab8ff", "type": "rogue", "cost": 4,
-    "hp": [735, 1250, 2126, 3602], "damage": [80, 136, 231, 392], "range": 2, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 10,
+    "hp": [735, 1250, 2126, 3602], "damage": [80, 136, 231, 392], "range": 2, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 5,
     "ability": {"name": "Battle Bond", "kind": "transform", "form": {"name": "Ash-Greninja", "sprite": "assets/sprites/ash-greninja.png", "moveSpeed": "fast", "secPerHit": 0.8, "damage": [110, 187, 318, 539], "range": 3}}
   },
   "torterra": {
     "name": "Torterra", "sprite": "assets/sprites/torterra.png", "fx": "#7bd36a", "type": "warrior", "cost": 4,
-    "hp": [900, 1530, 2600, 4410], "damage": [125, 212, 361, 612], "range": 1, "moveSpeed": "very slow", "secPerHit": 1.8, "critChance": 15, "energy": 10,
+    "hp": [900, 1530, 2600, 4410], "damage": [125, 212, 361, 612], "range": 1, "moveSpeed": "very slow", "secPerHit": 1.8, "critChance": 15, "energy": 5,
     "ability": {"name": "Earthquake", "kind": "quake", "damagePct": 30, "stun": 10}
   },
   "lilligant": {
@@ -70,7 +70,7 @@
     "ability": {"name": "Wild Charge", "kind": "empower", "damagePct": 150, "dash": true, "stun": 10}
   },
   "ditto": {
-    "name": "Ditto", "sprite": "assets/sprites/ditto.png", "fx": "#c9a4ff", "type": "mage", "cost": 3,
+    "name": "Ditto", "sprite": "assets/sprites/ditto.png", "fx": "#c9a4ff", "type": "mage", "cost": 4,
     "hp": [990, 1683, 2860, 4851], "damage": [60, 102, 173, 294], "range": 1, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 0,
     "ability": {"name": "Transform", "kind": "copy", "morph": 5}
   },
