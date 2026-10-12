@@ -21,7 +21,10 @@ export const MANA_PER_HIT = 0; // taking hits gives no energy
 export const STAT_SCALE = 1;
 // A critical hit deals 50% more damage. Only basic attacks can crit.
 export const CRIT_PCT = 150;
-// Movement speed tiers, in seconds per square.
+// Walking: a Pokémon waits its movement speed (seconds, below), then takes
+// STEP_TICKS to cross to the next square, then waits again before the next.
+export const STEP_TICKS = 5; // 0.5s per step
+// Movement speed tiers: the wait between steps, in seconds.
 export const MOVE_SPEEDS = { 'very fast': 0.35, fast: 0.5, medium: 0.8, slow: 1.0, 'very slow': 1.3, 'super slow': 2.0 };
 const ticksOf = (seconds) => Math.max(1, Math.round(seconds / TICK_SECONDS));
 
@@ -31,7 +34,7 @@ export function unitStats(def, star) {
     hp: Math.round(def.hp[star] * STAT_SCALE),
     atk: Math.round(def.damage[star] * STAT_SCALE),
     attackCd: ticksOf(def.secPerHit), // ticks per attack
-    moveCd: ticksOf(MOVE_SPEEDS[def.moveSpeed]), // ticks per square
+    moveCd: ticksOf(MOVE_SPEEDS[def.moveSpeed]), // ticks of waiting before each step
     crit: def.critChance ?? 0, // percent
     energy: def.energy,
   };
@@ -67,10 +70,13 @@ const coin = (seed, t) => hash(seed, t) & 1;
 const critRoll = (seed, t, slot) => hash(seed, t, slot + 1) % 100;
 
 // Distance is the number of steps between two squares: units walk
-// up/down/left/right, so a diagonal neighbour is 2 away. Range, targeting and
-// area powers all use it.
+// up/down/left/right, so a diagonal neighbour is 2 away. "Nearest" and
+// "farthest" enemy use it.
 const manhattan = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 const dist = manhattan;
+// Attack range (and blast radius) is a square around the Pokémon instead:
+// range 1 = the 3x3 around it (diagonals included), range 2 = the 5x5, ...
+const reach = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 
 function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, inst.y)) {
   const def = catalog[inst.unitId];
@@ -88,7 +94,9 @@ function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, in
     power: def.ability,
     shield: 0, stun: 0,
     pendingMana: 0, pendingStun: 0, // applied at the end of the tick
-    atkTimer: stats.attackCd, moveTimer: 0,
+    atkTimer: stats.attackCd,
+    moveTimer: stats.moveCd, // waiting before the next step (it waits before its first one too)
+    stepTimer: 0, // mid-step: ticks until it reaches the square it's walking to
     hasteUntil: 0, hastePct: 0, stealthFrom: 0, stealthUntil: 0,
     hold: 0, // ticks it can't move or attack (riding a Psywave); cooldowns still run
     landStun: 0, // stun applied when the hold ends (it has landed)
@@ -211,7 +219,7 @@ export function simulate(catalog, boards, seed = 0) {
     const p = u.power;
     emit('explode', { id: u.id, radius: p.radius });
     const amount = Math.floor((u.atk * p.damagePct) / 100);
-    for (const e of units) if (e.side !== u.side && standing(e) && dist(u, e) <= p.radius) damage(e, amount, u);
+    for (const e of units) if (e.side !== u.side && standing(e) && reach(u, e) <= p.radius) damage(e, amount, u);
     emit('death', { id: u.id });
   }
 
@@ -487,7 +495,7 @@ export function simulate(catalog, boards, seed = 0) {
       if (c !== start) {
         let reachable = null;
         for (const e of enemies) {
-          const d = dist(c, at(e));
+          const d = reach(c, at(e));
           if (d <= u.range && (!reachable || d < reachable.d)) reachable = { e, d };
         }
         if (reachable) {
@@ -504,6 +512,12 @@ export function simulate(catalog, boards, seed = 0) {
       }
     }
     return null;
+  }
+
+  // A step: STEP_TICKS crossing to the new square, then the movement-speed wait.
+  function startStep(u) {
+    u.stepTimer = STEP_TICKS;
+    u.moveTimer = STEP_TICKS + u.moveCd;
   }
 
   function moveTo(u, cell) {
@@ -538,6 +552,7 @@ export function simulate(catalog, boards, seed = 0) {
     if (u.stun > 0) { u.stun--; if (u.stun === 0) u.target = null; return; }
     if (u.atkTimer > 0) u.atkTimer--;
     if (u.moveTimer > 0) u.moveTimer--;
+    if (u.stepTimer > 0) u.stepTimer--;
     if (t <= u.morphUntil) return; // transforming
     if (t <= u.dashUntil) return; // mid-dash
     // Tapu Koko's dash has arrived: strike the Pokémon it dashed at (no dashing
@@ -546,7 +561,7 @@ export function simulate(catalog, boards, seed = 0) {
     if (arrived) {
       const far = units[u.dashTarget];
       u.dashTarget = null;
-      if (visible(far) && dist(u, at(far)) <= u.range) u.target = far.id;
+      if (visible(far) && reach(u, at(far)) <= u.range) u.target = far.id;
     }
     if (u.hold > 0) {
       u.hold--;
@@ -566,7 +581,8 @@ export function simulate(catalog, boards, seed = 0) {
         const e = nearestEnemy(u);
         if (!e) return;
         u.target = e.id;
-        if (dist(u, at(e)) <= e.range) {
+        if (u.stepTimer > 0) return; // finish the step first
+        if (reach(u, at(e)) <= e.range) {
           u.pendingCopy = e.id;
           u.morphUntil = t + u.power.morph - 1;
           emit('morphStart', { id: u.id, target: e.id, duration: u.power.morph });
@@ -574,7 +590,7 @@ export function simulate(catalog, boards, seed = 0) {
         }
         u.range = e.range; // walk until it is in reach of its own copy of `e`
       } else {
-        const inReach = (e) => e && visible(e) && e.side !== u.side && dist(u, at(e)) <= u.range;
+        const inReach = (e) => e && visible(e) && e.side !== u.side && reach(u, at(e)) <= u.range;
         let e = u.target === null ? null : units[u.target];
         if (!inReach(e)) e = enemiesOf(u).filter(inReach).sort((a, b) => dist(u, at(a)) - dist(u, at(b)))[0];
         if (!standing(units[u.copyOf]) || !e) { u.pendingRevert = true; return; }
@@ -583,7 +599,7 @@ export function simulate(catalog, boards, seed = 0) {
     }
 
     let target = u.target === null ? null : units[u.target];
-    if (!target || !visible(target) || target.side === u.side || dist(u, at(target)) > u.range) target = nearestEnemy(u);
+    if (!target || !visible(target) || target.side === u.side || reach(u, at(target)) > u.range) target = nearestEnemy(u);
     if (!target) return;
     u.target = target.id;
 
@@ -592,10 +608,10 @@ export function simulate(catalog, boards, seed = 0) {
     if (empowered && u.power.teleport && u.atkTimer === 0) {
       // No need to teleport if the farthest enemy is already in reach.
       const far = farthestEnemy(u);
-      const cell = far && dist(u, at(far)) > u.range && freeBeside(u, far);
+      const cell = far && reach(u, at(far)) > u.range && freeBeside(u, far);
       if (cell) {
         relocate(u, cell, 'teleport');
-        u.moveTimer = 0;
+        u.moveTimer = u.stepTimer = 0;
         target = far;
         u.target = far.id;
       }
@@ -604,7 +620,7 @@ export function simulate(catalog, boards, seed = 0) {
       // Dash in a straight line next to the farthest enemy, stunning every
       // enemy it passes through on the way.
       const far = farthestEnemy(u);
-      const cell = far && dist(u, at(far)) > u.range && dashSpot(u, far);
+      const cell = far && reach(u, at(far)) > u.range && dashSpot(u, far);
       if (cell) {
         const from = { x: u.x, y: u.y };
         for (const c of lineCells(from, cell)) {
@@ -615,7 +631,7 @@ export function simulate(catalog, boards, seed = 0) {
         // to everything; it strikes when it arrives.
         const travel = Math.max(2, Math.max(Math.abs(cell.x - from.x), Math.abs(cell.y - from.y)));
         relocate(u, cell, 'dash', { fromX: from.x, fromY: from.y, duration: travel });
-        u.moveTimer = 0;
+        u.moveTimer = u.stepTimer = 0;
         u.target = far.id;
         u.dashTarget = far.id;
         u.dashUntil = u.immuneUntil = t + travel;
@@ -624,9 +640,9 @@ export function simulate(catalog, boards, seed = 0) {
       }
     }
 
-    if (dist(u, at(target)) <= u.range) {
-      // A step takes the unit's whole move time; it can't attack mid-step.
-      if (u.atkTimer > 0 || u.moveTimer > 0) return;
+    if (reach(u, at(target)) <= u.range) {
+      // It can't attack mid-step; waiting between steps doesn't stop it.
+      if (u.atkTimer > 0 || u.stepTimer > 0) return;
       if (empowered) {
         powerStrike(u, target);
       } else {
@@ -647,16 +663,16 @@ export function simulate(catalog, boards, seed = 0) {
         if (u.power && u.power.kind !== 'empower' && u.maxMana > 0 && u.mana >= u.maxMana) instantPower(u, target);
       }
       u.atkTimer = cooldown(u);
-    } else if (u.moveTimer === 0 && u.copyOf === null) {
+    } else if (u.moveTimer === 0 && u.stepTimer === 0 && u.copyOf === null) {
       // Out of range: walk around anyone in the way toward the enemy that can
       // be reached soonest (which may not be the one closest as the crow flies).
       const path = findPath(u);
       if (path) {
         u.target = path.target.id;
         moveTo(u, path.next);
-        u.moveTimer = u.moveCd;
+        startStep(u);
       } else if (step(u, target)) {
-        u.moveTimer = u.moveCd;
+        startStep(u);
       }
     }
   }

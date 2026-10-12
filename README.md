@@ -2,10 +2,35 @@
 
 A browser-based 1v1 auto-battler. Buy units, place them on your half of the grid,
 then watch the fight play out by itself. Plain HTML/CSS/JS with ES modules. There is
-no build step and no dependencies, and it deploys to GitHub Pages as static files.
+no build step, and it deploys to GitHub Pages as static files. The only third-party
+code is PeerJS (MIT, copied into `vendor/`) for online play.
 
-**Status: Phase 1, a single-player loop against a bot.** PeerJS host/join (Phase 2) and
-host-authoritative multiplayer (Phase 3) are not started yet.
+**Status:** play against the bot, or a friend online with a game code.
+
+## Online play
+
+**Battle** on the start screen. One player taps **Create game** and gets a
+5-character code (and an invite link, `?join=CODE`); the other enters it under **Join**.
+
+- When the two connect, a battle-style screen wipe shows both trainers' names.
+- Each planning phase lasts 30 seconds (the Fight button counts down, red for the last 10).
+  When time runs out, anyone still planning is locked in as they are. The host's clock decides.
+- Browsers connect directly over WebRTC (`src/net.js`); PeerJS's free public server only
+  introduces them. Strict networks (some school/work Wi-Fi, some mobile data) can block
+  direct connections; then the join fails with a message suggesting another network.
+- The host's browser runs the match (`src/main.js`): the guest sends intents, the host
+  validates them with `applyIntent()` like anyone's and sends the new state back after
+  every change. Both players must run the same build; otherwise the join is refused.
+- A heartbeat notices a friend who leaves or loses connection; the other player is told
+  the match ended. **Leave match** in the menu disconnects. After a match: **Rematch**.
+- Players on different networks often can't connect directly; then a TURN relay from
+  Metered.ca carries the messages (`src/net-config.js`). Its username and password (from
+  "New credential" in Metered's TURN dashboard) live in the `METERED_TURN_USERNAME` and
+  `METERED_TURN_PASSWORD` repository secrets; the deploy workflow writes them into the site.
+- **Battle → Check my connection** shows whether the relay login is set and whether
+  direct and relayed routes work on that device.
+- `?peer=host:port` uses your own PeerJS server instead of the public one, e.g.
+  `npx peerjs --port 9000` for testing two tabs locally.
 
 ## Run locally
 
@@ -32,7 +57,7 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
 
 ## How to play
 
-- **Start:** the game opens on a start screen; **Battle** goes to team selection. Pokémon are shown as
+- **Start:** the game opens on a start screen; **Battle** plays a friend online (above); **Training** plays the bot. Pokémon are shown as
   cards (cost in the corner); tap one to pick it, or its **i** for its stats and power.
 - **Team:** before round 1, each player picks 6 Pokémon. Each one puts 4 copies into that player's own
   pool. The board starts empty: everything you field, you buy.
@@ -54,9 +79,12 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
 - **Board:** your half is 5×4 (the board is 5 wide by 8 tall); the row next to the centre line is the
   front. There is no limit on how many troops you field.
 - **Combat:** units target the nearest enemy they can reach and walk (pathing around anyone in the way)
-  into range one square at a time (up/down/left/right). Distance (for range, targeting and area
-  powers) is the number of steps between two squares, so a diagonal neighbour is 2 away. Movement speed is how long each step takes: fast
-  0.5s per square, medium 0.8s, slow 1.0s, very slow 1.3s, super slow 2.0s. A unit can't attack until it finishes its step. A unit attacks every `secPerHit` seconds; each basic attack
+  into range one square at a time (up/down/left/right). Distance (for picking the nearest or
+  farthest enemy) is the number of steps between two squares, so a diagonal neighbour is 2 away.
+  Attack range is a square around the Pokémon instead: range 1 (melee) covers the 3x3 around
+  it, diagonals included; range 2 the 5x5; and so on. Each step takes 0.5s; movement speed is how long a unit waits before each
+  step (before its first one too): very fast 0.35s, fast 0.5s, medium 0.8s, slow 1.0s, very slow 1.3s,
+  super slow 2.0s. So a medium unit covers a square every 1.3s. A unit can't attack until it finishes its step. A unit attacks every `secPerHit` seconds; each basic attack
   has a `critChance`% chance to crit for 50% more damage (powers never crit). Each tick resolves
   simultaneously, and crit luck is shared slot for slot between the sides, so neither side gets an edge.
 - **Powers:** every Pokémon has one. Most count attacks (the purple bar). Every fight starts with the bar
@@ -82,7 +110,7 @@ malformed or out-of-phase intents and leaves state unchanged when it does.
   - Lilligant, **Aromatherapy**: every attack heals your Pokémon directly left, right, above and below the
     square it hits, for 50% of its damage.
   - Golem, **Self-Destruct**: when knocked out it stays on its square for 3s (it can't be hit), then
-    explodes for 300% on enemies directly next to it (not diagonals). The fight waits for it.
+    explodes for 300% on enemies in the 3x3 square around it. The fight waits for it.
   - Minior, **Shining Star**: at 25% HP or less it spends 0.5s transforming, immune to everything
     (damage, stuns, knockbacks, sudden death), then becomes its star form: very fast movement (0.35s per
     square), attacks every 0.7s, more damage (same HP).

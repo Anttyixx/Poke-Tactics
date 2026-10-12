@@ -1,4 +1,4 @@
-e106d6e	dev	2026-10-12 04:38 UTC	Walking: wait the movement speed, then a 0.5s step
+e106d6e	stable	2026-10-12 04:55 UTC	Walking: wait the movement speed, then a 0.5s step
 03b4835	dev	2026-10-12 04:33 UTC	Start screen: Battle (online) is the main button, Training plays the bot
 be57b68	dev	2026-10-12 04:30 UTC	Attack range is a square radius around the Pokemon
 a393b25	dev	2026-10-12 04:23 UTC	Online: use a Metered TURN username/password instead of an API key

@@ -2,11 +2,11 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=1f977e7';
+import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=e106d6e';
 import {
   COPIES_PER_TROOP, LOSS_COINS, MAX_REROLLS, WIN_COINS,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=1f977e7';
+} from './game.js?v=e106d6e';
 
 const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
 // Attack-effect colour when a unit doesn't set its own "fx" colour in units.json.
@@ -22,7 +22,7 @@ const secs = (ticks) => +(ticks * TICK_SECONDS).toFixed(1);
 const attackTime = (stats) => secs(stats.attackCd);
 const dps = (stats) => (show(stats.atk) / attackTime(stats)).toFixed(1);
 const SPEED_NAME = { 'very fast': 'Very fast', fast: 'Fast', medium: 'Medium', slow: 'Slow', 'very slow': 'Very slow', 'super slow': 'Super slow' };
-const moveText = (def) => `${SPEED_NAME[def.moveSpeed]} (${MOVE_SPEEDS[def.moveSpeed]}s per tile)`;
+const moveText = (def) => `${SPEED_NAME[def.moveSpeed]} (waits ${MOVE_SPEEDS[def.moveSpeed]}s between 0.5s steps)`;
 
 // Internal combat numbers -> the design sheet's units.
 const show = (v) => +(v / STAT_SCALE).toFixed(1);
@@ -60,7 +60,7 @@ export function describePower(def, star, catalog) {
     case 'haste': return `${every}, it's enraged: ${p.hastePct}% faster attacks for ${secs(p.duration)}s.`;
     case 'quake': return `With every ${def.energy}th attack, it shakes the whole board: every enemy takes ${p.damagePct}% damage (${show(dmg)})${p.stun ? ` and is stunned for ${secs(p.stun)}s` : ''}.`;
     case 'splashHeal': return `Every attack also heals your Pokémon directly left, right, above and below the square it hits, for ${p.healPct}% of its damage (${show(Math.floor((def.damage[star ?? 0] * STAT_SCALE * p.healPct) / 100))}).`;
-    case 'selfdestruct': return `When it's knocked out, it stays on its square for ${secs(p.delay)}s, then explodes: enemies ${p.radius === 1 ? "directly left, right, in front and behind" : `within ${p.radius} steps`} take ${p.damagePct}% damage (${show(dmg)}).`;
+    case 'selfdestruct': return `When it's knocked out, it stays on its square for ${secs(p.delay)}s, then explodes: enemies in the ${2 * p.radius + 1}x${2 * p.radius + 1} square around it take ${p.damagePct}% damage (${show(dmg)}).`;
     case 'copy': return `It walks toward the nearest enemy until it's within that enemy's range, then takes ${secs(p.morph)}s to transform into it: it copies its max HP, damage, attack speed, range and crit (not its power or movement) and keeps the same share of HP it had. Transformed, it doesn't move. When that Pokémon faints or nothing is in range, it turns back and walks to the next nearest.`;
     case 'transform': {
       const f = p.form;
@@ -88,7 +88,7 @@ export const powerCadence = (def) => {
   return `Power every ${def.energy} attacks`;
 };
 
-export function createUI({ catalog, viewer, onIntent, onNewGame }) {
+export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
   const $ = (id) => document.getElementById(id);
   const arena = $('arena');
   const layer = $('units');
@@ -119,6 +119,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   let shownShop = ''; // last shop drawn, to deal new cards in
   let seenUids = new Set(); // board units already drawn, to drop new ones in
   let started = false; // past the start screen (it shows once, when the game loads)
+  let online = false; // playing a friend (the menu offers Leave instead of New game)
+  let lobbyView = null; // which online-lobby screen is showing, if any
+  let deadline = null; // online: when planning auto-locks (Date.now() ms), or null
   let peek = null; // unit id shown in the info pop-up (phones), opened with an ⓘ button
   const sheetBackdrop = $('info-backdrop');
 
@@ -178,8 +181,6 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     const el = document.createElement('div');
     el.className = `unit ${side}${def.sprite ? ' sprite-unit' : ''}${def.summon ? ' summon' : ''}`;
     el.dataset.type = def.type;
-    // Animation pacing follows movement speed (--step 1 = 0.5s per square).
-    el.style.setProperty('--step', unitStats(def, 0).moveCd / 5);
     const bars = '<div class="bars"><div class="hp"><i></i><b></b></div><div class="mana"><i></i></div></div>';
     const stars = `<div class="stars s${star}">${'★'.repeat(star)}</div>`;
     if (def.sprite) {
@@ -204,7 +205,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   }
 
   function showOverlay(html) {
-    overlay.classList.remove('start-screen');
+    lobbyView = null;
+    overlay.classList.remove('start-screen', 'lobby');
     overlay.querySelector('.card').innerHTML = html;
     overlay.hidden = false;
   }
@@ -315,18 +317,24 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     if (action === 'close') closeMenu();
     else if (action === 'dex') { closeMenu(); openDex(); }
     else if (action === 'new-confirmed') { closeMenu(); onNewGame(); }
+    else if (action === 'leave-confirmed') { closeMenu(); onLobby('leave'); }
     else openMenu(action); // 'main', 'help', 'new'
   });
   overlay.addEventListener('click', (e) => {
     const btn = e.target.closest('button, [data-dex-info]');
     if (btn?.id === 'battle') { started = true; overlay.classList.remove('start-screen'); return showTeamBuilder(); }
+    if (btn?.id === 'friend') return onLobby('open');
+    if (btn?.dataset.lobby) return onLobby(btn.dataset.lobby, lobbyValues());
+    if (btn?.dataset.copy) return copyText(btn.dataset.copy, btn);
+    if (btn?.id === 'share-link') return navigator.share?.({ title: 'Poke Tactics', text: `Battle me in Poke Tactics! Code: ${btn.dataset.code}`, url: btn.dataset.url }).catch(() => {});
     if (btn?.id === 'start-help') return openMenu('help');
     if (btn?.id === 'start-dex') return openDex();
     const info = e.target.closest('[data-dex-info]');
     if (info) return openDex(info.dataset.dexInfo); // a team card's ⓘ: full stats and power
     if (e.target.id === 'open-dex') return openDex();
     if (e.target.id === 'continue') { e.target.disabled = true; onIntent({ type: 'continue' }); }
-    if (e.target.id === 'play-again') { started = true; onNewGame(); }
+    if (e.target.id === 'play-again') { started = true; if (online) { e.target.disabled = true; e.target.textContent = 'Waiting for the host…'; } onNewGame(); }
+    if (e.target.id === 'leave-match') return onLobby('leave');
     if (state?.phase !== 'team' || me().ready) return;
     const troop = e.target.closest('[data-pick-troop]');
     if (troop) {
@@ -445,6 +453,10 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
           <li><b>Win</b> by bringing your opponent from 100 HP to 0. The loser of a battle loses HP for every Pokémon still standing.</li>
         </ul>
         <p class="muted">Keys: <kbd>D</kbd> reroll · <kbd>F</kbd> fight · <kbd>E</kbd> sell · <kbd>Space</kbd> skip · <kbd>P</kbd> Pokédex · <kbd>M</kbd> menu</p>`;
+    } else if (view === 'leave') {
+      panel.innerHTML = `${close}<h1>Leave the match?</h1>
+        <p class="muted">Your friend will be told you left, and the match ends.</p>
+        <div class="confirm-row"><button data-menu="main">Keep playing</button><button class="danger" data-menu="leave-confirmed">Leave</button></div>`;
     } else if (view === 'new') {
       panel.innerHTML = `${close}<h1>New game?</h1>
         <p class="muted">This match will be lost.</p>
@@ -455,7 +467,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
           <button data-menu="close"><span>▶</span><div>Resume</div></button>
           <button data-menu="help"><span>?</span><div>How to play<small>Rules, controls and keys</small></div></button>
           <button data-menu="dex"><span>◎</span><div>Pokédex<small>Every Pokémon's stats and power</small></div></button>
-          <button data-menu="new"><span>↻</span><div>New game<small>Start over with a new team</small></div></button>
+          ${online
+            ? '<button data-menu="leave"><span>⏏</span><div>Leave match<small>Disconnect from your friend</small></div></button>'
+            : '<button data-menu="new"><span>↻</span><div>New game<small>Start over with a new team</small></div></button>'}
         </div>`;
     }
     menuEl.hidden = false;
@@ -558,7 +572,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     rerollBtn.textContent = p.rerolls > 0 ? `Reroll (${p.rerolls} left)` : 'No rerolls left';
     rerollBtn.disabled = !canPlan() || p.rerolls <= 0;
     readyBtn.disabled = !canPlan();
-    readyBtn.textContent = state.phase === 'planning' && p.ready ? 'Waiting for opponent…' : 'Fight!';
+    readyBtn.dataset.base = state.phase === 'planning' && p.ready ? 'Waiting for opponent…' : 'Fight!';
+    tickDeadline();
   }
 
   function portrait(def) {
@@ -848,7 +863,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
           // Hop to the next square over the unit's whole move time, leaning into
           // the move; the walk cycle plays only while it's moving, and a little
           // dust puffs up where it lands.
-          const hopMs = (unitStats(catalog[a.unitId], 0).moveCd * TICK_MS) / speed;
+          const hopMs = (STEP_TICKS * TICK_MS) / speed; // every step takes 0.5s
           a.el.style.setProperty('--mx', Math.sign(p.x - from.x));
           play(a.el, 'hop', hopMs);
           play(a.el, 'moving', hopMs);
@@ -980,7 +995,6 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         const spr = a.el.querySelector('.sprite');
         const apply = () => {
           if (spr) spr.style.backgroundImage = `url('${ev.sprite}')`;
-          a.el.style.setProperty('--step', ev.moveCd / 5);
           a.el.classList.toggle('copied', Boolean(ev.copy)); // a Ditto-coloured copy
         };
         if (!animate) { apply(); break; }
@@ -1148,14 +1162,17 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         <div class="logo"><span>Poke</span><span>Tactics</span></div>
         <p class="tagline">Draft a team, place your Pokémon, and watch them battle it out.</p>
         <div class="parade" aria-hidden="true">${parade}</div>
-        <button id="battle" class="primary battle-btn">Battle</button>
+        <div class="start-modes">
+          <button id="friend" class="primary battle-btn">Battle</button>
+          <button id="battle" class="battle-btn training-btn">Training</button>
+        </div>
         <div class="start-links">
           <button id="start-help" class="ghost">How to play</button>
           <button id="start-dex" class="ghost">Pokédex</button>
         </div>
       </div>`);
     overlay.classList.add('start-screen');
-    overlay.querySelector('#battle').focus();
+    overlay.querySelector('#friend').focus();
   }
 
   function showTeamBuilder() {
@@ -1178,7 +1195,170 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     showOverlay(`
       <h1 class="${state.winner === viewer ? 'win' : 'loss'}">${title}</h1>
       <p>The match lasted ${state.round} rounds. Final HP: ${me().hp} vs ${foe().hp}.</p>
-      <button id="play-again" class="primary">Play again</button>`);
+      ${online && viewer === 1
+        ? '<button id="play-again" class="primary">Ask for a rematch</button>'
+        : `<button id="play-again" class="primary">${online ? 'Rematch' : 'Play again'}</button>`}
+      ${online ? '<button id="leave-match" class="ghost">Leave</button>' : ''}`);
+  }
+
+  // ---- online lobby ----------------------------------------------------------
+
+  const lobbyValues = () => ({
+    name: overlay.querySelector('#lobby-name')?.value ?? '',
+    code: overlay.querySelector('#lobby-code')?.value ?? '',
+  });
+
+  async function copyText(text, btn) {
+    try {
+      await navigator.clipboard.writeText(text);
+      const was = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = was; }, 1400);
+    } catch { toast('Copy blocked here. Select the text and copy it yourself.'); }
+  }
+
+  // Screens: 'menu' (name, create or join), 'connecting', 'hosting' (show the
+  // code), 'error' and 'disconnected'. main.js decides which one to show.
+  function showLobby(view, data = {}) {
+    const back = '<button class="ghost" data-lobby="home">Back</button>';
+    const html = {
+      menu: () => `
+        <h1>Battle a Friend</h1>
+        <label class="field">Your name<input id="lobby-name" maxlength="16" autocomplete="nickname" placeholder="Trainer" value="${esc(data.name ?? '')}"></label>
+        <div class="lobby-split">
+          <section>
+            <h2>Create a game</h2>
+            <p class="muted">Get a code to send your friend.</p>
+            <button class="primary" data-lobby="host">Create game</button>
+          </section>
+          <section>
+            <h2>Join a game</h2>
+            <p class="muted">Enter the code your friend sent you.</p>
+            <input id="lobby-code" class="code-input" maxlength="7" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCDE" value="${esc(data.code ?? '')}" aria-label="Game code">
+            <button class="primary" data-lobby="join">Join</button>
+          </section>
+        </div>
+        <div class="lobby-actions">${back}<button class="ghost" data-lobby="check">Check my connection</button></div>`,
+      checking: () => `
+        <h1>Checking your connection</h1>
+        <div class="spinner" aria-hidden="true"></div>
+        <p class="muted">This takes a few seconds.</p>`,
+      check: () => {
+        const c = data;
+        const keyText = {
+          ok: [true, 'Relay login is set'],
+          missing: [false, 'No relay login in this version of the game'],
+          unreachable: [false, 'Couldn\'t reach Metered to check the relay key'],
+        }[c.key] ?? [false, `Metered refused the relay key (${esc(c.key.replace('rejected', '').trim() || 'error')})`];
+        const row = ([ok, text]) => `<li class="${ok ? 'ok' : 'bad'}"><span aria-hidden="true">${ok ? '✓' : '✗'}</span>${text}</li>`;
+        const verdict = c.relay
+          ? 'Online play should work from anywhere: if a direct connection is blocked, the relay takes over.'
+          : c.direct
+            ? 'Direct connections work, but the relay doesn\'t. Friends on some networks (many phone carriers, some home routers) won\'t be able to connect to you.'
+            : 'Only same-network connections will work from here. Try a different network.';
+        return `
+        <h1>Connection check</h1>
+        <ul class="check-list">
+          ${row(keyText)}
+          ${row([c.direct, c.direct ? 'Direct connections through your router work' : 'Direct connections are blocked on this network'])}
+          ${row([c.relay, c.relay ? 'Relay connection works' : 'Relay connection not available'])}
+        </ul>
+        <p>${verdict}</p>
+        <button class="primary" data-lobby="open">Back</button>`;
+      },
+      connecting: () => `
+        <h1>Battle a Friend</h1>
+        <div class="spinner" aria-hidden="true"></div>
+        <p>${esc(data.text ?? 'Connecting…')}</p>
+        ${data.cancel ? '<button class="ghost" data-lobby="home">Cancel</button>' : ''}`,
+      hosting: () => `
+        <h1>Your game code</h1>
+        <p class="muted">Send this code to your friend. They open Poke Tactics, tap <b>Battle</b> and enter it.</p>
+        <div class="code-box" aria-label="Game code ${data.code.split('').join(' ')}">${data.code}</div>
+        <div class="lobby-actions">
+          <button data-copy="${esc(data.code)}">Copy code</button>
+          <button data-copy="${esc(data.link)}">Copy invite link</button>
+          ${navigator.share ? `<button id="share-link" data-code="${esc(data.code)}" data-url="${esc(data.link)}">Share…</button>` : ''}
+        </div>
+        <p class="waiting"><span class="spinner small" aria-hidden="true"></span> Waiting for your friend to join…</p>
+        <button class="ghost" data-lobby="cancel">Cancel</button>`,
+      error: () => `
+        <h1>Couldn't connect</h1>
+        <p>${esc(data.error)}</p>
+        <div class="lobby-actions"><button class="primary" data-lobby="open">Try again</button><button data-lobby="check">Check my connection</button>${back}</div>`,
+      disconnected: () => `
+        <h1>Match ended</h1>
+        <p>${esc(data.error)}</p>
+        <button class="primary" data-lobby="home">Back to start</button>`,
+    }[view]();
+    showOverlay(html);
+    overlay.classList.add('lobby');
+    lobbyView = view;
+    const focus = view === 'menu' ? (data.code ? '[data-lobby="join"]' : '#lobby-name') : 'button.primary, button';
+    overlay.querySelector(focus)?.focus();
+  }
+
+  overlay.addEventListener('input', (e) => {
+    if (e.target.id !== 'lobby-code') return;
+    const v = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (v !== e.target.value) e.target.value = v;
+  });
+  overlay.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    if (e.target.id === 'lobby-code') onLobby('join', lobbyValues());
+  });
+
+  // ---- online: planning countdown and the battle intro ----------------------
+
+  // Online, planning locks in automatically at `ms` (Date.now() time); null = no timer.
+  let deadlineTimer = 0;
+  function setDeadline(ms) {
+    deadline = ms;
+    clearInterval(deadlineTimer);
+    if (ms) deadlineTimer = setInterval(tickDeadline, 250);
+    tickDeadline();
+  }
+  function tickDeadline() {
+    const base = readyBtn.dataset.base || readyBtn.textContent;
+    const live = deadline && state?.phase === 'planning';
+    const left = live ? Math.max(0, Math.ceil((deadline - Date.now()) / 1000)) : null;
+    readyBtn.textContent = live ? `${base} 0:${String(left).padStart(2, '0')}` : base;
+    readyBtn.classList.toggle('hurry', live && left <= 10);
+    if (live && left === 0) clearInterval(deadlineTimer);
+  }
+
+  // A Pokémon-battle screen wipe: black bars sweep across, the two trainers'
+  // names meet over a Poké Ball, then the bars sweep away.
+  function playIntro(names) {
+    document.querySelector('#wipe')?.remove();
+    const el = document.createElement('div');
+    el.id = 'wipe';
+    el.setAttribute('aria-live', 'polite');
+    const bars = Array.from({ length: 8 }, (_, i) => `<i style="--i:${i}"></i>`).join('');
+    el.innerHTML = `<div class="bars">${bars}</div>
+      <div class="vs-card">
+        <span class="trainer left">${esc(names[0])}</span>
+        <span class="ball" aria-hidden="true"></span>
+        <span class="trainer right">${esc(names[1])}</span>
+        <span class="vs-text">VS</span>
+      </div>`;
+    el.setAttribute('aria-label', `${names[0]} versus ${names[1]}`);
+    document.body.append(el);
+    setTimeout(() => el.classList.add('out'), 2300);
+    setTimeout(() => el.remove(), 3100);
+  }
+
+  // Switch between playing the bot (null) and playing a friend as `viewer`.
+  function setOnline(opts) {
+    online = Boolean(opts);
+    viewer = opts?.viewer ?? 0;
+    setDeadline(null);
+    started = online;
+    playback?.cancel();
+    playback = null;
+    state = null; // the next render starts fresh, from this player's side
+    closeMenu();
+    closeDex();
   }
 
   // ---- Pokédex ---------------------------------------------------------------
@@ -1257,5 +1437,5 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
       </div>`;
   }
 
-  return { render, toast };
+  return { render, toast, showLobby, setOnline, setDeadline, playIntro, lobbyView: () => lobbyView };
 }
