@@ -1,4 +1,4 @@
-a393b25	dev	2026-10-12 04:20 UTC	Online: use a Metered TURN username/password instead of an API key
+a393b25	dev	2026-10-12 04:23 UTC	Online: use a Metered TURN username/password instead of an API key
 c530611	dev	2026-10-12 02:27 UTC	Online: keep the game code alive while waiting; add a connection check
 5247560	dev	2026-10-12 02:22 UTC	Online: Metered relay app, key injected at deploy from a repo secret
 55fd3da	dev	2026-10-12 02:06 UTC	Online: more STUN servers and support for a Metered TURN relay

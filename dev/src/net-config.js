@@ -15,5 +15,5 @@ export const TURN_URLS = [
   'turn:global.relay.metered.ca:443',
   'turns:global.relay.metered.ca:443?transport=tcp',
 ];
-export const TURN_USERNAME = ''; // set at deploy time
-export const TURN_PASSWORD = ''; // set at deploy time
+export const TURN_USERNAME = '67f5e2f41dfc0c7e1e42261b'; // set at deploy time
+export const TURN_PASSWORD = 'XgsBM1AasfntJblp'; // set at deploy time
