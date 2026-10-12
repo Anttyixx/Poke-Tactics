@@ -1,3 +1,4 @@
+8af3fd1	dev	2026-10-12 07:46 UTC	Plan: building-block abilities (triggers, targets, hit patterns, effects)
 3237921	dev	2026-10-12 05:45 UTC	Match logs and replay analysis; single-Pokemon focus studies
 8afa6fc	dev	2026-10-12 05:40 UTC	Faster simulations: engine hot paths and a smarter placer
 736f06d	dev	2026-10-12 05:24 UTC	Balance tools: two-team matches and smart repositioning
@@ -27,4 +28,3 @@ c979235	dev	2026-10-09 15:48 UTC	Clean up the UI: menu, responsive layout, refre
 744e458	dev	2026-10-09 13:01 UTC	Show the opponent's last-round lineup while planning
 b085413	dev	2026-10-08 22:52 UTC	Each step takes the unit's whole move time
 4e7d6ca	dev	2026-10-08 22:48 UTC	Psywave crosses the whole board
-764bf9a	dev	2026-10-08 22:42 UTC	Power tweaks: Vespiquen every 7 attacks, Combee stats, fresh start each fight
