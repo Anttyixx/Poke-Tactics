@@ -23,6 +23,9 @@ code is PeerJS (MIT, copied into `vendor/`) for online play.
   every change. Both players must run the same build; otherwise the join is refused.
 - A heartbeat notices a friend who leaves or loses connection; the other player is told
   the match ended. **Leave match** in the menu disconnects. After a match: **Rematch**.
+- Players on different networks often can't connect directly; then a TURN relay from
+  Metered.ca carries the messages (`src/net-config.js`). Its publishable API key lives in
+  the `METERED_API_KEY` repository secret, and the deploy workflow writes it into the site.
 - `?peer=host:port` uses your own PeerJS server instead of the public one, e.g.
   `npx peerjs --port 9000` for testing two tabs locally.
 
