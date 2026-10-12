@@ -15,11 +15,11 @@
 //                  { type: 'refuse', error }           can't play (different versions)
 //                  { type: 'full' }                    someone else already joined
 
-import { createGame, applyIntent } from './game.js?v=a393b25';
-import { botTurn } from './bot.js?v=a393b25';
-import { createUI } from './ui.js?v=a393b25';
-import { hashSeed } from './rng.js?v=a393b25';
-import { hostRoom, joinRoom, cleanCode, isCode, checkConnection } from './net.js?v=a393b25';
+import { createGame, applyIntent } from './game.js?v=be57b68';
+import { botTurn } from './bot.js?v=be57b68';
+import { createUI } from './ui.js?v=be57b68';
+import { hashSeed } from './rng.js?v=be57b68';
+import { hostRoom, joinRoom, cleanCode, isCode, checkConnection } from './net.js?v=be57b68';
 
 const BOT = 1;
 // Online, each planning phase lasts this long; then everyone still planning is
@@ -27,7 +27,7 @@ const BOT = 1;
 const PLAN_SECONDS = 30;
 const NAME_KEY = 'poke-tactics-name';
 
-const catalogText = await (await fetch('data/units.json?v=a393b25')).text();
+const catalogText = await (await fetch('data/units.json?v=be57b68')).text();
 const catalog = JSON.parse(catalogText);
 // Both players must run the same rules and Pokémon. The deploy tags every file
 // with its build (?v=...); locally there's no tag, so compare the data instead.
