@@ -1,5 +1,17 @@
 [
   {
+    "id": "2026-10-13-profiles",
+    "version": "0.10.0",
+    "date": "2026-10-13",
+    "title": "Player profiles",
+    "intro": "Make the game yours: pick a name and a profile picture. They're saved in your browser, so they're still there when you come back.",
+    "changes": [
+      { "kind": "new", "text": "Profile: tap the chip at the top left of the start screen (or Menu → Profile) to set your name and choose a profile picture." },
+      { "kind": "new", "text": "Your profile is saved in this browser and stays after you close it. Clearing your browser's site data resets it." },
+      { "kind": "new", "text": "Profile pictures show next to the names at the top of the screen and in the versus intro. Online, your friend sees yours." }
+    ]
+  },
+  {
     "id": "2026-10-13-new-shop",
     "version": "0.9.0",
     "date": "2026-10-13",

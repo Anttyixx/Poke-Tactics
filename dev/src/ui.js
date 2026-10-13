@@ -2,11 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=519c610';
+import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=0eed4d0';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=519c610';
+} from './game.js?v=0eed4d0';
+import { AVATARS, NAME_MAX, avatarUrl } from './profile.js?v=0eed4d0';
 
 const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
 // Attack-effect colour when a unit doesn't set its own "fx" colour in units.json.
@@ -94,7 +95,7 @@ export const powerCadence = (def) => {
   return `Power every ${def.energy} attacks`;
 };
 
-export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog, changelog = [], version = null, build = null }) {
+export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProfile = () => {}, getProfile = () => ({ name: '', avatar: null, saved: false }), getLog, changelog = [], version = null, build = null }) {
   const $ = (id) => document.getElementById(id);
   const arena = $('arena');
   const layer = $('units');
@@ -189,6 +190,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
   }
 
   const spriteStyle = (def) => `style="background-image:url('${def.sprite}')"`;
+  // A profile picture: the front-facing frame of a sprite sheet.
+  const avatar = (id, cls = '') => `<span class="avatar ${cls}" style="background-image:url('${avatarUrl(id)}')" aria-hidden="true"></span>`;
+  let profileDraft = null; // the profile screen's unsaved choices
 
   function unitEl(unitId, star, side = 'ally', facing = 'down') {
     const def = catalog[unitId];
@@ -325,6 +329,13 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
   });
   menuEl.addEventListener('click', (e) => {
     if (e.target === menuEl) return closeMenu();
+    const pic = e.target.closest('button[data-avatar]');
+    if (pic && profileDraft) {
+      profileDraft.avatar = pic.dataset.avatar;
+      for (const b of menuEl.querySelectorAll('button[data-avatar]')) b.setAttribute('aria-pressed', String(b === pic));
+      menuEl.querySelector('.profile-preview .avatar').style.backgroundImage = `url('${avatarUrl(profileDraft.avatar)}')`;
+      return;
+    }
     const btn = e.target.closest('button[data-menu]');
     if (!btn) return;
     const action = btn.dataset.menu;
@@ -333,6 +344,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
     else if (action === 'new-confirmed') { closeMenu(); onNewGame(); }
     else if (action === 'leave-confirmed') { closeMenu(); onLobby('leave'); }
     else if (action === 'copy-log') copyLog(btn);
+    else if (action === 'profile-save') saveProfileForm();
     else if (action === 'start-battle') { closeMenu(); onLobby('open'); }
     else if (action === 'start-training') { closeMenu(); started = true; overlay.classList.remove('start-screen'); showTeamBuilder(); }
     else openMenu(action); // 'main', 'help', 'new'
@@ -345,6 +357,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
     if (btn?.dataset.copy) return copyText(btn.dataset.copy, btn);
     if (btn?.id === 'share-link') return navigator.share?.({ title: 'Poke Tactics', text: `Battle me in Poke Tactics! Code: ${btn.dataset.code}`, url: btn.dataset.url }).catch(() => {});
     if (btn?.id === 'start-menu') return openMenu('main');
+    if (btn?.id === 'profile-chip') return openMenu('profile');
     const info = e.target.closest('[data-dex-info]');
     if (info) return openDex(info.dataset.dexInfo); // a team card's ⓘ: full stats and power
     if (e.target.id === 'open-dex') return openDex();
@@ -423,9 +436,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
   function hpBox(p, side) {
     const pct = Math.max(0, p.hp);
     return `<div class="hpbox ${side}" title="${esc(p.name)}: ${p.hp} HP">
-      ${side === 'ally' ? `<span class="name">${esc(p.name)}</span>` : `<b>${p.hp}</b>`}
+      ${side === 'ally' ? `${avatar(p.avatar, 'hud-avatar')}<span class="name">${esc(p.name)}</span>` : `<b>${p.hp}</b>`}
       <div class="hpbar"><i style="width:${pct}%"></i></div>
-      ${side === 'ally' ? `<b>${p.hp}</b>` : `<span class="name">${esc(p.name)}</span>`}
+      ${side === 'ally' ? `<b>${p.hp}</b>` : `<span class="name">${esc(p.name)}</span>${avatar(p.avatar, 'hud-avatar')}`}
     </div>`;
   }
 
@@ -482,6 +495,20 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
         <button class="primary" data-menu="copy-log">Copy match log</button>
         <p class="muted" id="log-status" aria-live="polite"></p>
         <textarea id="log-text" class="log-text" rows="6" readonly hidden></textarea>`;
+    } else if (view === 'profile') {
+      const p = getProfile();
+      profileDraft = { name: p.name, avatar: p.avatar };
+      panel.innerHTML = `${close}${back}<h1>Profile</h1>
+        <div class="profile-preview">${avatar(profileDraft.avatar, 'big')}</div>
+        <label class="field">Your name<input id="profile-name" maxlength="${NAME_MAX}" autocomplete="nickname" placeholder="Trainer" value="${esc(p.name)}"></label>
+        <p class="field-label">Profile picture</p>
+        <div class="avatar-grid" role="group" aria-label="Profile picture">${AVATARS.map((id) =>
+          `<button type="button" data-avatar="${id}" aria-pressed="${id === profileDraft.avatar}" title="${esc(catalog[id]?.name ?? id)}">${avatar(id)}</button>`).join('')}</div>
+        <button class="primary" data-menu="profile-save">Save</button>
+        <p class="muted small">Saved in this browser, so it's here next time you play. Clearing your browser's site data resets it.</p>`;
+      menuEl.hidden = false;
+      panel.querySelector('#profile-name').focus();
+      return;
     } else if (view === 'leave') {
       panel.innerHTML = `${close}<h1>Leave the match?</h1>
         <p class="muted">Your friend will be told you left, and the match ends.</p>
@@ -496,6 +523,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
         <div class="menu-list">
           <button data-menu="start-battle"><span>⚔</span><div>Battle<small>Play a friend online</small></div></button>
           <button data-menu="start-training"><span>▶</span><div>Training<small>Play against the bot</small></div></button>
+          <button data-menu="profile"><span>☺</span><div>Profile<small>Your name and picture</small></div></button>
           <button data-menu="news" class="${hasUnread() ? 'unread' : ''}"><span>★</span><div>What's new<small>${esc(changelog[0]?.title ?? 'Updates to the game')}</small></div></button>
           <button data-menu="help"><span>?</span><div>How to play<small>Rules, controls and keys</small></div></button>
           <button data-menu="dex"><span>◎</span><div>Pokédex<small>Every Pokémon's stats and power</small></div></button>
@@ -509,6 +537,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
           <button data-menu="help"><span>?</span><div>How to play<small>Rules, controls and keys</small></div></button>
           <button data-menu="dex"><span>◎</span><div>Pokédex<small>Every Pokémon's stats and power</small></div></button>
           <button data-menu="log"><span>⧉</span><div>Match log<small>Copy every move this match, with notes</small></div></button>
+          <button data-menu="profile"><span>☺</span><div>Profile<small>${online ? 'Changes show from your next match' : 'Your name and picture'}</small></div></button>
           ${online
             ? '<button data-menu="leave"><span>⏏</span><div>Leave match<small>Disconnect from your friend</small></div></button>'
             : '<button data-menu="new"><span>↻</span><div>New game<small>Start over with a new team</small></div></button>'}
@@ -559,6 +588,15 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
 
   function closeMenu() {
     menuEl.hidden = true;
+    profileDraft = null;
+  }
+
+  function saveProfileForm() {
+    const name = menuEl.querySelector('#profile-name')?.value ?? '';
+    const saved = onProfile({ name, avatar: profileDraft.avatar });
+    toast(saved?.stored === false ? 'This browser blocked saving. Your profile lasts until you close the page.' : 'Profile saved');
+    closeMenu();
+    if (overlay.classList.contains('start-screen')) showStart();
   }
 
   // Phones: Pokémon details open as a pop-up sheet over the game (the layout
@@ -1263,6 +1301,11 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
     </button>`;
   }
 
+  function profileChip() {
+    const p = getProfile();
+    return `<button id="profile-chip" class="profile-chip" title="Your profile">${avatar(p.avatar)}<span>${p.saved && p.name ? esc(p.name) : 'Set up your profile'}</span></button>`;
+  }
+
   function showStart() {
     const ids = troopIds(catalog);
     const parade = ids.map((id, i) => `<span class="walker" style="--i:${i};--n:${ids.length}" data-facing="right"><span class="sprite" ${spriteStyle(catalog[id])}></span></span>`).join('');
@@ -1276,6 +1319,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
           <button id="battle" class="battle-btn training-btn">Training</button>
         </div>
         <button id="start-menu" class="icon-btn start-menu${hasUnread() ? ' unread' : ''}" title="Menu (M)" aria-label="Menu">${ICON_MENU}</button>
+        ${profileChip()}
         ${versionText ? `<div class="start-version">${esc(versionText)}</div>` : ''}
       </div>`);
     overlay.classList.add('start-screen');
@@ -1437,7 +1481,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
 
   // A Pokémon-battle screen wipe: black bars sweep across, the two trainers'
   // names meet over a Poké Ball, then the bars sweep away.
-  function playIntro(names) {
+  function playIntro(names, avatars = []) {
     document.querySelector('#wipe')?.remove();
     const el = document.createElement('div');
     el.id = 'wipe';
@@ -1445,9 +1489,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
     const bars = Array.from({ length: 8 }, (_, i) => `<i style="--i:${i}"></i>`).join('');
     el.innerHTML = `<div class="bars">${bars}</div>
       <div class="vs-card">
-        <span class="trainer left">${esc(names[0])}</span>
+        <span class="trainer left">${avatars[0] ? avatar(avatars[0], 'intro-avatar') : ''}${esc(names[0])}</span>
         <span class="ball" aria-hidden="true"></span>
-        <span class="trainer right">${esc(names[1])}</span>
+        <span class="trainer right">${esc(names[1])}${avatars[1] ? avatar(avatars[1], 'intro-avatar') : ''}</span>
         <span class="vs-text">VS</span>
       </div>`;
     el.setAttribute('aria-label', `${names[0]} versus ${names[1]}`);
