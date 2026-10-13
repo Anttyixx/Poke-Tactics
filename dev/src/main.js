@@ -17,11 +17,11 @@
 //                  { type: 'log', log }                the match log (at game over, or on request)
 //   guest -> host  { type: 'getLog' }                  ask for the match log mid-match
 
-import { createGame, applyIntent } from './game.js?v=6631210';
-import { botTurn } from './bot.js?v=6631210';
-import { createUI } from './ui.js?v=6631210';
-import { hashSeed } from './rng.js?v=6631210';
-import { hostRoom, joinRoom, cleanCode, isCode, checkConnection } from './net.js?v=6631210';
+import { createGame, applyIntent } from './game.js?v=c5d99c6';
+import { botTurn } from './bot.js?v=c5d99c6';
+import { createUI } from './ui.js?v=c5d99c6';
+import { hashSeed } from './rng.js?v=c5d99c6';
+import { hostRoom, joinRoom, cleanCode, isCode, checkConnection } from './net.js?v=c5d99c6';
 
 const BOT = 1;
 // Online, each planning phase lasts this long; then everyone still planning is
@@ -29,10 +29,10 @@ const BOT = 1;
 const PLAN_SECONDS = 30;
 const NAME_KEY = 'poke-tactics-name';
 
-const catalogText = await (await fetch('data/units.json?v=6631210')).text();
+const catalogText = await (await fetch('data/units.json?v=c5d99c6')).text();
 const catalog = JSON.parse(catalogText);
 // What's new: newest first. Add an entry to data/changelog.json with each update.
-const changelog = await fetch('data/changelog.json?v=6631210').then((r) => (r.ok ? r.json() : [])).catch(() => []);
+const changelog = await fetch('data/changelog.json?v=c5d99c6').then((r) => (r.ok ? r.json() : [])).catch(() => []);
 // Both players must run the same rules and Pokémon. The deploy tags every file
 // with its build (?v=...); locally there's no tag, so compare the data instead.
 const VERSION = `${new URL(import.meta.url).searchParams.get('v') ?? 'local'}:${hashSeed(catalogText)}`;

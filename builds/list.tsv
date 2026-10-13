@@ -1,3 +1,4 @@
+c5d99c6	dev	2026-10-13 04:16 UTC	Minior: two distinct forms (slow Rock form, frantic Star Form)
 6631210	dev	2026-10-13 00:25 UTC	Combee moves very fast (0.35s between steps, was 0.5s)
 1383648	dev	2026-10-12 22:00 UTC	Start screen: links move to the menu; bigger Battle, smaller Training
 f1199da	dev	2026-10-12 20:11 UTC	Start screen: menu button and version number
@@ -27,4 +28,3 @@ fb316c6	dev	2026-10-09 23:41 UTC	Faster shoves, and no diagonal-looking displace
 e4e559b	dev	2026-10-09 21:54 UTC	Stun on landing, new stun effect, retarget after stuns
 f9219d3	dev	2026-10-09 21:47 UTC	Fix diagonal tilt direction for front-facing sprites
 82dceda	dev	2026-10-09 21:36 UTC	Displacement rule for Pokémon launched onto an occupied square
-2e65e53	dev	2026-10-09 20:37 UTC	Tilt sprites toward diagonal targets

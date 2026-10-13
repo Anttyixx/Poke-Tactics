@@ -173,9 +173,10 @@ test a set of changes together. Team styles to pit against each other live in `A
     square it hits, for 50% of its damage.
   - Golem, **Self-Destruct**: when knocked out it stays on its square for 3s (it can't be hit), then
     explodes for 300% on enemies in the 3x3 square around it. The fight waits for it.
-  - Minior, **Shining Star**: at 25% HP or less it spends 0.5s transforming, immune to everything
-    (damage, stuns, knockbacks, sudden death), then becomes its star form: very fast movement (0.35s per
-    square), attacks every 0.7s, more damage (same HP).
+  - Minior, **Shining Star**: two play styles. Rock form is slow and sturdy (super slow, attacks every
+    3.0s). At 50% HP or less it spends 0.5s transforming, immune to everything (damage, stuns,
+    knockbacks, sudden death), then becomes its Star Form for the rest of the fight: very fast movement
+    and an attack every 0.5s, for the same damage per hit.
   - Tapu Koko (range 2, attacks every 1.1s), **Wild Charge**: after 4 attacks, the next dashes in a straight line to the open square
     next to the farthest enemy (closest to Tapu Koko). The dash takes 0.1s per square (at least 0.2s),
     and Tapu Koko is immune to everything on the way. When it arrives it hits for 150%; the target and
