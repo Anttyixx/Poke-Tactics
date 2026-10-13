@@ -1,5 +1,17 @@
 [
   {
+    "id": "2026-10-13-stay-in-match",
+    "version": "0.11.2",
+    "date": "2026-10-13",
+    "title": "No more getting kicked",
+    "intro": "Looking away from an online match no longer ends it.",
+    "changes": [
+      { "kind": "fix", "text": "If you don't press Fight (for example your phone locked or you switched apps), you're no longer kicked: when the timer runs out your team is locked in as it is and the fight starts." },
+      { "kind": "new", "text": "If your connection drops mid-match, the game reconnects you to the same match by itself." },
+      { "kind": "change", "text": "When your friend's connection drops, a notice says so, and the match keeps going. It only ends if they leave, or after 2 minutes without hearing from them." }
+    ]
+  },
+  {
     "id": "2026-10-13-online-fix",
     "version": "0.11.1",
     "date": "2026-10-13",

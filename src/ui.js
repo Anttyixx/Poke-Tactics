@@ -1648,5 +1648,18 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       </div>`;
   }
 
-  return { render, toast, showLobby, setOnline, setDeadline, playIntro, lobbyView: () => lobbyView };
+  // A standing notice about the online connection (null hides it).
+  let netEl = null;
+  function setNetStatus(text) {
+    if (!text) { netEl?.remove(); netEl = null; return; }
+    if (!netEl) {
+      netEl = document.createElement('div');
+      netEl.className = 'net-status';
+      netEl.setAttribute('role', 'status');
+      document.body.append(netEl);
+    }
+    netEl.textContent = text;
+  }
+
+  return { render, toast, showLobby, setOnline, setDeadline, setNetStatus, playIntro, lobbyView: () => lobbyView };
 }

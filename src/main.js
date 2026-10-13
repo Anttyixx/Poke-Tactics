@@ -7,7 +7,8 @@
 //           screen only ever shows the state the host sends.
 //
 // Protocol (JSON over the PeerJS connection; pings and goodbyes live in net.js):
-//   guest -> host  { type: 'hello', version, name, avatar }   first message
+//   guest -> host  { type: 'hello', version, name, avatar, guestId }   first message; sent again with the
+//                  same guestId after a dropped connection, to pick the match back up
 //                  { type: 'intent', intent }
 //                  { type: 'rematch' }                 "Play again" after a match
 //   host -> guest  { type: 'state', state }            after every change
@@ -21,7 +22,7 @@ import { createGame, applyIntent } from './game.js';
 import { botTurn } from './bot.js';
 import { createUI } from './ui.js';
 import { hashSeed } from './rng.js';
-import { hostRoom, joinRoom, cleanCode, isCode, checkConnection } from './net.js';
+import { hostRoom, joinRoom, cleanCode, isCode, checkConnection, randomCode, GONE_MS } from './net.js';
 import { loadProfile, saveProfile, recordBattle, recordMatch, removeFriend, cleanName, validAvatar, BOT_AVATAR, DEFAULT_AVATAR } from './profile.js';
 
 const BOT = 1;
@@ -41,7 +42,11 @@ let state;
 let firstGame = true;
 let mode = 'bot'; // 'bot' | 'host' | 'guest'
 let link = null; // the connection to the friend, online
-let hosting = null; // a room waiting for a friend: { code, cancel }
+let room = null; // host: the open room ({ code, cancel }), kept for the whole match so the guest can rejoin
+let guestId = null; // host: who the guest is; guest: who we are (to rejoin after a drop)
+let away = false; // the friend has gone quiet or their connection dropped
+let giveUpTimer = 0; // host: ends the match if a dropped guest doesn't come back
+let awayTimer = 0; // host: moves an away guest past the battle results
 let profile = loadProfile(); // name and picture, saved in this browser
 const myName = () => profile.name || 'You';
 let names = [myName(), 'Bot'];
@@ -132,6 +137,21 @@ function show() {
   trackStats();
   ui.render(state);
   planClock();
+  awayContinue();
+}
+
+// Host: a guest who's away can't press Continue after a battle. Once the
+// battle has had time to play out, continue for them so the match goes on.
+let awayKey = null;
+function awayContinue() {
+  if (mode !== 'host' || !away || state.phase !== 'combat' || state.players[1].ready) return;
+  const key = `${state.seed}:${state.round}`;
+  if (key === awayKey) return;
+  awayKey = key;
+  clearTimeout(awayTimer);
+  awayTimer = setTimeout(() => {
+    if (mode === 'host' && away && state.phase === 'combat' && `${state.seed}:${state.round}` === key && !state.players[1].ready) dispatch(1, { type: 'continue' });
+  }, state.combat.result.ticks * 100 + 5000);
 }
 
 // Profile stats: each battle counts the Pokémon this player fielded; each
@@ -209,7 +229,7 @@ function lobby(action, data = {}) {
     if (!isCode(code)) return ui.toast('Codes are 5 letters and numbers, like KOKO4.');
     return join(code, playerName(data.name) || 'Player 2');
   }
-  if (action === 'cancel') { stopHosting(); return ui.showLobby('menu', { name: savedName() }); }
+  if (action === 'cancel') { stopHosting(); link = null; return ui.showLobby('menu', { name: savedName() }); }
   if (action === 'leave') return leave();
   if (action === 'check') {
     ui.showLobby('checking');
@@ -225,18 +245,19 @@ async function host(name) {
   stopHosting();
   ui.showLobby('connecting', { text: 'Creating a game…' });
   try {
-    const room = await hostRoom({
-      onGuest: (l) => { link = l; },
+    const r = await hostRoom({
       onMessage: hostMessage,
-      onClose: (reason) => disconnected(reason),
+      onClose: hostLinkClosed,
+      onQuiet: (quiet, l) => { if (l === link && mode === 'host') setAway(quiet); },
       onError: (error) => { stopHosting(); ui.showLobby('error', { error }); },
     });
-    hosting = room;
+    room = r;
+    guestId = null;
     names = [name, 'Friend'];
     avatars = [profile.avatar, DEFAULT_AVATAR];
     const url = new URL(location.href);
-    url.search = `?join=${room.code}`;
-    ui.showLobby('hosting', { code: room.code, link: url.href });
+    url.search = `?join=${r.code}`;
+    ui.showLobby('hosting', { code: r.code, link: url.href });
   } catch (err) {
     ui.showLobby('error', { error: err.message });
   }
@@ -244,16 +265,32 @@ async function host(name) {
 
 function hostMessage(msg, l) {
   if (msg.type === 'hello') {
-    if (mode === 'host') return; // a repeat (the guest re-sends until the game starts)
+    if (l === link) return; // a repeat (the guest re-sends until the game starts)
+    if (mode === 'host') {
+      // Mid-match: only the same guest, coming back after a dropped connection.
+      if (typeof msg.guestId === 'string' && msg.guestId === guestId) {
+        const old = link;
+        link = l;
+        old?.close();
+        clearTimeout(giveUpTimer);
+        setAway(false);
+        l.send({ type: 'state', state });
+      } else {
+        l.send({ type: 'full' });
+        setTimeout(() => l.close(), 300);
+      }
+      return;
+    }
+    if (!room) return;
     if (msg.version !== VERSION) {
       l.send({ type: 'refuse', error: 'You and your friend have different versions of the game. Both of you refresh the page (or open the same link) and try again.' });
       setTimeout(() => l.close(), 300);
-      link = null;
-      hosting = null;
       ui.showLobby('error', { error: 'Your friend has a different version of the game. Both of you refresh the page (or open the same link) and try again.' });
+      stopHosting();
       return;
     }
-    hosting = null;
+    link = l;
+    guestId = typeof msg.guestId === 'string' ? msg.guestId.slice(0, 40) : null;
     mode = 'host';
     me = 0;
     names = [names[0], cleanName(msg.name) || 'Player 2'];
@@ -261,8 +298,8 @@ function hostMessage(msg, l) {
     ui.setOnline({ viewer: 0 });
     newGame();
     ui.playIntro(names, avatars);
-  } else if (mode !== 'host') {
-    // Not in a match yet: ignore anything else.
+  } else if (mode !== 'host' || l !== link) {
+    // Not in a match yet, or not the player: ignore anything else.
   } else if (msg.type === 'intent') {
     dispatch(1, msg.intent);
   } else if (msg.type === 'getLog') {
@@ -272,43 +309,116 @@ function hostMessage(msg, l) {
   }
 }
 
+// Host: a connection closed. Only the player's matters. If it broke (rather
+// than the guest leaving), keep the match going and wait for them to rejoin.
+function hostLinkClosed(reason, l) {
+  if (l !== link) return;
+  link = null;
+  if (mode !== 'host') return; // still in the waiting room: wait for someone else
+  if (reason === 'lost') {
+    setAway(true);
+    clearTimeout(giveUpTimer);
+    giveUpTimer = setTimeout(() => { if (mode === 'host' && !link) disconnected('timeout'); }, GONE_MS);
+    return;
+  }
+  disconnected(reason);
+}
+
+// The friend went quiet or dropped (true), or is back (false).
+function setAway(isAway) {
+  if (away === isAway) return;
+  away = isAway;
+  const who = mode === 'host' ? names[1] : state?.players[0]?.name ?? 'your friend';
+  if (isAway) {
+    ui.setNetStatus(mode === 'host'
+      ? `${who}'s connection dropped. They're locked in when the timer runs out; waiting for them to come back…`
+      : `Lost touch with ${who}. Reconnecting…`);
+    awayKey = null;
+    if (state) awayContinue();
+  } else {
+    ui.setNetStatus(null);
+    clearTimeout(awayTimer);
+    ui.toast(mode === 'host' ? `${who} is back` : 'Reconnected');
+  }
+}
+
 async function join(code, name) {
   stopHosting();
   ui.showLobby('connecting', { text: `Joining ${code}…`, cancel: true });
+  guestId = randomCode() + randomCode();
+  const myId = guestId;
   let started = false;
+  let giveUpAt = 0; // while reconnecting: when to stop trying
+  let statesSeen = 0;
+  const handlers = {
+    onMessage: (msg) => {
+      if (msg.type === 'state') {
+        statesSeen++;
+        if (!started) {
+          started = true;
+          mode = 'guest';
+          me = 1;
+          ui.setOnline({ viewer: 1 });
+          const [mine, theirs] = [msg.state.players[1], msg.state.players[0]];
+          ui.playIntro([mine.name, theirs.name], [mine.avatar, theirs.avatar]);
+        }
+        state = msg.state;
+        show();
+      } else if (msg.type === 'reject') ui.toast(msg.error);
+      else if (msg.type === 'log') {
+        matchLog = msg.log;
+        for (const w of logWaiters) w(matchLog);
+        logWaiters = [];
+      } else if (msg.type === 'refuse' || msg.type === 'full') {
+        const l = link;
+        link = null;
+        l?.close();
+        if (started) return disconnected('refused');
+        ui.showLobby('error', { error: msg.type === 'full' ? 'That game already has two players.' : msg.error });
+      }
+    },
+    onQuiet: (quiet) => { if (started && mode === 'guest') setAway(quiet); },
+    onClose: (reason) => {
+      if (reason === 'self' || guestId !== myId) return;
+      link = null;
+      if (started && mode === 'guest' && reason === 'lost') return reconnect();
+      disconnected(reason);
+    },
+  };
+  // Say hello until a state arrives, in case the first one is lost.
+  const greet = (l) => {
+    const before = statesSeen;
+    const hello = () => {
+      if (link !== l || statesSeen !== before) return;
+      l.send({ type: 'hello', version: VERSION, name, avatar: profile.avatar, guestId: myId });
+      setTimeout(hello, 1000);
+    };
+    hello();
+  };
+  // Mid-match the connection broke: keep trying to get back into the same room.
+  const reconnect = async () => {
+    setAway(true);
+    giveUpAt ||= Date.now() + GONE_MS;
+    while (guestId === myId && mode === 'guest' && !link) {
+      if (Date.now() > giveUpAt) return disconnected('timeout');
+      try {
+        const l = await joinRoom(code, handlers);
+        if (guestId !== myId || mode !== 'guest') { l.close(); return; }
+        link = l;
+        giveUpAt = 0;
+        greet(l);
+        setAway(false);
+        return;
+      } catch {
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    }
+  };
   try {
-    const l = await joinRoom(code, {
-      onMessage: (msg) => {
-        if (msg.type === 'state') {
-          if (!started) {
-            started = true;
-            mode = 'guest';
-            me = 1;
-            ui.setOnline({ viewer: 1 });
-            const [mine, theirs] = [msg.state.players[1], msg.state.players[0]];
-            ui.playIntro([mine.name, theirs.name], [mine.avatar, theirs.avatar]);
-          }
-          state = msg.state;
-          show();
-        } else if (msg.type === 'reject') ui.toast(msg.error);
-        else if (msg.type === 'log') {
-          matchLog = msg.log;
-          for (const w of logWaiters) w(matchLog);
-          logWaiters = [];
-        }
-        else if (msg.type === 'refuse' || msg.type === 'full') {
-          link?.close();
-          link = null;
-          ui.showLobby('error', { error: msg.type === 'full' ? 'That game already has two players.' : msg.error });
-        }
-      },
-      onClose: (reason) => disconnected(reason),
-    });
+    const l = await joinRoom(code, handlers);
     if (ui.lobbyView() !== 'connecting') { l.close(); return; } // cancelled while connecting
     link = l;
-    // Say hello until the first state arrives, in case the first one is lost.
-    const hello = () => { if (!started && link === l) { l.send({ type: 'hello', version: VERSION, name, avatar: profile.avatar }); setTimeout(hello, 1000); } };
-    hello();
+    greet(l);
     ui.showLobby('connecting', { text: 'Connected! Waiting for the game to start…' });
   } catch (err) {
     if (ui.lobbyView() === 'connecting') ui.showLobby('error', { error: err.message });
@@ -316,29 +426,43 @@ async function join(code, name) {
 }
 
 function stopHosting() {
-  hosting?.cancel();
-  hosting = null;
+  room?.cancel();
+  room = null;
 }
 
+// The match is over for good: tell the player why.
 function disconnected(reason) {
   const wasPlaying = mode !== 'bot';
+  link?.close();
   link = null;
+  stopHosting();
+  guestId = null;
   clearTimeout(lockTimer); // nobody to lock in any more
+  clearTimeout(giveUpTimer);
+  clearTimeout(awayTimer);
+  away = false;
+  ui.setNetStatus(null);
   ui.setDeadline(null);
   if (reason === 'self' || !wasPlaying) return;
-  const who = mode === 'host' ? names[1] : names[0];
-  ui.showLobby('disconnected', { error: reason === 'timeout' ? `Lost the connection to ${who}.` : `${who} left the game.` });
+  const who = mode === 'host' ? names[1] : state?.players[0]?.name ?? names[0];
+  ui.showLobby('disconnected', { error: reason === 'timeout' ? `Lost the connection to ${who}.` : reason === 'refused' ? `Couldn't get back into the game with ${who}.` : `${who} left the game.` });
 }
 
 function leave() {
   link?.close();
   link = null;
+  guestId = null;
   goHome();
 }
 
 // Back to the start screen with a fresh game against the bot.
 function goHome() {
   stopHosting();
+  guestId = null;
+  clearTimeout(giveUpTimer);
+  clearTimeout(awayTimer);
+  away = false;
+  ui.setNetStatus(null);
   clearTimeout(lockTimer);
   timerKey = null;
   mode = 'bot';

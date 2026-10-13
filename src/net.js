@@ -3,8 +3,11 @@
 // a friend can connect with just the code.
 //
 // Messages are plain JSON objects; see main.js for the protocol. A heartbeat
-// notices a friend who closed the tab or lost their connection, since WebRTC
-// doesn't always report that on its own.
+// notices when a friend goes quiet. Quiet isn't gone: phones pause the page
+// whenever the screen locks or the player switches apps, so a quiet friend is
+// only reported (onQuiet), and the match carries on without them. Only a
+// friend who leaves, or stays silent for GONE_MS, ends it. A guest whose
+// connection drops reconnects to the same room (main.js resumes the match).
 
 import { TURN_URLS, TURN_USERNAME, TURN_PASSWORD } from './net-config.js';
 
@@ -14,7 +17,8 @@ const ID_PREFIX = 'poke-tactics-';
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 5;
 const PING_MS = 2000;
-const TIMEOUT_MS = 9000; // no message for this long = disconnected
+const QUIET_MS = 7000; // no message for this long: the friend's page is probably asleep
+export const GONE_MS = 120000; // no message for this long: give up on them
 const CONNECT_MS = 20000; // give up joining after this long (a relayed connection can take a while)
 
 export const randomCode = () => Array.from(crypto.getRandomValues(new Uint32Array(CODE_LENGTH)), (n) => CODE_CHARS[n % CODE_CHARS.length]).join('');
@@ -99,42 +103,57 @@ const friendlyError = (err) => {
 };
 
 // Wrap a PeerJS DataConnection: JSON messages in, heartbeat, one close callback.
-function wrap(conn, peer, { onMessage, onClose }) {
+// onClose(reason): 'left' (the friend left or closed the page), 'lost' (the
+// connection broke), 'timeout' (silent for GONE_MS) or 'self' (we closed it).
+// onQuiet(true/false): the friend went quiet / is back.
+function wrap(conn, { onMessage, onClose, onQuiet = () => {}, after = () => {} }) {
   let closed = false;
+  let quiet = false;
   let lastSeen = Date.now();
-  const send = (msg) => { if (!closed && conn.open) conn.send(msg); };
-  const close = (reason = 'left') => {
+  let lastTick = Date.now();
+  const send = (msg) => { if (!closed && conn.open) { try { conn.send(msg); } catch {} } };
+  const end = (reason) => {
     if (closed) return;
     closed = true;
     clearInterval(timer);
     window.removeEventListener('pagehide', bye);
-    try { conn.send({ type: 'bye' }); } catch {}
-    setTimeout(() => { try { conn.close(); } catch {} try { peer.destroy(); } catch {} }, 100);
+    setTimeout(() => { try { conn.close(); } catch {} after(); }, 100);
     onClose(reason);
   };
-  const bye = () => { try { conn.send({ type: 'bye' }); } catch {} };
+  // Closing or leaving the page says goodbye; a page that's only being put
+  // aside (kept in the back/forward cache) may come back, so it doesn't.
+  const bye = (e) => { if (!e?.persisted) send({ type: 'bye' }); };
   window.addEventListener('pagehide', bye);
   const timer = setInterval(() => {
-    if (Date.now() - lastSeen > TIMEOUT_MS) close('timeout');
-    else send({ type: 'ping' });
+    const now = Date.now();
+    // This page was asleep itself (timers stopped): give the friend a fresh
+    // chance instead of blaming them for our silence.
+    if (now - lastTick > 3 * PING_MS) lastSeen = now;
+    lastTick = now;
+    const silent = now - lastSeen;
+    if (silent > GONE_MS) return end('timeout');
+    if (silent > QUIET_MS && !quiet) { quiet = true; onQuiet(true); }
+    send({ type: 'ping' });
   }, PING_MS);
   conn.on('data', (msg) => {
     lastSeen = Date.now();
+    if (quiet && !closed) { quiet = false; onQuiet(false); }
     if (closed || !msg || typeof msg !== 'object') return;
     if (msg.type === 'ping') return;
-    if (msg.type === 'bye') return close('left');
+    if (msg.type === 'bye') return end('left');
     onMessage(msg);
   });
-  conn.on('close', () => close('left'));
-  conn.on('error', () => close('error'));
-  peer.on('disconnected', () => { try { peer.reconnect(); } catch {} }); // the broker, not the friend
-  return { send, close: () => close('self') };
+  conn.on('close', () => end('lost'));
+  conn.on('error', () => end('lost'));
+  return { send, close: () => { send({ type: 'bye' }); end('self'); } };
 }
 
-// Host a room. Resolves with { code, cancel } once the code is live;
-// `onGuest(link)` fires when a friend connects (link = { send, close }).
-// Only the first friend gets in; anyone else is told the game is full.
-export async function hostRoom({ onGuest, onMessage, onClose, onError }) {
+// Host a room. Resolves with { code, cancel } once the code is live. Every
+// friend who connects becomes a link ({ send, close }); main.js decides who
+// plays (the first hello, or the same guest coming back). The room stays open
+// for the whole match so a guest whose connection drops can rejoin; cancel()
+// closes it.
+export async function hostRoom({ onMessage, onClose, onQuiet, onError }) {
   const Peer = await loadPeerJS();
   for (let attempt = 0; attempt < 4; attempt++) {
     const code = randomCode();
@@ -144,8 +163,7 @@ export async function hostRoom({ onGuest, onMessage, onClose, onError }) {
       peer.once('error', (err) => resolve(err));
     });
     if (result === 'open') {
-      let link = null;
-      let onGuestWrapped = null; // stops the waiting-room keep-alive
+      let started = false; // a friend has connected
       peer.on('connection', (conn) => {
         // The friend may send before this side sees the connection open: keep
         // those messages and replay them once we're listening.
@@ -154,28 +172,32 @@ export async function hostRoom({ onGuest, onMessage, onClose, onError }) {
         conn.on('data', keep);
         conn.on('open', () => {
           conn.off('data', keep);
-          if (link) { conn.send({ type: 'full' }); setTimeout(() => conn.close(), 200); return; }
-          link = wrap(conn, peer, { onMessage: (msg) => onMessage(msg, link), onClose });
-          onGuestWrapped?.();
-          onGuest(link);
+          started = true;
+          const link = wrap(conn, {
+            onMessage: (msg) => onMessage(msg, link),
+            onClose: (reason) => onClose(reason, link),
+            onQuiet: (q) => onQuiet?.(q, link),
+          });
           for (const msg of early) conn.emit('data', msg);
         });
       });
-      // Stay reachable while waiting: phones drop the matchmaking connection
-      // when the page goes to the background (e.g. to text the code to a
-      // friend). Re-register the same code as soon as it drops or we're back.
-      const rejoin = () => { if (!link && peer.disconnected && !peer.destroyed) { try { peer.reconnect(); } catch {} } };
+      // Stay reachable: phones drop the matchmaking connection when the page
+      // goes to the background (e.g. to text the code to a friend). Re-register
+      // the same code as soon as it drops or we're back.
+      const rejoin = () => { if (peer.disconnected && !peer.destroyed) { try { peer.reconnect(); } catch {} } };
       peer.on('disconnected', () => setTimeout(rejoin, 500));
       document.addEventListener('visibilitychange', rejoin);
       const keepAlive = setInterval(rejoin, 3000);
       peer.on('error', (err) => {
-        if (link) return;
         if (['network', 'socket-error', 'socket-closed', 'server-error', 'disconnected'].includes(err?.type)) return setTimeout(rejoin, 1000);
-        onError(friendlyError(err));
+        if (!started) onError(friendlyError(err));
       });
-      const stop = () => { clearInterval(keepAlive); document.removeEventListener('visibilitychange', rejoin); };
-      onGuestWrapped = stop;
-      return { code, cancel: () => { stop(); if (!link) peer.destroy(); } };
+      const cancel = () => {
+        clearInterval(keepAlive);
+        document.removeEventListener('visibilitychange', rejoin);
+        setTimeout(() => { try { peer.destroy(); } catch {} }, 150); // after any goodbye is sent
+      };
+      return { code, cancel };
     }
     peer.destroy();
     if (result?.type !== 'unavailable-id') throw new Error(friendlyError(result));
@@ -184,7 +206,7 @@ export async function hostRoom({ onGuest, onMessage, onClose, onError }) {
 }
 
 // Join a friend's room. Resolves with { send, close } once connected.
-export async function joinRoom(code, { onMessage, onClose }) {
+export async function joinRoom(code, { onMessage, onClose, onQuiet }) {
   const Peer = await loadPeerJS();
   const peer = new Peer(await peerOptions());
   return new Promise((resolve, reject) => {
@@ -205,7 +227,7 @@ export async function joinRoom(code, { onMessage, onClose }) {
         if (done) return;
         done = true;
         clearTimeout(timer);
-        resolve(wrap(conn, peer, { onMessage, onClose }));
+        resolve(wrap(conn, { onMessage, onClose, onQuiet, after: () => { try { peer.destroy(); } catch {} } }));
       });
     });
   });

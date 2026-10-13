@@ -21,8 +21,13 @@ code is PeerJS (MIT, copied into `vendor/`) for online play.
 - The host's browser runs the match (`src/main.js`): the guest sends intents, the host
   validates them with `applyIntent()` like anyone's and sends the new state back after
   every change. Both players must run the same build; otherwise the join is refused.
-- A heartbeat notices a friend who leaves or loses connection; the other player is told
-  the match ended. **Leave match** in the menu disconnects. After a match: **Rematch**.
+- A player whose page goes quiet (phone screen locked, switched apps, a network blip) stays
+  in the match: the other player sees a notice, the quiet player is locked in when the
+  planning timer runs out, and the host continues past the battle results for them. If the
+  connection itself drops, the guest reconnects to the same room by itself and picks the match
+  back up (the host keeps the room open and recognises the guest by the `guestId` in its
+  hello). The match only ends when a player leaves (closing the page or **Leave match**), or
+  after 2 minutes without hearing from them. After a match: **Rematch**.
 - Players on different networks often can't connect directly; then a TURN relay from
   Metered.ca carries the messages (`src/net-config.js`). Its username and password (from
   "New credential" in Metered's TURN dashboard) live in the `METERED_TURN_USERNAME` and
