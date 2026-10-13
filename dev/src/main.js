@@ -20,22 +20,22 @@
 //   guest -> host  { type: 'getLog' }                  ask for the match log mid-match
 //                  { type: 'sync' }                    "are you there?": the host answers with the state
 
-import { createGame, applyIntent } from './game.js?v=06bd63b';
-import { botTurn } from './bot.js?v=06bd63b';
-import { createUI } from './ui.js?v=06bd63b';
-import { hashSeed } from './rng.js?v=06bd63b';
-import { hostRoom, joinRoom, cleanCode, isCode, checkConnection, randomCode, GONE_MS } from './net.js?v=06bd63b';
-import { loadProfile, saveProfile, recordBattle, recordMatch, removeFriend, cleanName, validAvatar, BOT_AVATAR, DEFAULT_AVATAR } from './profile.js?v=06bd63b';
+import { createGame, applyIntent } from './game.js?v=aa11be7';
+import { botTurn } from './bot.js?v=aa11be7';
+import { createUI } from './ui.js?v=aa11be7';
+import { hashSeed } from './rng.js?v=aa11be7';
+import { hostRoom, joinRoom, cleanCode, isCode, checkConnection, randomCode, GONE_MS, netLog, note } from './net.js?v=aa11be7';
+import { loadProfile, saveProfile, recordBattle, recordMatch, removeFriend, cleanName, validAvatar, BOT_AVATAR, DEFAULT_AVATAR } from './profile.js?v=aa11be7';
 
 const BOT = 1;
 // Online, each planning phase lasts this long; then everyone still planning is
 // locked in as they are. The host's clock decides; both screens count down.
 const PLAN_SECONDS = 30;
 
-const catalogText = await (await fetch('data/units.json?v=06bd63b')).text();
+const catalogText = await (await fetch('data/units.json?v=aa11be7')).text();
 const catalog = JSON.parse(catalogText);
 // What's new: newest first. Add an entry to data/changelog.json with each update.
-const changelog = await fetch('data/changelog.json?v=06bd63b').then((r) => (r.ok ? r.json() : [])).catch(() => []);
+const changelog = await fetch('data/changelog.json?v=aa11be7').then((r) => (r.ok ? r.json() : [])).catch(() => []);
 // Both players must run the same rules and Pokémon. The deploy tags every file
 // with its build (?v=...); locally there's no tag, so compare the data instead.
 const VERSION = `${new URL(import.meta.url).searchParams.get('v') ?? 'local'}:${hashSeed(catalogText)}`;
@@ -78,13 +78,43 @@ const ui = createUI({
   build: new URL(import.meta.url).searchParams.get('v'),
 });
 
+// The match log, plus this browser's connection log (what happened to the
+// online connection, for looking into drops).
 function getLog() {
-  if (mode !== 'guest') return Promise.resolve(matchLog);
+  const withNet = (log) => (log && mode !== 'bot' ? { ...log, connection: [...netLog] } : log);
+  if (mode !== 'guest') return Promise.resolve(withNet(matchLog));
   return new Promise((resolve) => {
-    logWaiters.push(resolve);
+    const done = (log) => resolve(withNet(log));
+    logWaiters.push(done);
     link?.send({ type: 'getLog' });
-    setTimeout(() => { logWaiters = logWaiters.filter((w) => w !== resolve); resolve(matchLog); }, 4000);
+    setTimeout(() => { logWaiters = logWaiters.filter((w) => w !== done); done(matchLog); }, 4000);
   });
+}
+
+// ---- surviving a reload ------------------------------------------------------
+// Phones often reload a page that was in the background, and players reload
+// when something looks stuck. The current online match is kept in this browser
+// so it can be picked back up: the host keeps the whole match (it runs it); the
+// guest keeps the code and its guestId, so the host knows it's the same player.
+const SESSION_KEY = 'poke-tactics-session';
+const SESSION_MS = 10 * 60 * 1000; // older than this: forget it
+function saveSession(data) {
+  try { localStorage.setItem(SESSION_KEY, JSON.stringify({ ...data, at: Date.now() })); } catch {}
+}
+function loadSession() {
+  try {
+    const s = JSON.parse(localStorage.getItem(SESSION_KEY) ?? 'null');
+    if (s && Date.now() - s.at < SESSION_MS && (s.role === 'host' || s.role === 'guest') && isCode(s.code)) return s;
+  } catch {}
+  return null;
+}
+function clearSession() {
+  try { localStorage.removeItem(SESSION_KEY); } catch {}
+}
+function saveHostSession() {
+  if (mode !== 'host' || !room) return;
+  if (state.phase === 'gameover') return clearSession();
+  saveSession({ role: 'host', code: room.code, guestId, state, matchLog, names, avatars, opponent: names[1] });
 }
 
 const record = (player, intent) => matchLog?.intents.push([player, intent]);
@@ -187,6 +217,7 @@ function planClock() {
 
 const broadcast = () => {
   if (mode !== 'host') return;
+  saveHostSession();
   link?.send({ type: 'state', state });
   if (state.phase === 'gameover') link?.send({ type: 'log', log: matchLog });
 };
@@ -241,6 +272,47 @@ function lobby(action, data = {}) {
     });
   }
   if (action === 'home') return goHome();
+  if (action === 'resume') {
+    const saved = loadSession();
+    if (!saved) { ui.toast('That match has expired.'); return ui.showLobby('menu', { name: savedName() }); }
+    return saved.role === 'host' ? resumeHost(saved) : join(saved.code, savedName() || 'Player 2');
+  }
+  if (action === 'discard') { clearSession(); return ui.showLobby('menu', { name: savedName() }); }
+}
+
+// Host after a reload: reopen the room under the same code with the saved
+// match. The guest's game is already trying to reconnect, and finds it.
+async function resumeHost(saved) {
+  stopHosting();
+  ui.showLobby('connecting', { text: `Reopening game ${saved.code}…` });
+  note(`resuming match ${saved.code} as host`);
+  try {
+    const r = await hostRoom({
+      code: saved.code,
+      onMessage: hostMessage,
+      onClose: hostLinkClosed,
+      onQuiet: (quiet, l) => { if (l === link && mode === 'host') { setAway(quiet); if (quiet) nudge(l); } },
+      onError: () => {},
+    });
+    room = r;
+    guestId = saved.guestId;
+    names = saved.names;
+    avatars = saved.avatars;
+    mode = 'host';
+    me = 0;
+    link = null;
+    ui.setOnline({ viewer: 0 });
+    state = saved.state;
+    matchLog = saved.matchLog;
+    trackedKey = `${state.seed}:${state.round}:${state.phase}`; // already counted before the reload
+    show();
+    setAway(true);
+    clearTimeout(giveUpTimer);
+    giveUpTimer = setTimeout(() => { if (mode === 'host' && !link) disconnected('timeout'); }, GONE_MS);
+  } catch (err) {
+    clearSession();
+    ui.showLobby('error', { error: err.message });
+  }
 }
 
 async function host(name) {
@@ -366,8 +438,12 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 async function join(code, name) {
   stopHosting();
   ui.showLobby('connecting', { text: `Joining ${code}…`, cancel: true });
-  guestId = randomCode() + randomCode();
+  // Joining a match this browser was already in (after a reload, or typing the
+  // code again): come back as the same player.
+  const saved = loadSession();
+  guestId = saved?.role === 'guest' && saved.code === code ? saved.guestId : randomCode() + randomCode();
   const myId = guestId;
+  note(`joining ${code}${saved?.role === 'guest' && saved.code === code ? ' (rejoining)' : ''}`);
   const live = () => guestId === myId;
   let started = false;
   let statesSeen = 0;
@@ -393,6 +469,8 @@ async function join(code, name) {
           ui.playIntro([mine.name, theirs.name], [mine.avatar, theirs.avatar]);
         }
         state = msg.state;
+        if (state.phase === 'gameover') clearSession();
+        else saveSession({ role: 'guest', code, guestId: myId, opponent: state.players[0]?.name });
         show();
         setAway(false); // the host answered: we're really back
       } else if (msg.type === 'reject') ui.toast(msg.error);
@@ -490,6 +568,8 @@ function stopHosting() {
 
 // The match is over for good: tell the player why.
 function disconnected(reason) {
+  clearSession();
+  note(`match ended: ${reason}`);
   const wasPlaying = mode !== 'bot';
   link?.close();
   link = null;
@@ -507,6 +587,7 @@ function disconnected(reason) {
 }
 
 function leave() {
+  clearSession();
   link?.close();
   link = null;
   guestId = null;
@@ -535,5 +616,8 @@ function goHome() {
 window.game = { get state() { return state; }, get mode() { return mode; }, catalog, dispatch };
 
 newGame();
-// A shared invite link (?join=CODE) goes straight to the join screen.
-if (new URLSearchParams(location.search).get('join')) lobby('open');
+// An online match this browser was in (before a reload) can be picked back up;
+// otherwise a shared invite link (?join=CODE) goes straight to the join screen.
+const unfinished = loadSession();
+if (unfinished) ui.showLobby('resume', { code: unfinished.code, role: unfinished.role, opponent: unfinished.opponent });
+else if (new URLSearchParams(location.search).get('join')) lobby('open');

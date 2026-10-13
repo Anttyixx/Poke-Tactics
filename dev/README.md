@@ -30,7 +30,16 @@ code is PeerJS (MIT, copied into `vendor/`) for online play.
   or work in one direction only, so: when the guest hears nothing, or comes back to the page,
   it asks the host for the state (`sync`) and replaces the connection if there's no answer
   within 4 seconds; when the host hears nothing from the guest, it tells the guest to
-  reconnect (`resync`). "Reconnected" only shows once the host has sent the state back. The match only ends when a player leaves (closing the page or **Leave match**), or
+  reconnect (`resync`). "Reconnected" only shows once the host has sent the state back.
+- **Reloads:** the current online match is saved in the browser (`poke-tactics-session`, for
+  10 minutes): the host saves the whole match, the guest its code and `guestId`. After a reload
+  (phones often reload pages that were in the background) the game offers to pick it back up:
+  the host reopens the room under the same code, and the guest rejoins as the same player.
+  Typing the same code again also rejoins. Closing or reloading the page sends `gone` (the
+  other side waits for a rejoin, up to 2 minutes); only **Leave match** sends `bye`.
+- **Connection log:** each browser notes what its connection did (route: direct or relay,
+  quiet spells, drops, reconnects, matchmaking-server hiccups); it's included in the copied
+  match log under `connection`, to look into drops. The match only ends when a player leaves (closing the page or **Leave match**), or
   after 2 minutes without hearing from them. After a match: **Rematch**.
 - Players on different networks often can't connect directly; then a TURN relay from
   Metered.ca carries the messages (`src/net-config.js`). Its username and password (from

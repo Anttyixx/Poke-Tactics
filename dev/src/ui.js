@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=06bd63b';
+import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=aa11be7';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=06bd63b';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=06bd63b';
+} from './game.js?v=aa11be7';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=aa11be7';
 
 const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
 // Attack-effect colour when a unit doesn't set its own "fx" colour in units.json.
@@ -1450,6 +1450,14 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
           </section>
         </div>
         <div class="lobby-actions">${back}<button class="ghost" data-lobby="check">Check my connection</button></div>`,
+      resume: () => `
+        <h1>Match in progress</h1>
+        <p>You were ${data.role === 'host' ? 'hosting' : 'in'} a match${data.opponent ? ` with <b>${esc(data.opponent)}</b>` : ''} (game <b>${esc(data.code)}</b>) when the page closed.</p>
+        <p class="muted">${data.role === 'host'
+          ? 'Reopen it and your friend\'s game reconnects by itself.'
+          : 'Rejoin and you\'re back in, as long as your friend still has the game open.'}</p>
+        <button class="primary" data-lobby="resume">${data.role === 'host' ? 'Reopen the match' : 'Rejoin the match'}</button>
+        <div class="lobby-actions"><button class="ghost" data-lobby="discard">Start fresh</button></div>`,
       checking: () => `
         <h1>Checking your connection</h1>
         <div class="spinner" aria-hidden="true"></div>

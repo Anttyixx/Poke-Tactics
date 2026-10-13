@@ -1,5 +1,19 @@
 [
   {
+    "id": "2026-10-13-rejoin",
+    "version": "0.11.4",
+    "date": "2026-10-13",
+    "title": "Rejoin after a reload",
+    "intro": "Online matches now survive a reloaded or closed page.",
+    "changes": [
+      { "kind": "fix", "text": "Reloading the page (or your phone reloading it) no longer ends the match. The game offers to rejoin, and you're back in as the same player." },
+      { "kind": "fix", "text": "Typing the game code in again rejoins your match instead of saying it already has two players." },
+      { "kind": "fix", "text": "If the host reloads, they can reopen the match and their friend reconnects by themselves." },
+      { "kind": "change", "text": "Closing the page gives your friend up to 2 minutes to come back before the match ends. Leave match still ends it straight away." },
+      { "kind": "new", "text": "The match log (Menu → Match log) now includes what happened to the connection, to help track down drops." }
+    ]
+  },
+  {
     "id": "2026-10-13-reconnect-fix",
     "version": "0.11.3",
     "date": "2026-10-13",
