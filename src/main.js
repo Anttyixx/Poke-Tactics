@@ -22,7 +22,7 @@ import { botTurn } from './bot.js';
 import { createUI } from './ui.js';
 import { hashSeed } from './rng.js';
 import { hostRoom, joinRoom, cleanCode, isCode, checkConnection } from './net.js';
-import { loadProfile, saveProfile, cleanName, validAvatar, BOT_AVATAR, DEFAULT_AVATAR } from './profile.js';
+import { loadProfile, saveProfile, recordBattle, recordMatch, removeFriend, cleanName, validAvatar, BOT_AVATAR, DEFAULT_AVATAR } from './profile.js';
 
 const BOT = 1;
 // Online, each planning phase lasts this long; then everyone still planning is
@@ -63,6 +63,7 @@ const ui = createUI({
   onNewGame: () => (mode === 'guest' ? link?.send({ type: 'rematch' }) : newGame()),
   onLobby: lobby,
   onProfile: updateProfile,
+  onRemoveFriend: (id) => { profile = removeFriend(id); return profile; },
   getProfile: () => profile,
   getLog,
   changelog,
@@ -128,8 +129,23 @@ function runBot() {
 }
 
 function show() {
+  trackStats();
   ui.render(state);
   planClock();
+}
+
+// Profile stats: each battle counts the Pokémon this player fielded; each
+// finished match counts a win, loss or draw (online and training separately).
+let trackedKey = null;
+function trackStats() {
+  const key = `${state.seed}:${state.round}:${state.phase}`;
+  if (key === trackedKey) return;
+  trackedKey = key;
+  if (state.phase === 'combat') {
+    profile = recordBattle(state.combat.result.initial.filter((u) => u.side === me && !u.summoned).map((u) => u.unitId));
+  } else if (state.phase === 'gameover') {
+    profile = recordMatch(mode === 'bot' ? 'training' : 'online', state.winner === me ? 'win' : state.winner === null ? 'draw' : 'loss');
+  }
 }
 
 // Start the countdown when a new planning phase begins (online only).

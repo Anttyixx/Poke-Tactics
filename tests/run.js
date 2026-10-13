@@ -12,7 +12,7 @@ import {
   simulate, MAX_TICKS, COLS, HALF, SUDDEN_DEATH_TICK, SUDDEN_DEATH_HP_PER_SECOND, MOVE_SPEEDS, STEP_TICKS, CRIT_PCT, STAT_SCALE, TICK_SECONDS,
 } from '../src/combat.js';
 import { botTurn } from '../src/bot.js';
-import { loadProfile, saveProfile, AVATARS, DEFAULT_AVATAR, NAME_MAX } from '../src/profile.js';
+import { loadProfile, saveProfile, recordMatch, recordBattle, favouriteTroop, addFriend, removeFriend, AVATARS, DEFAULT_AVATAR, NAME_MAX } from '../src/profile.js';
 
 const catalog = JSON.parse(readFileSync(new URL('../data/units.json', import.meta.url), 'utf8'));
 const tests = [];
@@ -957,12 +957,13 @@ test('profile: saved in browser storage and loaded back; old saved names carry o
   const store = new Map();
   globalThis.localStorage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)) };
   try {
-    assert.deepEqual(loadProfile(), { name: '', avatar: DEFAULT_AVATAR, saved: false }, 'nothing saved yet');
+    const basics = ({ name, avatar, saved }) => ({ name, avatar, saved });
+    assert.deepEqual(basics(loadProfile()), { name: '', avatar: DEFAULT_AVATAR, saved: false }, 'nothing saved yet');
     store.set('poke-tactics-name', 'Misty');
-    assert.deepEqual(loadProfile(), { name: 'Misty', avatar: DEFAULT_AVATAR, saved: true }, 'the name saved before profiles');
+    assert.deepEqual(basics(loadProfile()), { name: 'Misty', avatar: DEFAULT_AVATAR, saved: true }, 'the name saved before profiles');
     const pic = AVATARS[0];
     assert.equal(saveProfile({ name: '  Brock   the  Rock ', avatar: pic }).stored, true);
-    assert.deepEqual(loadProfile(), { name: 'Brock the Rock', avatar: pic, saved: true }, 'comes back after a reload');
+    assert.deepEqual(basics(loadProfile()), { name: 'Brock the Rock', avatar: pic, saved: true }, 'comes back after a reload');
     saveProfile({ name: 'x'.repeat(40), avatar: '../../evil.png' });
     const p = loadProfile();
     assert.equal(p.name.length, NAME_MAX);
@@ -976,6 +977,41 @@ test('profile: saved in browser storage and loaded back; old saved names carry o
     delete globalThis.localStorage;
   }
   for (const id of AVATARS) assert.ok(existsSync(new URL(`../assets/avatars/${id}.png`, import.meta.url)), `${id} picture exists (tools/make-avatars.py)`);
+});
+
+test('profile stats and friends: wins/losses per mode, most used Pokémon, add and remove friends; kept when the name changes', () => {
+  const store = new Map();
+  globalThis.localStorage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)) };
+  try {
+    recordMatch('training', 'win');
+    recordMatch('training', 'loss');
+    recordMatch('online', 'win');
+    recordMatch('online', 'draw');
+    recordMatch('hacked', 'win');
+    recordBattle(['mawile', 'golem']);
+    recordBattle(['mawile', 'mawile']); // the same Pokémon counts once per battle
+    addFriend({ id: 'a', name: 'Misty', avatar: 'lilligant' });
+    addFriend({ id: 'b', name: 'Brock', avatar: 'nope' });
+    addFriend({ id: 'a', name: 'Misty W', avatar: 'lilligant' }); // same friend: updated, not doubled
+    saveProfile({ name: 'Ash', avatar: AVATARS[0] });
+    const p = loadProfile();
+    assert.deepEqual(p.stats.training, { wins: 1, losses: 1, draws: 0 });
+    assert.deepEqual(p.stats.online, { wins: 1, losses: 0, draws: 1 });
+    assert.deepEqual(p.stats.troops, { mawile: 2, golem: 1 });
+    assert.deepEqual(favouriteTroop(p.stats), { id: 'mawile', battles: 2 });
+    assert.equal(favouriteTroop({ troops: {} }), null, 'none before any battle');
+    assert.deepEqual(p.friends.map((f) => [f.id, f.name, f.avatar]), [['b', 'Brock', DEFAULT_AVATAR], ['a', 'Misty W', 'lilligant']]);
+    removeFriend('b');
+    assert.deepEqual(loadProfile().friends.map((f) => f.id), ['a']);
+    assert.equal(loadProfile().name, 'Ash');
+    store.set('poke-tactics-profile', JSON.stringify({ name: 'X', stats: { online: { wins: -5, losses: 'lots' }, troops: { '<b>': 3 } }, friends: 'no' }));
+    const bad = loadProfile();
+    assert.deepEqual(bad.stats.online, { wins: 0, losses: 0, draws: 0 }, 'bad numbers are dropped');
+    assert.deepEqual(bad.stats.troops, {}, 'bad ids are dropped');
+    assert.deepEqual(bad.friends, []);
+  } finally {
+    delete globalThis.localStorage;
+  }
 });
 
 test('each player\'s profile picture is part of the game state', () => {
