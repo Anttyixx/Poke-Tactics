@@ -9,7 +9,7 @@
 // friend who leaves, or stays silent for GONE_MS, ends it. A guest whose
 // connection drops reconnects to the same room (main.js resumes the match).
 
-import { TURN_URLS, TURN_USERNAME, TURN_PASSWORD } from './net-config.js?v=c200ba6';
+import { TURN_URLS, TURN_USERNAME, TURN_PASSWORD } from './net-config.js?v=06bd63b';
 
 const PEERJS_SRC = 'vendor/peerjs-1.5.4.min.js';
 const ID_PREFIX = 'poke-tactics-';
@@ -145,7 +145,9 @@ function wrap(conn, { onMessage, onClose, onQuiet = () => {}, after = () => {} }
   });
   conn.on('close', () => end('lost'));
   conn.on('error', () => end('lost'));
-  return { send, close: () => { send({ type: 'bye' }); end('self'); } };
+  // close(): say goodbye and hang up. drop(): hang up without a goodbye (the
+  // connection seems dead; we're about to replace it, not leave).
+  return { send, close: () => { send({ type: 'bye' }); end('self'); }, drop: () => end('self') };
 }
 
 // Host a room. Resolves with { code, cancel } once the code is live. Every
