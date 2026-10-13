@@ -252,6 +252,13 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
       atk: Math.round(form.damage[u.star] * STAT_SCALE), attackCd: ticksOf(form.secPerHit),
       moveCd: ticksOf(MOVE_SPEEDS[form.moveSpeed]), range: form.range, sprite: form.sprite,
     }, { name: form.name });
+    // A shock wave as it changes: stuns every enemy in the square around it
+    // (radius 1 = the 3x3). Stuns land at the end of the tick, as always.
+    const wave = form.shockwave;
+    if (wave) {
+      emit('shockwave', { id: u.id, radius: wave.radius });
+      for (const e of units) if (e.side !== u.side && standing(e) && reach(u, e) <= wave.radius) stun(e, wave.stun);
+    }
   }
   // Ditto: a new max HP keeps the same share of HP left (never rounding down to 0).
   const rescaleHp = (u, maxHp) => {
