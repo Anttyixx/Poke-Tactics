@@ -173,13 +173,16 @@ test a set of changes together. Team styles to pit against each other live in `A
     square it hits, for 50% of its damage.
   - Golem, **Self-Destruct**: when knocked out it stays on its square for 3s (it can't be hit), then
     explodes for 300% on enemies in the 3x3 square around it. The fight waits for it.
-  - Minior, **Shining Star**: two play styles. Rock form is a slow, soft-hitting wall (very slow, 30
-    damage every 3.0s, more HP than Coalossal). At 65% HP or less it spends 0.5s transforming, immune
-    to everything (damage, stuns, knockbacks, sudden death), then becomes its Star Form for the rest of
-    the fight. Changing sends out a shock wave that stuns every enemy in the 3x3 around it for 1s. Star
-    Form attacks every 0.3s for 20 damage, and doesn't walk: it zips straight to the open square beside
-    its target (if all are taken, it walks). A form with a faster attack speed doesn't wait out the old
-    form's attack timer.
+  - Minior, **Shining Star**: two lives. Rock form is a slow, soft-hitting wall (very slow, 30 damage
+    every 3.0s, 1100 HP). When it would be knocked out it doesn't faint: at the end of that tick it gets
+    Star Form's own HP (600), spends 0.5s transforming, immune to everything (damage, stuns, knockbacks,
+    sudden death), then becomes Star Form for the rest of the fight. Changing sends out a shock wave
+    that stuns every enemy in the 3x3 around it for 1s. Star Form attacks every 0.3s for 20 and doesn't
+    walk: it zips straight to the open square beside its target (if all are taken, it walks). Its own
+    power, every 10 attacks: it picks a different enemy (a seeded pick among those with a free square
+    beside them) and zips there; with no other enemy to reach it moves to another square beside its
+    target, and with none free it stays. The purple bar counts toward the next hop. A form with a
+    faster attack speed doesn't wait out the old form's attack timer.
   - Tapu Koko (range 2, attacks every 1.1s), **Wild Charge**: after 4 attacks, the next dashes in a straight line to the open square
     next to the farthest enemy (closest to Tapu Koko). The dash takes 0.1s per square (at least 0.2s),
     and Tapu Koko is immune to everything on the way. When it arrives it hits for 150%; the target and

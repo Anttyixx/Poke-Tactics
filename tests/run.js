@@ -647,27 +647,58 @@ test('Self-Destruct (Golem): knocked out, it stays put 3s, then explodes on adja
   assert.ok(!r.events.some((e) => e.type === 'damage' && e.id === g && e.t > fuse.t), 'it cannot be hit while the fuse burns');
 });
 
-test('Shining Star (Minior): at its HP threshold it spends 0.5s transforming, immune to everything, then takes its core form', () => {
+test('Shining Star (Minior): knocked out in Rock form, it comes back as Star Form with its own HP after 0.5s immune', () => {
   const cat = powerCat();
-  cat.brute = { ...cat.wall, range: 1, secPerHit: 1, damage: [125, 125, 125, 125] }; // 1485 HP: 9 hits leave 360 (24%)
+  cat.brute = { ...cat.wall, range: 1, secPerHit: 1, damage: [125, 125, 125, 125] };
   cat.stunner = { ...cat.brute, energy: 1, ability: { name: 'Stun', kind: 'empower', damagePct: 100, stun: 10 } };
+  const form = catalog.minior.ability.form;
   for (const foe of ['brute', 'stunner']) {
     const r = simulate(cat, [[{ uid: 1, unitId: 'minior', star: 0, x: 2, y: 0 }], [{ uid: 2, unitId: foe, star: 0, x: 2, y: 0 }]], 1);
     const m = unitOf(r, 1).id;
-    const start = evs(r, 'morphStart', m)[0];
-    assert.ok(start, 'starts transforming');
-    const max = catalog.minior.hp[0];
     const hits = r.events.filter((e) => e.type === 'damage' && e.id === m);
-    const hpBefore = hits.filter((e) => e.t <= start.t).at(-1).hp;
-    assert.ok(hpBefore * 100 <= max * catalog.minior.ability.hpPct && hpBefore > 0, `at ${hpBefore}/${max}`);
-    assert.ok(hits.filter((e) => e.t < start.t).every((e) => e.hp * 100 > max * catalog.minior.ability.hpPct || e === hits.filter((h) => h.t <= start.t).at(-1)), 'not before the threshold');
+    const ko = hits.find((e) => e.hp === 0);
+    const start = evs(r, 'morphStart', m)[0];
+    assert.ok(ko && start, 'Rock form is knocked out, then starts transforming');
+    assert.equal(start.t, ko.t, 'in the same tick');
+    assert.ok(hits.filter((e) => e.t < ko.t).every((e) => e.hp > 0), 'only once its Rock form HP is gone');
+    assert.equal(start.hp, form.hp[0], 'with Star Form\'s own HP');
+    assert.equal(start.maxHp, form.hp[0]);
+    const deaths = evs(r, 'death', m);
+    assert.ok(deaths.every((e) => e.t > start.t), 'Rock form breaking is not a knockout');
     const tf = evs(r, 'transform', m)[0];
     assert.equal(tf.t, start.t + 5, 'takes 0.5s');
-    assert.equal(tf.sprite, catalog.minior.ability.form.sprite);
+    assert.equal(tf.sprite, form.sprite);
     assert.ok(!hits.some((e) => e.t > start.t && e.t <= tf.t), 'no damage while transforming');
     assert.ok(!evs(r, 'stun', m).some((e) => e.t > start.t && e.t <= tf.t), 'no stuns while transforming');
     assert.ok(!r.events.some((e) => e.src === m && e.t > start.t && e.t <= tf.t), 'it does nothing while transforming');
+    assert.equal(evs(r, 'morphStart', m).length, 1, 'Star Form doesn\'t come back again');
   }
+});
+
+test('Shining Star (Minior): every 10 Star Form attacks it hops to a different enemy, even when its target is next to it', () => {
+  const cat = powerCat();
+  cat.brute = { ...cat.wall, range: 1, secPerHit: 1, damage: [150, 150, 150, 150] };
+  cat.dummy = { ...cat.wall, damage: [1, 1, 1, 1] }; // never dies, barely hurts
+  const r = simulate(cat, [
+    [{ uid: 1, unitId: 'minior', star: 0, x: 2, y: 0 }],
+    [{ uid: 2, unitId: 'brute', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'dummy', star: 0, x: 0, y: 3 }],
+  ], 1);
+  const m = unitOf(r, 1).id;
+  const tf = evs(r, 'transform', m)[0];
+  assert.ok(tf, 'it reaches Star Form');
+  const every = catalog.minior.ability.form.energy;
+  const attacks = evs(r, 'attack', m).filter((e) => e.t > tf.t);
+  assert.ok(attacks.length >= every, 'and attacks enough');
+  const hopAt = attacks[every - 1].t;
+  const hop = evs(r, 'blink', m).find((e) => e.hop);
+  assert.ok(hop, 'it hops');
+  assert.equal(hop.t, hopAt, `right after attack ${every}`);
+  const before = attacks[every - 1].target;
+  const cast = evs(r, 'cast', m).find((e) => e.t === hopAt);
+  assert.notEqual(cast.target, before, 'to a different enemy');
+  const to = r.initial.find((u) => u.id === cast.target);
+  assert.equal(Math.max(Math.abs(hop.x - to.x), Math.abs(hop.y - to.y)), 1, 'landing right beside it');
+  assert.ok(attacks.some((e) => e.t > hopAt && e.target === cast.target), 'then attacks it');
 });
 
 test('Shining Star (Minior): Star Form zips straight to the square beside its target instead of walking, after a shock wave', () => {
