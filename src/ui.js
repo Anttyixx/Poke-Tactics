@@ -1450,6 +1450,14 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
           </section>
         </div>
         <div class="lobby-actions">${back}<button class="ghost" data-lobby="check">Check my connection</button></div>`,
+      resume: () => `
+        <h1>Match in progress</h1>
+        <p>You were ${data.role === 'host' ? 'hosting' : 'in'} a match${data.opponent ? ` with <b>${esc(data.opponent)}</b>` : ''} (game <b>${esc(data.code)}</b>) when the page closed.</p>
+        <p class="muted">${data.role === 'host'
+          ? 'Reopen it and your friend\'s game reconnects by itself.'
+          : 'Rejoin and you\'re back in, as long as your friend still has the game open.'}</p>
+        <button class="primary" data-lobby="resume">${data.role === 'host' ? 'Reopen the match' : 'Rejoin the match'}</button>
+        <div class="lobby-actions"><button class="ghost" data-lobby="discard">Start fresh</button></div>`,
       checking: () => `
         <h1>Checking your connection</h1>
         <div class="spinner" aria-hidden="true"></div>

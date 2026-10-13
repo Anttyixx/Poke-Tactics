@@ -21,6 +21,29 @@ const QUIET_MS = 7000; // no message for this long: the friend's page is probabl
 export const GONE_MS = 120000; // no message for this long: give up on them
 const CONNECT_MS = 20000; // give up joining after this long (a relayed connection can take a while)
 
+// What happened to the connection, newest last (copied into the match log so
+// a dropped match can be looked into afterwards).
+export const netLog = [];
+export function note(text) {
+  netLog.push(`${new Date().toISOString().slice(11, 19)} ${text}`);
+  if (netLog.length > 300) netLog.splice(0, netLog.length - 300);
+}
+
+// Which kind of route a connection took: 'host'/'srflx' = direct, 'relay' = TURN.
+async function routeOf(conn) {
+  try {
+    const stats = await conn.peerConnection.getStats();
+    let pair = null;
+    stats.forEach((r) => { if (r.type === 'candidate-pair' && r.nominated && r.state === 'succeeded') pair = r; });
+    const local = pair && stats.get(pair.localCandidateId);
+    return local ? `${local.candidateType}${local.relayProtocol ? `/${local.relayProtocol}` : ''}` : 'unknown';
+  } catch { return 'unknown'; }
+}
+function watch(conn, who) {
+  routeOf(conn).then((r) => note(`${who}: connected via ${r}`));
+  conn.peerConnection?.addEventListener('iceconnectionstatechange', () => note(`${who}: ice ${conn.peerConnection.iceConnectionState}`));
+}
+
 export const randomCode = () => Array.from(crypto.getRandomValues(new Uint32Array(CODE_LENGTH)), (n) => CODE_CHARS[n % CODE_CHARS.length]).join('');
 export const cleanCode = (text) => String(text ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, CODE_LENGTH);
 export const isCode = (code) => code.length === CODE_LENGTH && [...code].every((c) => CODE_CHARS.includes(c));
@@ -103,8 +126,9 @@ const friendlyError = (err) => {
 };
 
 // Wrap a PeerJS DataConnection: JSON messages in, heartbeat, one close callback.
-// onClose(reason): 'left' (the friend left or closed the page), 'lost' (the
-// connection broke), 'timeout' (silent for GONE_MS) or 'self' (we closed it).
+// onClose(reason): 'left' (the friend left the match), 'lost' (the connection
+// broke, or the friend closed or reloaded the page), 'timeout' (silent for
+// GONE_MS) or 'self' (we closed it).
 // onQuiet(true/false): the friend went quiet / is back.
 function wrap(conn, { onMessage, onClose, onQuiet = () => {}, after = () => {} }) {
   let closed = false;
@@ -115,14 +139,17 @@ function wrap(conn, { onMessage, onClose, onQuiet = () => {}, after = () => {} }
   const end = (reason) => {
     if (closed) return;
     closed = true;
+    note(`connection closed: ${reason}`);
     clearInterval(timer);
     window.removeEventListener('pagehide', bye);
     setTimeout(() => { try { conn.close(); } catch {} after(); }, 100);
     onClose(reason);
   };
-  // Closing or leaving the page says goodbye; a page that's only being put
-  // aside (kept in the back/forward cache) may come back, so it doesn't.
-  const bye = (e) => { if (!e?.persisted) send({ type: 'bye' }); };
+  // Closing or reloading the page: a browser can't tell the two apart, and a
+  // reload comes straight back, so this is only "gone for now" ('lost' on the
+  // other side, which waits for a rejoin). Leaving on purpose (close()) is a
+  // real goodbye.
+  const bye = (e) => { if (!e?.persisted) send({ type: 'gone' }); };
   window.addEventListener('pagehide', bye);
   const timer = setInterval(() => {
     const now = Date.now();
@@ -132,15 +159,16 @@ function wrap(conn, { onMessage, onClose, onQuiet = () => {}, after = () => {} }
     lastTick = now;
     const silent = now - lastSeen;
     if (silent > GONE_MS) return end('timeout');
-    if (silent > QUIET_MS && !quiet) { quiet = true; onQuiet(true); }
+    if (silent > QUIET_MS && !quiet) { quiet = true; note('friend went quiet'); onQuiet(true); }
     send({ type: 'ping' });
   }, PING_MS);
   conn.on('data', (msg) => {
     lastSeen = Date.now();
-    if (quiet && !closed) { quiet = false; onQuiet(false); }
+    if (quiet && !closed) { quiet = false; note('friend is back'); onQuiet(false); }
     if (closed || !msg || typeof msg !== 'object') return;
     if (msg.type === 'ping') return;
     if (msg.type === 'bye') return end('left');
+    if (msg.type === 'gone') return end('lost');
     onMessage(msg);
   });
   conn.on('close', () => end('lost'));
@@ -155,18 +183,34 @@ function wrap(conn, { onMessage, onClose, onQuiet = () => {}, after = () => {} }
 // plays (the first hello, or the same guest coming back). The room stays open
 // for the whole match so a guest whose connection drops can rejoin; cancel()
 // closes it.
-export async function hostRoom({ onMessage, onClose, onQuiet, onError }) {
+const openResult = (peer) => new Promise((resolve) => {
+  peer.once('open', () => resolve('open'));
+  peer.once('error', (err) => resolve(err));
+});
+
+// Host a room. Resolves with { code, cancel } once the code is live. Pass
+// `code` to open a room under a code used before (resuming a match after a
+// reload). Every friend who connects becomes a link ({ send, close, drop });
+// main.js decides who plays (the first hello, or the same guest coming back).
+// The room stays open for the whole match so the guest can rejoin; cancel()
+// closes it.
+export async function hostRoom({ code: wanted = null, onMessage, onClose, onQuiet, onError }) {
   const Peer = await loadPeerJS();
-  for (let attempt = 0; attempt < 4; attempt++) {
-    const code = randomCode();
-    const peer = new Peer(ID_PREFIX + code, await peerOptions());
-    const result = await new Promise((resolve) => {
-      peer.once('open', () => resolve('open'));
-      peer.once('error', (err) => resolve(err));
-    });
+  const options = await peerOptions();
+  // A code we used before may still be held for a few seconds by our old
+  // registration on the matchmaking server: keep asking for it.
+  const tries = wanted ? 15 : 4;
+  for (let attempt = 0; attempt < tries; attempt++) {
+    const code = wanted ?? randomCode();
+    const first = new Peer(ID_PREFIX + code, options);
+    const result = await openResult(first);
     if (result === 'open') {
+      note(`room ${code} open`);
       let started = false; // a friend has connected
-      peer.on('connection', (conn) => {
+      let closed = false;
+      let peer = first;
+      const peers = [first]; // every registration made; older ones may still carry the connection
+      const onConnection = (conn) => {
         // The friend may send before this side sees the connection open: keep
         // those messages and replay them once we're listening.
         const early = [];
@@ -175,6 +219,7 @@ export async function hostRoom({ onMessage, onClose, onQuiet, onError }) {
         conn.on('open', () => {
           conn.off('data', keep);
           started = true;
+          watch(conn, 'guest');
           const link = wrap(conn, {
             onMessage: (msg) => onMessage(msg, link),
             onClose: (reason) => onClose(reason, link),
@@ -182,29 +227,53 @@ export async function hostRoom({ onMessage, onClose, onQuiet, onError }) {
           });
           for (const msg of early) conn.emit('data', msg);
         });
-      });
-      // Stay reachable: phones drop the matchmaking connection when the page
-      // goes to the background (e.g. to text the code to a friend). Re-register
-      // the same code as soon as it drops or we're back.
-      const rejoin = () => { if (peer.disconnected && !peer.destroyed) { try { peer.reconnect(); } catch {} } };
-      peer.on('disconnected', () => setTimeout(rejoin, 500));
+      };
+      // Stay reachable: the matchmaking connection drops now and then (phones
+      // drop it whenever the page is in the background). Re-register the same
+      // code as soon as it drops or we're back; if the old registration is
+      // gone for good, register again from scratch.
+      let renewing = false;
+      const renew = async () => {
+        if (renewing || closed) return;
+        renewing = true;
+        const p = new Peer(ID_PREFIX + code, options);
+        const r = await openResult(p);
+        renewing = false;
+        if (r === 'open' && !closed) { peer = p; peers.push(p); attach(p); note('room registered again'); }
+        else { try { p.destroy(); } catch {} note(`room re-register failed: ${r?.type ?? r}`); }
+      };
+      const rejoin = () => {
+        if (closed) return;
+        if (peer.destroyed) return renew();
+        if (peer.disconnected) { note('matchmaking: reconnecting'); try { peer.reconnect(); } catch { renew(); } }
+      };
+      const attach = (p) => {
+        p.on('connection', onConnection);
+        p.on('disconnected', () => { if (p === peer) { note('matchmaking: disconnected'); setTimeout(rejoin, 500); } });
+        p.on('error', (err) => {
+          if (p !== peer) return;
+          note(`matchmaking error: ${err?.type}`);
+          if (err?.type === 'unavailable-id') return setTimeout(renew, 3000);
+          if (['network', 'socket-error', 'socket-closed', 'server-error', 'disconnected'].includes(err?.type)) return setTimeout(rejoin, 1000);
+          if (!started) onError(friendlyError(err));
+        });
+      };
+      attach(first);
       document.addEventListener('visibilitychange', rejoin);
       const keepAlive = setInterval(rejoin, 3000);
-      peer.on('error', (err) => {
-        if (['network', 'socket-error', 'socket-closed', 'server-error', 'disconnected'].includes(err?.type)) return setTimeout(rejoin, 1000);
-        if (!started) onError(friendlyError(err));
-      });
       const cancel = () => {
+        closed = true;
         clearInterval(keepAlive);
         document.removeEventListener('visibilitychange', rejoin);
-        setTimeout(() => { try { peer.destroy(); } catch {} }, 150); // after any goodbye is sent
+        setTimeout(() => { for (const p of peers) { try { p.destroy(); } catch {} } }, 150); // after any goodbye is sent
       };
       return { code, cancel };
     }
-    peer.destroy();
+    first.destroy();
     if (result?.type !== 'unavailable-id') throw new Error(friendlyError(result));
+    if (wanted) await new Promise((r) => setTimeout(r, 2000));
   }
-  throw new Error('Couldn\'t create a game code. Try again.');
+  throw new Error(wanted ? 'Couldn\'t reopen the game. Start a new one.' : 'Couldn\'t create a game code. Try again.');
 }
 
 // Join a friend's room. Resolves with { send, close } once connected.
@@ -216,6 +285,7 @@ export async function joinRoom(code, { onMessage, onClose, onQuiet }) {
     const fail = (err) => {
       if (done) return;
       done = true;
+      note(`join failed: ${typeof err === 'string' ? 'timed out' : err?.type ?? err}`);
       clearTimeout(timer);
       peer.destroy();
       reject(new Error(typeof err === 'string' ? err : friendlyError(err)));
@@ -229,6 +299,7 @@ export async function joinRoom(code, { onMessage, onClose, onQuiet }) {
         if (done) return;
         done = true;
         clearTimeout(timer);
+        watch(conn, 'host');
         resolve(wrap(conn, { onMessage, onClose, onQuiet, after: () => { try { peer.destroy(); } catch {} } }));
       });
     });
