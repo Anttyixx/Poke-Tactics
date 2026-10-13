@@ -1,5 +1,18 @@
 [
   {
+    "id": "2026-10-13-new-shop",
+    "version": "0.9.0",
+    "date": "2026-10-13",
+    "title": "New shop and coins",
+    "intro": "Buying is faster and every coin counts: the shop refreshes each time you buy, and losing Pokémon in battle pays you back.",
+    "changes": [
+      { "kind": "change", "text": "The shop refreshes for free every time you buy a Pokémon." },
+      { "kind": "change", "text": "Rerolls cost 1 coin, with no limit (they were free, 3 at most)." },
+      { "kind": "buff", "text": "You start with 10 coins (was 6)." },
+      { "kind": "change", "text": "Every round after the first you get 5 coins, plus 1 for each of your Pokémon knocked out in the last battle (was +6 for a win, +9 for a loss)." }
+    ]
+  },
+  {
     "id": "2026-10-13-minior-second-life",
     "version": "0.8.0",
     "date": "2026-10-13",

@@ -6,7 +6,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import {
   createGame, applyIntent, fielded, troopIds, teamSize, poolSize, TEAM_SIZE,
-  COPIES_PER_TROOP, MAX_STAR, SHOP_SIZE, START_COINS, WIN_COINS, LOSS_COINS, MAX_REROLLS,
+  COPIES_PER_TROOP, MAX_STAR, SHOP_SIZE, START_COINS, ROUND_COINS, LOST_COIN, REROLL_COST, lostCount,
 } from '../src/game.js';
 import {
   simulate, MAX_TICKS, COLS, HALF, SUDDEN_DEATH_TICK, SUDDEN_DEATH_HP_PER_SECOND, MOVE_SPEEDS, STEP_TICKS, CRIT_PCT, STAT_SCALE, TICK_SECONDS,
@@ -148,7 +148,7 @@ test('shop only offers troops from your own pool, never more copies than it hold
   const s = startedGame();
   const p = s.players[0];
   for (let i = 0; i < 300; i++) {
-    p.rerolls = 1;
+    p.coins = 99;
     assert.ok(applyIntent(s, catalog, 0, { type: 'reroll' }).ok);
     const counts = {};
     for (const id of p.shop.filter(Boolean)) counts[id] = (counts[id] ?? 0) + 1;
@@ -160,7 +160,7 @@ test('shop only offers troops from your own pool, never more copies than it hold
   // Nearly empty pool: shop shows only what's left.
   p.pool = Object.fromEntries(p.team.map((t) => [t, 0]));
   p.pool[p.team[0]] = 1;
-  p.rerolls = 1;
+  p.coins = 99;
   applyIntent(s, catalog, 0, { type: 'reroll' });
   assert.deepEqual(p.shop, [p.team[0], null, null]);
 });
@@ -175,10 +175,10 @@ test('buying places onto the chosen square and removes the copy from the pool', 
   const placed = p.board.find((u) => u.x === 0 && u.y === 1);
   assert.deepEqual([placed.unitId, placed.star], [id, 0]);
   assert.equal(p.pool[id], before - 1);
-  assert.equal(p.shop[0], null);
   assert.equal(p.coins, 99 - catalog[id].cost);
   assertCopiesConserved(p);
-  assert.equal(applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: 1, y: 1 }).ok, false, 'slot is now empty');
+  p.shop = [null, null, null];
+  assert.equal(applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: 1, y: 1 }).ok, false, 'an empty slot');
 });
 
 test('no duplicates on the field: buying a troop you already have levels it up (1-4 copies = 0-3 stars)', () => {
@@ -190,7 +190,9 @@ test('no duplicates on the field: buying a troop you already have levels it up (
   p.shop = [id, id, other];
   assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: 0, y: 0 }).ok);
   // A second copy aimed at a different empty square still levels up the first one.
+  p.shop = [id, id, other];
   assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 1, x: 4, y: 2 }).ok);
+  p.shop = [id, id, other];
   assert.deepEqual(p.board.filter((u) => u.unitId === id).map((u) => [u.star, u.x, u.y]), [[1, 0, 0]]);
   assert.equal(applyIntent(s, catalog, 0, { type: 'buy', slot: 2, x: 0, y: 0 }).ok, false, 'a new troop cannot go on a taken square');
   assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 2, x: 1, y: 0 }).ok, 'a different troop gets its own square');
@@ -216,6 +218,7 @@ test('selling refunds coins per copy and returns every copy to the pool', () => 
   p.coins = 99;
   p.shop = ['beheeyem', 'beheeyem', null];
   applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: 0, y: 3 });
+  p.shop = ['beheeyem', 'beheeyem', null];
   applyIntent(s, catalog, 0, { type: 'buy', slot: 1, x: 0, y: 3 });
   const unit = p.board.find((u) => u.unitId === 'beheeyem');
   assert.equal(unit.star, 1);
@@ -263,43 +266,52 @@ test('rejects invalid and out-of-phase intents without changing state', () => {
   }
 });
 
-test('economy: start with 6 coins; winner +6, loser +9; coins carry over uncapped', () => {
+test('economy: start with START_COINS; each round +ROUND_COINS +1 per own Pokémon knocked out; coins carry over uncapped', () => {
   const s = startedGame();
   assert.deepEqual(s.players.map((p) => p.coins), [START_COINS, START_COINS]);
-  const p = s.players[0];
-  p.shop = ['mawile', null, null];
-  p.coins = 50; // whatever isn't spent carries over to the next round
-  assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: 2, y: 0 }).ok); // player 0 has a troop, player 1 an empty board
+  const [a, b] = s.players;
+  a.coins = 50; b.coins = 50; // whatever isn't spent carries over to the next round
+  a.shop = ['mawile', 'coalossal', null];
+  assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: 2, y: 0 }).ok);
+  b.shop = ['mawile', null, null];
+  assert.ok(applyIntent(s, catalog, 1, { type: 'buy', slot: 0, x: 2, y: 0 }).ok);
   const before = s.players.map((q) => q.coins);
   for (const i of [0, 1]) applyIntent(s, catalog, i, { type: 'ready' });
-  const { winner } = s.combat.result;
+  const { result } = s.combat;
+  const lost = [0, 1].map((i) => lostCount(result, i));
+  assert.ok(lost.some((n) => n > 0), 'someone lost a Pokémon');
   for (const i of [0, 1]) applyIntent(s, catalog, i, { type: 'continue' });
   assert.equal(s.round, 2);
-  s.players.forEach((q, i) => assert.equal(q.coins, before[i] + (winner === i ? WIN_COINS : LOSS_COINS), `player ${i} (winner ${winner})`));
-  assert.ok(s.players[0].coins > 50, 'no cap on coins');
+  s.players.forEach((q, i) => assert.equal(q.coins, before[i] + ROUND_COINS + LOST_COIN * lost[i], `player ${i}`));
+  assert.ok(s.players.every((q) => q.coins > 50), 'no cap on coins');
 });
 
-test('rerolls: 3 free to start, none left means none, +1 per round capped at 3, shop refreshes each round', () => {
+test('lost Pokémon: the loser lost its whole board, the winner the ones knocked out; summons never count', () => {
+  const r = { initial: [{ side: 0 }, { side: 0 }, { side: 0, summoned: true }, { side: 1 }, { side: 1 }, { side: 1 }], survivors: [{ side: 0 }] };
+  assert.equal(lostCount(r, 0), 1);
+  assert.equal(lostCount(r, 1), 3);
+});
+
+test('shop: refreshes for free after every purchase and after every battle; a reroll costs a coin', () => {
   const s = startedGame();
   const p = s.players[0];
-  assert.equal(p.rerolls, MAX_REROLLS);
+  p.coins = 3;
+  assert.ok(applyIntent(s, catalog, 0, { type: 'reroll' }).ok);
+  assert.equal(p.coins, 3 - REROLL_COST, 'rerolls cost coins');
+  p.coins = 0;
+  assert.equal(applyIntent(s, catalog, 0, { type: 'reroll' }).ok, false, 'not without coins');
+  p.coins = 99;
+  const rolls = p.shopRolls;
   const coins = p.coins;
-  for (let i = 0; i < MAX_REROLLS; i++) assert.ok(applyIntent(s, catalog, 0, { type: 'reroll' }).ok);
-  assert.equal(p.coins, coins, 'rerolls are free');
-  assert.equal(p.rerolls, 0);
-  assert.equal(applyIntent(s, catalog, 0, { type: 'reroll' }).ok, false, 'out of rerolls');
-  const nextRound = () => {
-    for (const i of [0, 1]) applyIntent(s, catalog, i, { type: 'ready' });
-    for (const i of [0, 1]) applyIntent(s, catalog, i, { type: 'continue' });
-  };
+  const id = p.shop[0];
+  assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: 0, y: 0 }).ok);
+  assert.equal(p.coins, coins - catalog[id].cost, 'only the Pokémon is paid for');
+  assert.equal(p.shopRolls, rolls + 1, 'the shop refreshed');
+  assert.ok(p.shop.every(Boolean), 'a full shop again');
   p.shop = [null, null, null];
-  nextRound();
-  assert.equal(p.rerolls, 1, '+1 reroll for the new round');
+  for (const i of [0, 1]) applyIntent(s, catalog, i, { type: 'ready' });
+  for (const i of [0, 1]) applyIntent(s, catalog, i, { type: 'continue' });
   assert.ok(p.shop.some(Boolean), 'shop is refreshed automatically after the battle');
-  nextRound();
-  nextRound();
-  nextRound();
-  assert.equal(p.rerolls, MAX_REROLLS, 'capped');
 });
 
 test('locked-in players cannot act; combat starts when both are ready', () => {
@@ -319,6 +331,7 @@ test("each player's lineup from the last fight is kept for the next planning pha
   p.coins = 99;
   p.shop = ['mawile', 'coalossal', null];
   applyIntent(s, catalog, 1, { type: 'buy', slot: 0, x: 1, y: 0 });
+  p.shop = ['mawile', 'coalossal', null];
   applyIntent(s, catalog, 1, { type: 'buy', slot: 1, x: 3, y: 2 });
   for (const i of [0, 1]) applyIntent(s, catalog, i, { type: 'ready' });
   for (const i of [0, 1]) applyIntent(s, catalog, i, { type: 'continue' });
@@ -334,7 +347,7 @@ test('featured troop leads the shop while its pool has copies; bad ids are ignor
   for (const p of s.players) assert.equal(p.shop[0], 'beheeyem');
   const p = s.players[0];
   for (let i = 0; i < 5; i++) {
-    p.rerolls = 1;
+    p.coins = 99;
     assert.ok(applyIntent(s, catalog, 0, { type: 'reroll' }).ok);
     assert.equal(p.shop[0], 'beheeyem');
   }
