@@ -1,3 +1,4 @@
+ae52230	dev	2026-10-13 04:50 UTC	Minior rework: tanky Rock form, Star Form zips to its target
 b15d0d7	dev	2026-10-13 04:29 UTC	Engine: optional shock wave when a Pokemon transforms
 c5d99c6	dev	2026-10-13 04:16 UTC	Minior: two distinct forms (slow Rock form, frantic Star Form)
 6631210	dev	2026-10-13 00:25 UTC	Combee moves very fast (0.35s between steps, was 0.5s)
@@ -27,4 +28,3 @@ d18c3f8	dev	2026-10-11 23:53 UTC	Add Torterra, Lilligant, Hoopa, Golem, Minior, 
 e1629d9	dev	2026-10-10 00:57 UTC	Add a start screen and card-style team selection
 fb316c6	dev	2026-10-09 23:41 UTC	Faster shoves, and no diagonal-looking displacement
 e4e559b	dev	2026-10-09 21:54 UTC	Stun on landing, new stun effect, retarget after stuns
-f9219d3	dev	2026-10-09 21:47 UTC	Fix diagonal tilt direction for front-facing sprites

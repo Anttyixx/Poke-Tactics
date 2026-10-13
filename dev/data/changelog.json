@@ -1,5 +1,20 @@
 [
   {
+    "id": "2026-10-13-minior-rework",
+    "version": "0.7.0",
+    "date": "2026-10-13",
+    "title": "Minior reworked",
+    "intro": "Minior is now a wall that cracks open into a shooting star. Rock form soaks up hits; Star Form bursts out with a stunning shock wave and zips from target to target.",
+    "changes": [
+      { "pokemon": "minior", "kind": "buff", "text": "Rock form is much tankier: HP 1485 → 1634 at 0★ (more than Coalossal), and it moves very slow (was super slow)." },
+      { "pokemon": "minior", "kind": "nerf", "text": "Rock form hits softly: 30 damage at 0★ (was 90), every 3.0s." },
+      { "pokemon": "minior", "kind": "change", "text": "Shining Star triggers at 65% HP (was 50%), so Star Form starts with more HP and lasts about 6 seconds." },
+      { "pokemon": "minior", "kind": "new", "text": "Transforming sends out a shock wave that stuns every enemy in the 3×3 around Minior for 1s." },
+      { "pokemon": "minior", "kind": "new", "text": "Star Form doesn't walk: it zips straight to the square beside its target and starts attacking right away." },
+      { "pokemon": "minior", "kind": "change", "text": "Star Form attacks every 0.3s (was 0.5s) for 20 damage at 0★ (was 90)." }
+    ]
+  },
+  {
     "id": "2026-10-13-minior",
     "version": "0.6.5",
     "date": "2026-10-13",
