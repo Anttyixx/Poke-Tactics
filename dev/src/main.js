@@ -17,22 +17,22 @@
 //                  { type: 'log', log }                the match log (at game over, or on request)
 //   guest -> host  { type: 'getLog' }                  ask for the match log mid-match
 
-import { createGame, applyIntent } from './game.js?v=0eed4d0';
-import { botTurn } from './bot.js?v=0eed4d0';
-import { createUI } from './ui.js?v=0eed4d0';
-import { hashSeed } from './rng.js?v=0eed4d0';
-import { hostRoom, joinRoom, cleanCode, isCode, checkConnection } from './net.js?v=0eed4d0';
-import { loadProfile, saveProfile, cleanName, validAvatar, BOT_AVATAR, DEFAULT_AVATAR } from './profile.js?v=0eed4d0';
+import { createGame, applyIntent } from './game.js?v=73e2a1e';
+import { botTurn } from './bot.js?v=73e2a1e';
+import { createUI } from './ui.js?v=73e2a1e';
+import { hashSeed } from './rng.js?v=73e2a1e';
+import { hostRoom, joinRoom, cleanCode, isCode, checkConnection } from './net.js?v=73e2a1e';
+import { loadProfile, saveProfile, cleanName, validAvatar, BOT_AVATAR, DEFAULT_AVATAR } from './profile.js?v=73e2a1e';
 
 const BOT = 1;
 // Online, each planning phase lasts this long; then everyone still planning is
 // locked in as they are. The host's clock decides; both screens count down.
 const PLAN_SECONDS = 30;
 
-const catalogText = await (await fetch('data/units.json?v=0eed4d0')).text();
+const catalogText = await (await fetch('data/units.json?v=73e2a1e')).text();
 const catalog = JSON.parse(catalogText);
 // What's new: newest first. Add an entry to data/changelog.json with each update.
-const changelog = await fetch('data/changelog.json?v=0eed4d0').then((r) => (r.ok ? r.json() : [])).catch(() => []);
+const changelog = await fetch('data/changelog.json?v=73e2a1e').then((r) => (r.ok ? r.json() : [])).catch(() => []);
 // Both players must run the same rules and Pokémon. The deploy tags every file
 // with its build (?v=...); locally there's no tag, so compare the data instead.
 const VERSION = `${new URL(import.meta.url).searchParams.get('v') ?? 'local'}:${hashSeed(catalogText)}`;

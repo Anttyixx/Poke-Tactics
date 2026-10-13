@@ -7,7 +7,8 @@ const KEY = 'poke-tactics-profile';
 const OLD_NAME_KEY = 'poke-tactics-name'; // before profiles, only the name was kept
 
 export const NAME_MAX = 16;
-// Profile pictures: the front-facing frame of these sprites.
+// Profile pictures: the front-facing frame of these sprites, cropped and
+// centred into assets/avatars/ by tools/make-avatars.py.
 export const AVATARS = [
   'infernape', 'greninja', 'ash-greninja', 'decidueye', 'tapukoko', 'mawile',
   'lilligant', 'vespiquen', 'combee', 'hoopa', 'beheeyem', 'toxtricity',
@@ -16,7 +17,7 @@ export const AVATARS = [
 export const DEFAULT_AVATAR = 'ditto';
 export const BOT_AVATAR = 'golem';
 
-export const avatarUrl = (id) => `assets/sprites/${validAvatar(id) ? id : DEFAULT_AVATAR}.png`;
+export const avatarUrl = (id) => `assets/avatars/${validAvatar(id) ? id : DEFAULT_AVATAR}.png`;
 export const validAvatar = (id) => typeof id === 'string' && AVATARS.includes(id);
 export const cleanName = (name) => String(name ?? '').replace(/\s+/g, ' ').trim().slice(0, NAME_MAX);
 

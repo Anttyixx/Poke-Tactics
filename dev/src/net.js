@@ -6,7 +6,7 @@
 // notices a friend who closed the tab or lost their connection, since WebRTC
 // doesn't always report that on its own.
 
-import { TURN_URLS, TURN_USERNAME, TURN_PASSWORD } from './net-config.js?v=0eed4d0';
+import { TURN_URLS, TURN_USERNAME, TURN_PASSWORD } from './net-config.js?v=73e2a1e';
 
 const PEERJS_SRC = 'vendor/peerjs-1.5.4.min.js';
 const ID_PREFIX = 'poke-tactics-';
