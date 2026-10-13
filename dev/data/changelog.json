@@ -1,5 +1,18 @@
 [
   {
+    "id": "2026-10-13-minior-second-life",
+    "version": "0.8.0",
+    "date": "2026-10-13",
+    "title": "Minior's second life",
+    "intro": "Minior now has two lives. Its Rock form soaks up damage until it's knocked out, then it breaks open into Star Form with a fresh HP bar and bounces around the enemy team.",
+    "changes": [
+      { "pokemon": "minior", "kind": "change", "text": "Shining Star now triggers when Rock form would be knocked out (was at 65% HP). Minior comes back as Star Form instead of fainting." },
+      { "pokemon": "minior", "kind": "new", "text": "Star Form has its own HP: 600 at 0★. Rock form has 1100 at 0★ (was 1634 shared by both forms)." },
+      { "pokemon": "minior", "kind": "new", "text": "Star Form's own power: every 10 attacks it picks a different enemy and zips to the square beside it, even if its target is right next to it. If there's nowhere to go, it stays." },
+      { "pokemon": "minior", "kind": "change", "text": "Unchanged: the 1s shock-wave stun when it transforms, and Star Form's 20 damage every 0.3s with very fast zipping movement." }
+    ]
+  },
+  {
     "id": "2026-10-13-minior-rework",
     "version": "0.7.0",
     "date": "2026-10-13",

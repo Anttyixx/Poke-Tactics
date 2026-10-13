@@ -2,11 +2,11 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=ae52230';
+import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=a5c1264';
 import {
   COPIES_PER_TROOP, LOSS_COINS, MAX_REROLLS, WIN_COINS,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=ae52230';
+} from './game.js?v=a5c1264';
 
 const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
 // Attack-effect colour when a unit doesn't set its own "fx" colour in units.json.
@@ -64,11 +64,14 @@ export function describePower(def, star, catalog) {
     case 'copy': return `It walks toward the nearest enemy until it's within that enemy's range, then takes ${secs(p.morph)}s to transform into it: it copies its max HP, damage, attack speed, range and crit (not its power or movement) and keeps the same share of HP it had. Transformed, it doesn't move. When that Pokémon faints or nothing is in range, it turns back and walks to the next nearest.`;
     case 'transform': {
       const f = p.form;
-      const fs = `${SPEED_NAME[f.moveSpeed].toLowerCase()} movement, attacks every ${f.secPerHit}s for ${show(Math.round(f.damage[star ?? 0] * STAT_SCALE))} damage, range ${f.range}`;
+      const fs = `${f.hp ? `${show(Math.round(f.hp[star ?? 0] * STAT_SCALE))} HP, ` : ''}${SPEED_NAME[f.moveSpeed].toLowerCase()} movement, attacks every ${f.secPerHit}s for ${show(Math.round(f.damage[star ?? 0] * STAT_SCALE))} damage, range ${f.range}`;
       const morph = p.morph ? ` It takes ${secs(p.morph)}s to transform and can't be hurt, stunned or moved while it does.` : '';
-      const zip = f.blink ? ' In Star Form it doesn\'t walk: it zips straight to the square beside its target.' : '';
       const wave = f.shockwave ? ` As it changes, a shock wave stuns every enemy in the ${2 * f.shockwave.radius + 1}x${2 * f.shockwave.radius + 1} around it for ${secs(f.shockwave.stun)}s.` : '';
-      return `${p.trigger === 'lowHp' ? `When its HP drops to ${p.hpPct}% or less` : every}, it transforms into ${f.name} for the rest of the fight (${fs}; HP stays the same).${morph}${wave}${zip}`;
+      const zip = f.blink ? ' In Star Form it doesn\'t walk: it zips straight to the square beside its target.' : '';
+      const hop = f.hop ? ` Every ${f.energy} attacks it picks a different enemy and zips beside it (if there's no free square, it stays).` : '';
+      const when = p.trigger === 'knockedOut' ? 'When it would be knocked out' : p.trigger === 'lowHp' ? `When its HP drops to ${p.hpPct}% or less` : every;
+      const hpNote = f.hp ? 'with its own HP' : 'HP stays the same';
+      return `${when}, it transforms into ${f.name} for the rest of the fight (${fs}; ${hpNote}).${morph}${wave}${zip}${hop}`;
     }
     case 'opening': return `When the battle starts, it fires a wave down its column. The first enemy hit takes ${p.damagePct}% damage (${show(dmg)}) and is carried all the way to the other end of the board${p.stun ? `, stunned for ${secs(p.stun)}s when it lands` : ''}. Anyone already there is pushed to the side.`;
     default: return '';
@@ -87,6 +90,7 @@ export const powerCadence = (def) => {
   if (p.kind === 'selfdestruct') return 'Power when knocked out';
   if (p.kind === 'copy') return 'Copies the nearest enemy';
   if (p.trigger === 'lowHp') return `Power at ${p.hpPct}% HP`;
+  if (p.trigger === 'knockedOut') return 'Power when knocked out';
   return `Power every ${def.energy} attacks`;
 };
 
@@ -1068,6 +1072,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
         // morph, then the new sprite. A Ditto that turns back and copies again in
         // the same moment shows its own form briefly in between.
         a.range = ev.range;
+        if (ev.maxMana !== undefined) { a.maxMana = ev.maxMana; setMana(0); bars(a); } // a form with its own power counter
         // Ditto takes on the copied Pokémon's max HP (keeping its share of HP).
         if (ev.maxHp && newest()) { a.maxHp = ev.maxHp; a.hp = ev.hp; bars(a); }
         const spr = a.el.querySelector('.sprite');
@@ -1121,10 +1126,13 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
         place(a.el, p.x, p.y);
         play(a.el, 'dashing', ms + 60);
         fx(from.x, from.y, 'burst', fxColor(a.unitId), 0.9);
+        if (ev.hop) setTimeout(() => fx(p.x, p.y, 'ring', fxColor(a.unitId), 1.4), ms);
         setTimeout(() => { a.el.style.transition = ''; }, ms);
         break;
       }
       case 'morphStart': { // Minior (immune) or Ditto changing form
+        // Minior's Rock form breaking: Star Form's own, full HP bar.
+        if (ev.maxHp && newest()) { a.maxHp = ev.maxHp; a.hp = ev.hp; a.shield = 0; later(ctx.hitDelay.get(a.id) ?? 0, () => bars(a)); }
         if (!animate) break;
         const immune = catalog[a.unitId].ability?.kind === 'transform';
         const cls = immune ? ['morphing', 'immune'] : ['morphing'];

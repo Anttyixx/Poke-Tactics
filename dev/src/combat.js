@@ -105,6 +105,7 @@ function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, in
     sprite: def.sprite, // changes when it transforms (Ash-Greninja, Minior, Ditto)
     form: null, // name of the form it has transformed into, if any
     pendingForm: false, // transform at the end of this tick (Minior's low-HP trigger)
+    pendingRebirth: false, // Minior: knocked out in Rock form, comes back as Star Form at the end of the tick
     copyOf: null, // Ditto: id of the unit it is copying
     pendingCopy: null, pendingRevert: false, // Ditto: copy / turn back at the end of the tick
     morphUntil: 0, // mid-transformation (Minior, Ditto) through this tick: it can't act
@@ -222,7 +223,12 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
   // HP reached 0. Usually that's a knockout; a Golem instead lights its fuse:
   // it stays on its square (it can't be hit or targeted) and explodes later.
   function knockedOut(u) {
-    if (u.power?.kind === 'selfdestruct' && !u.fused) {
+    if (u.power?.kind === 'transform' && u.power.trigger === 'knockedOut' && !u.form && !u.pendingRebirth) {
+      // Minior: Rock form breaks open instead of fainting. Like any knockout it
+      // can't be hit or targeted for the rest of this tick; at the end of the
+      // tick it comes back with Star Form's own HP (see the main loop).
+      u.pendingRebirth = true;
+    } else if (u.power?.kind === 'selfdestruct' && !u.fused) {
       u.fused = true;
       u.fuse = u.power.delay;
       u.fusedAt = t; // it still acts this tick, like anyone knocked out mid-tick
@@ -248,12 +254,15 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
   }
   function applyForm(u, form) {
     u.form = form.name;
-    u.maxMana = 0; // its power is spent: no more counting
+    // Its power is spent: no more counting, unless the form has a power of its
+    // own (Star Form's hop every `energy` attacks).
+    u.maxMana = form.hop ? form.energy : 0;
+    u.mana = 0;
     setStats(u, {
       atk: Math.round(form.damage[u.star] * STAT_SCALE), attackCd: ticksOf(form.secPerHit),
       moveCd: ticksOf(MOVE_SPEEDS[form.moveSpeed]), range: form.range, sprite: form.sprite,
       blink: Boolean(form.blink),
-    }, { name: form.name });
+    }, { name: form.name, maxMana: u.maxMana });
     // A faster form doesn't sit out the rest of its old, slower attack timer.
     u.atkTimer = Math.min(u.atkTimer, u.attackCd);
     // A shock wave as it changes: stuns every enemy in the square around it
@@ -458,6 +467,7 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
         break;
       }
       case 'transform':
+        if (u.form) { hop(u, target); break; } // Star Form's own power
         emit('cast', { id: u.id, target: null });
         applyForm(u, p.form);
         break;
@@ -506,6 +516,26 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
   }
 
   const cooldown = (u) => (u.hasteUntil > t ? Math.max(1, Math.round((u.attackCd * 100) / (100 + u.hastePct))) : u.attackCd);
+
+  // Minior's Star Form, every `energy` attacks: it picks a new target (a
+  // seeded pick among the other enemies it can land beside) and zips to the
+  // open square beside it closest to it. With no other enemy to reach, it
+  // moves to another square beside its current target; with none free, it stays.
+  function hop(u, target) {
+    u.mana = 0;
+    const options = [];
+    for (const e of units) {
+      if (e.side === u.side || e === target || !visible(e)) continue;
+      const cell = dashSpot(u, e);
+      if (cell) options.push({ e, cell });
+    }
+    let pick = options.length ? options[hash(seed, t, u.slot + 101) % options.length] : null;
+    if (!pick) { const cell = dashSpot(u, target); if (cell) pick = { e: target, cell }; }
+    emit('cast', { id: u.id, target: pick ? pick.e.id : null });
+    if (!pick) return;
+    relocate(u, pick.cell, 'blink', { fromX: u.x, fromY: u.y, hop: true });
+    u.target = pick.e.id;
+  }
 
   // Shortest walk (breadth-first search, up/down/left/right) from `u` around
   // every other unit to a square where some enemy is within its attack range.
@@ -790,6 +820,21 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
         } else applyForm(u, u.power.form);
       }
       u.pendingForm = false;
+      // Minior knocked out in Rock form: Star Form's own HP, then the same
+      // immune transformation as above.
+      if (u.pendingRebirth) {
+        u.pendingRebirth = false;
+        u.form = 'breaking'; // no second rebirth, even before the new form lands
+        u.maxHp = u.hp = Math.round(u.power.form.hp[u.star] * STAT_SCALE);
+        u.shield = 0;
+        emit('cast', { id: u.id, target: null });
+        const m = u.power.morph ?? 0;
+        u.morphUntil = u.immuneUntil = t + Math.max(1, m);
+        u.immuneFrom = t + 1;
+        u.stun = u.pendingStun = 0;
+        u.pendingMana = 0;
+        emit('morphStart', { id: u.id, duration: Math.max(1, m), hp: u.hp, maxHp: u.maxHp });
+      }
       if (u.power?.kind === 'transform' && u.morphUntil === t && u.hp > 0) { applyForm(u, u.power.form); u.target = null; }
       // Ditto finishes turning into its target (if that one is still standing),
       // or turns back.
