@@ -66,7 +66,8 @@ export function describePower(def, star, catalog) {
       const f = p.form;
       const fs = `${SPEED_NAME[f.moveSpeed].toLowerCase()} movement, attacks every ${f.secPerHit}s for ${show(Math.round(f.damage[star ?? 0] * STAT_SCALE))} damage, range ${f.range}`;
       const morph = p.morph ? ` It takes ${secs(p.morph)}s to transform and can't be hurt, stunned or moved while it does.` : '';
-      return `${p.trigger === 'lowHp' ? `When its HP drops to ${p.hpPct}% or less` : every}, it transforms into ${f.name} for the rest of the fight (${fs}; HP stays the same).${morph}`;
+      const wave = f.shockwave ? ` As it changes, a shock wave stuns every enemy in the ${2 * f.shockwave.radius + 1}x${2 * f.shockwave.radius + 1} around it for ${secs(f.shockwave.stun)}s.` : '';
+      return `${p.trigger === 'lowHp' ? `When its HP drops to ${p.hpPct}% or less` : every}, it transforms into ${f.name} for the rest of the fight (${fs}; HP stays the same).${morph}${wave}`;
     }
     case 'opening': return `When the battle starts, it fires a wave down its column. The first enemy hit takes ${p.damagePct}% damage (${show(dmg)}) and is carried all the way to the other end of the board${p.stun ? `, stunned for ${secs(p.stun)}s when it lands` : ''}. Anyone already there is pushed to the side.`;
     default: return '';
@@ -1122,6 +1123,14 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
           if (animate) floatText(a, '!!', 'crit');
         });
         break;
+      case 'shockwave': { // Minior's Star Form arrives with a stunning burst
+        if (!animate) break;
+        const p = at();
+        fx(p.x, p.y, 'ring', fxColor(a.unitId), ev.radius * 2 + 1.4);
+        fx(p.x, p.y, 'burst', '#ffe14d', ev.radius * 2 + 0.4);
+        pulse(arena, 'shake');
+        break;
+      }
       case 'explode': {
         a.el.classList.remove('fusing');
         if (!animate) break;
