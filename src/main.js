@@ -285,8 +285,8 @@ async function join(code, name) {
             mode = 'guest';
             me = 1;
             ui.setOnline({ viewer: 1 });
-            const [me, host] = [msg.state.players[1], msg.state.players[0]];
-            ui.playIntro([me.name, host.name], [me.avatar, host.avatar]);
+            const [mine, theirs] = [msg.state.players[1], msg.state.players[0]];
+            ui.playIntro([mine.name, theirs.name], [mine.avatar, theirs.avatar]);
           }
           state = msg.state;
           show();
