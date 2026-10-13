@@ -1,3 +1,4 @@
+34fba29	dev	2026-10-13 23:31 UTC	Online: keep the screen on; match log reachable after a drop
 aa11be7	dev	2026-10-13 23:20 UTC	Online: rejoin after a reload; host can reopen its match
 06bd63b	dev	2026-10-13 22:48 UTC	Online: recover from connections that look open but are dead
 c200ba6	dev	2026-10-13 22:14 UTC	Online: a quiet player is locked in, not kicked; guests reconnect
@@ -27,4 +28,3 @@ a393b25	dev	2026-10-12 04:23 UTC	Online: use a Metered TURN username/password in
 c530611	dev	2026-10-12 02:27 UTC	Online: keep the game code alive while waiting; add a connection check
 5247560	dev	2026-10-12 02:22 UTC	Online: Metered relay app, key injected at deploy from a repo secret
 55fd3da	dev	2026-10-12 02:06 UTC	Online: more STUN servers and support for a Metered TURN relay
-823cf9c	dev	2026-10-12 01:46 UTC	Online: battle intro wipe and a 30-second planning timer

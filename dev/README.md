@@ -39,7 +39,11 @@ code is PeerJS (MIT, copied into `vendor/`) for online play.
   other side waits for a rejoin, up to 2 minutes); only **Leave match** sends `bye`.
 - **Connection log:** each browser notes what its connection did (route: direct or relay,
   quiet spells, drops, reconnects, matchmaking-server hiccups); it's included in the copied
-  match log under `connection`, to look into drops. The match only ends when a player leaves (closing the page or **Leave match**), or
+  match log under `connection`, to look into drops. The last online match's log is kept in
+  localStorage (`poke-tactics-last-log`): **Copy match log** on the "Match ended" screen, or
+  **Menu → Last online match log** on the start screen (also after a reload).
+- **Screen stays on** during online matches (Screen Wake Lock API, where the browser allows it):
+  phones that lock themselves mid-match pause the page and drop the connection. The match only ends when a player leaves (closing the page or **Leave match**), or
   after 2 minutes without hearing from them. After a match: **Rematch**.
 - Players on different networks often can't connect directly; then a TURN relay from
   Metered.ca carries the messages (`src/net-config.js`). Its username and password (from

@@ -9,7 +9,7 @@
 // friend who leaves, or stays silent for GONE_MS, ends it. A guest whose
 // connection drops reconnects to the same room (main.js resumes the match).
 
-import { TURN_URLS, TURN_USERNAME, TURN_PASSWORD } from './net-config.js?v=aa11be7';
+import { TURN_URLS, TURN_USERNAME, TURN_PASSWORD } from './net-config.js?v=34fba29';
 
 const PEERJS_SRC = 'vendor/peerjs-1.5.4.min.js';
 const ID_PREFIX = 'poke-tactics-';

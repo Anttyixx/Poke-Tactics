@@ -1,5 +1,15 @@
 [
   {
+    "id": "2026-10-13-wake-lock",
+    "version": "0.11.5",
+    "date": "2026-10-13",
+    "title": "Screen stays on online",
+    "changes": [
+      { "kind": "fix", "text": "Your screen stays on during online matches. Phones locking themselves mid-match (often while watching a battle) was dropping the connection." },
+      { "kind": "new", "text": "\"Match ended\" has a Copy match log button, and the start-screen menu keeps your last online match's log, so a dropped match can be looked into." }
+    ]
+  },
+  {
     "id": "2026-10-13-rejoin",
     "version": "0.11.4",
     "date": "2026-10-13",
