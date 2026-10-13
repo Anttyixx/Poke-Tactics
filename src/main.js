@@ -72,6 +72,7 @@ const ui = createUI({
   onProfile: updateProfile,
   onRemoveFriend: (id) => { profile = removeFriend(id); return profile; },
   getProfile: () => profile,
+  getLastLog: () => { try { return localStorage.getItem(LAST_LOG_KEY); } catch { return null; } },
   getLog,
   changelog,
   version: changelog[0]?.version ?? null,
@@ -97,6 +98,18 @@ function getLog() {
 // so it can be picked back up: the host keeps the whole match (it runs it); the
 // guest keeps the code and its guestId, so the host knows it's the same player.
 const SESSION_KEY = 'poke-tactics-session';
+// The last online match's log with this browser's connection log, kept so it
+// can still be copied after a drop or a reload (Match ended screen, start menu).
+const LAST_LOG_KEY = 'poke-tactics-last-log';
+function lastLogText() {
+  const log = mode === 'host' || mode === 'bot' ? matchLog : null;
+  const base = log ?? { format: 'poke-tactics-match', v: 1, build: BUILD, mode: 'pvp', role: 'guest', seed: state?.seed, round: state?.round, names: state?.players.map((p) => p.name) };
+  return JSON.stringify({ ...base, role: mode === 'guest' ? 'guest' : 'host', round: state?.round, connection: [...netLog], copied: new Date().toISOString() });
+}
+function saveLastLog() {
+  if (mode === 'bot') return;
+  try { localStorage.setItem(LAST_LOG_KEY, lastLogText()); } catch {}
+}
 const SESSION_MS = 10 * 60 * 1000; // older than this: forget it
 function saveSession(data) {
   try { localStorage.setItem(SESSION_KEY, JSON.stringify({ ...data, at: Date.now() })); } catch {}
@@ -165,8 +178,31 @@ function runBot() {
   else if (state.phase === 'combat') send({ type: 'continue' });
 }
 
+// Online, keep the screen on: phones lock themselves after a short while
+// without a touch (often mid-match, while watching a battle), which pauses the
+// page and drops the connection. The browser releases the lock whenever the
+// page is hidden, so it's asked for again when the page is back.
+let wakeLock = null;
+async function keepAwake() {
+  const want = mode !== 'bot' && document.visibilityState === 'visible';
+  if (!want) { wakeLock?.release().catch(() => {}); wakeLock = null; return; }
+  if (wakeLock && !wakeLock.released) return;
+  try {
+    wakeLock = await navigator.wakeLock?.request('screen');
+    if (wakeLock) note('screen kept on');
+  } catch (err) {
+    if (!wakeRefused) note(`screen wake lock refused: ${err?.name ?? err}`);
+    wakeRefused = true;
+  }
+}
+let wakeRefused = false;
+document.addEventListener('visibilitychange', () => keepAwake());
+document.addEventListener('pointerdown', () => { if (mode !== 'bot' && !(wakeLock && !wakeLock.released)) keepAwake(); });
+
 function show() {
   trackStats();
+  saveLastLog();
+  keepAwake();
   ui.render(state);
   planClock();
   awayContinue();
@@ -583,7 +619,8 @@ function disconnected(reason) {
   ui.setDeadline(null);
   if (reason === 'self' || !wasPlaying) return;
   const who = mode === 'host' ? names[1] : state?.players[0]?.name ?? names[0];
-  ui.showLobby('disconnected', { error: reason === 'timeout' ? `Lost the connection to ${who}.` : reason === 'refused' ? `Couldn't get back into the game with ${who}.` : `${who} left the game.` });
+  saveLastLog();
+  ui.showLobby('disconnected', { log: lastLogText(), error: reason === 'timeout' ? `Lost the connection to ${who}.` : reason === 'refused' ? `Couldn't get back into the game with ${who}.` : `${who} left the game.` });
 }
 
 function leave() {

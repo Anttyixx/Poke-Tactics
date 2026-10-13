@@ -95,7 +95,7 @@ export const powerCadence = (def) => {
   return `Power every ${def.energy} attacks`;
 };
 
-export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProfile = () => {}, onRemoveFriend = () => {}, getProfile = () => ({ name: '', avatar: null, saved: false }), getLog, changelog = [], version = null, build = null }) {
+export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProfile = () => {}, onRemoveFriend = () => {}, getLastLog = () => null, getProfile = () => ({ name: '', avatar: null, saved: false }), getLog, changelog = [], version = null, build = null }) {
   const $ = (id) => document.getElementById(id);
   const arena = $('arena');
   const layer = $('units');
@@ -345,6 +345,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     else if (action === 'new-confirmed') { closeMenu(); onNewGame(); }
     else if (action === 'leave-confirmed') { closeMenu(); onLobby('leave'); }
     else if (action === 'copy-log') copyLog(btn);
+    else if (action === 'copy-text') copyText(btn.dataset.copy, btn);
     else if (action === 'profile-save') saveProfileForm();
     else if (action === 'profile-pick') togglePicker();
     else if (action === 'friend-remove') {
@@ -522,6 +523,12 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       menuEl.hidden = false;
       panel.querySelector('#profile-name').focus();
       return;
+    } else if (view === 'lastlog') {
+      const text = getLastLog() ?? '';
+      panel.innerHTML = `${close}${back}<h1>Last online match log</h1>
+        <p class="muted">Every move of your last online match, and what happened to the connection. Copy it and paste it to Claude to look into a drop.</p>
+        <button class="primary" data-menu="copy-text" data-copy="${esc(text)}">Copy match log</button>
+        <textarea class="log-text" rows="6" readonly>${esc(text)}</textarea>`;
     } else if (view === 'leave') {
       panel.innerHTML = `${close}<h1>Leave the match?</h1>
         <p class="muted">Your friend will be told you left, and the match ends.</p>
@@ -540,6 +547,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
           <button data-menu="news" class="${hasUnread() ? 'unread' : ''}"><span>★</span><div>What's new<small>${esc(changelog[0]?.title ?? 'Updates to the game')}</small></div></button>
           <button data-menu="help"><span>?</span><div>How to play<small>Rules, controls and keys</small></div></button>
           <button data-menu="dex"><span>◎</span><div>Pokédex<small>Every Pokémon's stats and power</small></div></button>
+          ${getLastLog() ? '<button data-menu="lastlog"><span>⧉</span><div>Last online match log<small>Copy it to look into a dropped connection</small></div></button>' : ''}
         </div>
         ${versionText ? `<p class="menu-version">${esc(versionText)}</p>` : ''}`;
     } else {
@@ -1508,7 +1516,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       disconnected: () => `
         <h1>Match ended</h1>
         <p>${esc(data.error)}</p>
-        <button class="primary" data-lobby="home">Back to start</button>`,
+        <button class="primary" data-lobby="home">Back to start</button>
+        ${data.log ? `<p class="muted small">Did the connection drop? Copy the match log and send it in: it shows what happened to the connection.</p>
+        <button class="ghost" data-copy="${esc(data.log)}">Copy match log</button>` : ''}`,
     }[view]();
     showOverlay(html);
     overlay.classList.add('lobby');
