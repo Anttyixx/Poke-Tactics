@@ -647,7 +647,7 @@ test('Self-Destruct (Golem): knocked out, it stays put 3s, then explodes on adja
   assert.ok(!r.events.some((e) => e.type === 'damage' && e.id === g && e.t > fuse.t), 'it cannot be hit while the fuse burns');
 });
 
-test('Shining Star (Minior): at 25% HP or less it spends 0.5s transforming, immune to everything, then takes its core form', () => {
+test('Shining Star (Minior): at its HP threshold (50%) it spends 0.5s transforming, immune to everything, then takes its core form', () => {
   const cat = powerCat();
   cat.brute = { ...cat.wall, range: 1, secPerHit: 1, damage: [125, 125, 125, 125] }; // 1485 HP: 9 hits leave 360 (24%)
   cat.stunner = { ...cat.brute, energy: 1, ability: { name: 'Stun', kind: 'empower', damagePct: 100, stun: 10 } };
@@ -659,8 +659,8 @@ test('Shining Star (Minior): at 25% HP or less it spends 0.5s transforming, immu
     const max = catalog.minior.hp[0];
     const hits = r.events.filter((e) => e.type === 'damage' && e.id === m);
     const hpBefore = hits.filter((e) => e.t <= start.t).at(-1).hp;
-    assert.ok(hpBefore * 100 <= max * 25 && hpBefore > 0, `at ${hpBefore}/${max}`);
-    assert.ok(hits.filter((e) => e.t < start.t).every((e) => e.hp * 100 > max * 25 || e === hits.filter((h) => h.t <= start.t).at(-1)), 'not before the threshold');
+    assert.ok(hpBefore * 100 <= max * catalog.minior.ability.hpPct && hpBefore > 0, `at ${hpBefore}/${max}`);
+    assert.ok(hits.filter((e) => e.t < start.t).every((e) => e.hp * 100 > max * catalog.minior.ability.hpPct || e === hits.filter((h) => h.t <= start.t).at(-1)), 'not before the threshold');
     const tf = evs(r, 'transform', m)[0];
     assert.equal(tf.t, start.t + 5, 'takes 0.5s');
     assert.equal(tf.sprite, catalog.minior.ability.form.sprite);

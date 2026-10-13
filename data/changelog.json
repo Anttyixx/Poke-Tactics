@@ -1,5 +1,17 @@
 [
   {
+    "id": "2026-10-13-minior",
+    "version": "0.6.5",
+    "date": "2026-10-13",
+    "title": "Minior's two forms",
+    "intro": "Minior now plays like two different Pokémon: a slow, sturdy rock that soaks up hits, then a frantic star that attacks six times as fast.",
+    "changes": [
+      { "pokemon": "minior", "kind": "change", "text": "Rock form attacks every 3.0s (was 2.2s) for 90 damage at 0★ (was 80)." },
+      { "pokemon": "minior", "kind": "buff", "text": "Shining Star triggers at 50% HP (was 25%), so Star Form lasts about twice as long." },
+      { "pokemon": "minior", "kind": "change", "text": "Star Form attacks every 0.5s (was 0.7s) for the same 90 damage as Rock form (was 100)." }
+    ]
+  },
+  {
     "id": "2026-10-13-combee",
     "version": "0.6.4",
     "date": "2026-10-13",
