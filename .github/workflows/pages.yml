@@ -5,6 +5,11 @@
 # Each push runs the tests, then updates only its own folder on the
 # `gh-pages` branch, so a dev deploy never touches stable and vice versa.
 # One-time setup: Settings -> Pages -> Deploy from a branch -> gh-pages, / (root).
+#
+# Online play runs on a Cloudflare Worker (server/). Each push deploys it first
+# (main -> "poke-tactics", dev -> "poke-tactics-dev") and writes its address
+# into the site. Needs the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID
+# repository secrets; without them the site still deploys, with online play off.
 
 name: Deploy to GitHub Pages
 
@@ -36,14 +41,46 @@ jobs:
         working-directory: app
         run: node tests/run.js
 
+      - name: Deploy the game server (Cloudflare Worker)
+        id: server
+        # A failed server deploy shouldn't hold back the site; it's flagged below.
+        continue-on-error: true
+        working-directory: app/server
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          BRANCH: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            echo "::warning title=Game server::No CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID secrets; online play is off in this deploy"
+            exit 0
+          fi
+          if [ "$BRANCH" = "main" ]; then NAME=poke-tactics; else NAME=poke-tactics-dev; fi
+          npm ci --no-audit --no-fund
+          # BUILD: the server only lets in players on this same version of the site.
+          npx wrangler deploy --name "$NAME" --var "BUILD:${SHA:0:7}" 2>&1 | tee deploy.log
+          URL=$(grep -Eo 'https://[A-Za-z0-9.-]+\.workers\.dev' deploy.log | head -n 1 || true)
+          if [ -z "$URL" ]; then
+            echo "::error title=Game server::Deployed, but its address wasn't in wrangler's output (is a workers.dev subdomain set up in the Cloudflare dashboard?)"
+            exit 1
+          fi
+          for i in 1 2 3 4 5 6; do curl -fsS "$URL/health" && break; sleep 5; done
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "::notice title=Game server::$URL"
+
+      - name: Flag a failed server deploy
+        if: steps.server.outcome == 'failure'
+        run: echo "::error title=Game server::The Cloudflare deploy failed (see the step above); this site deploy has online play off"
+
       - name: Publish to gh-pages
         env:
           REPO_URL: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
           REPO: ${{ github.repository }}
           BRANCH: ${{ github.ref_name }}
           SHA: ${{ github.sha }}
-          TURN_USERNAME: ${{ secrets.METERED_TURN_USERNAME }}
-          TURN_PASSWORD: ${{ secrets.METERED_TURN_PASSWORD }}
+          SERVER_URL: ${{ steps.server.outputs.url }}
         run: |
           set -euo pipefail
           if [ "$BRANCH" = "main" ]; then TARGET=.; LABEL=stable; else TARGET=dev; LABEL=dev; fi
@@ -53,7 +90,7 @@ jobs:
           # 1. Build the site once into a temp folder.
           BUILD="$RUNNER_TEMP/build"
           rm -rf "$BUILD" && mkdir -p "$BUILD"
-          tar -C "$GITHUB_WORKSPACE/app" --exclude=.git --exclude=.github --exclude=tests --exclude=tools --exclude=node_modules -cf - . \
+          tar -C "$GITHUB_WORKSPACE/app" --exclude=.git --exclude=.github --exclude=tests --exclude=tools --exclude=server --exclude=node_modules -cf - . \
             | tar -C "$BUILD" -xf -
           if [ -f "$BUILD/index.html" ]; then
             # Cache-bust: tag every reference with the commit so a deploy never
@@ -61,16 +98,11 @@ jobs:
             sed -i -E "s#(href=\"styles\.css|src=\"src/main\.js)\"#\1?v=$V\"#" "$BUILD/index.html"
             sed -i -E "s#(from '\./[A-Za-z0-9_-]+\.js)'#\1?v=$V'#; s#fetch\('(data/[A-Za-z0-9_-]+\.json)'\)#fetch('\1?v=$V')#" "$BUILD"/src/*.js
             sed -i -E "s#(\"assets/[^\"]+\.png)\"#\1?v=$V\"#" "$BUILD"/data/*.json
-            # Relay login for online play, from the METERED_TURN_USERNAME and
-            # METERED_TURN_PASSWORD repository secrets (kept out of the repo).
-            if [ -n "${TURN_USERNAME:-}" ] && [ -n "${TURN_PASSWORD:-}" ]; then
-              if printf '%s\n%s' "$TURN_USERNAME" "$TURN_PASSWORD" | grep -Eqv '^[A-Za-z0-9_+/=.:@-]+$'; then
-                echo "::warning title=Relay login::The relay username or password has unexpected characters; online play will run without the relay"
-              else
-                sed -i -E "s#^export const TURN_USERNAME = '';#export const TURN_USERNAME = '$TURN_USERNAME';#; s#^export const TURN_PASSWORD = '';#export const TURN_PASSWORD = '$TURN_PASSWORD';#" "$BUILD/src/net-config.js"
-              fi
+            # The game server's address (from the deploy step above).
+            if [ -n "${SERVER_URL:-}" ] && printf '%s' "$SERVER_URL" | grep -Eq '^https://[A-Za-z0-9.-]+$'; then
+              sed -i -E "s#^export const SERVER_URL = '';#export const SERVER_URL = '$SERVER_URL';#" "$BUILD/src/server-config.js"
             else
-              echo "::warning title=Relay login::No METERED_TURN_USERNAME / METERED_TURN_PASSWORD secrets; online play will run without the relay"
+              echo "::warning title=Game server::No game server address; online play is off in this deploy"
             fi
             # Badge so it's obvious which version you're looking at.
             sed -i "s|</body>|  <a class=\"build-badge $LABEL\" href=\"https://github.com/$REPO/commit/$SHA\">$LABEL · $V</a>\n</body>|" "$BUILD/index.html"

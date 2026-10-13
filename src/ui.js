@@ -1442,8 +1442,14 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     const back = '<button class="ghost" data-lobby="home">Back</button>';
     const html = {
       menu: () => `
-        <h1>Battle a Friend</h1>
+        <h1>Battle</h1>
         <label class="field">Your name<input id="lobby-name" maxlength="16" autocomplete="nickname" placeholder="Trainer" value="${esc(data.name ?? '')}"></label>
+        <section class="lobby-queue">
+          <h2>Find a match</h2>
+          <p class="muted">Play the next player looking for a battle.</p>
+          <button class="primary" data-lobby="queue">Find a match</button>
+        </section>
+        <p class="lobby-or">or play a friend</p>
         <div class="lobby-split">
           <section>
             <h2>Create a game</h2>
@@ -1460,41 +1466,38 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         <div class="lobby-actions">${back}<button class="ghost" data-lobby="check">Check my connection</button></div>`,
       resume: () => `
         <h1>Match in progress</h1>
-        <p>You were ${data.role === 'host' ? 'hosting' : 'in'} a match${data.opponent ? ` with <b>${esc(data.opponent)}</b>` : ''} (game <b>${esc(data.code)}</b>) when the page closed.</p>
-        <p class="muted">${data.role === 'host'
-          ? 'Reopen it and your friend\'s game reconnects by itself.'
-          : 'Rejoin and you\'re back in, as long as your friend still has the game open.'}</p>
-        <button class="primary" data-lobby="resume">${data.role === 'host' ? 'Reopen the match' : 'Rejoin the match'}</button>
+        <p>You were in a match${data.opponent ? ` with <b>${esc(data.opponent)}</b>` : ''} (game <b>${esc(data.code)}</b>) when the page closed.</p>
+        <p class="muted">It's still going on the server: rejoin and you're straight back in.</p>
+        <button class="primary" data-lobby="resume">Rejoin the match</button>
         <div class="lobby-actions"><button class="ghost" data-lobby="discard">Start fresh</button></div>`,
+      queue: () => `
+        <h1>Finding a match</h1>
+        <div class="spinner" aria-hidden="true"></div>
+        <p>Looking for another player…</p>
+        <p class="muted">Keep this screen open. The match starts as soon as someone else is looking too.</p>
+        <button class="ghost" data-lobby="cancel">Cancel</button>`,
       checking: () => `
         <h1>Checking your connection</h1>
         <div class="spinner" aria-hidden="true"></div>
         <p class="muted">This takes a few seconds.</p>`,
       check: () => {
         const c = data;
-        const keyText = {
-          ok: [true, 'Relay login is set'],
-          missing: [false, 'No relay login in this version of the game'],
-          unreachable: [false, 'Couldn\'t reach Metered to check the relay key'],
-        }[c.key] ?? [false, `Metered refused the relay key (${esc(c.key.replace('rejected', '').trim() || 'error')})`];
         const row = ([ok, text]) => `<li class="${ok ? 'ok' : 'bad'}"><span aria-hidden="true">${ok ? '✓' : '✗'}</span>${text}</li>`;
-        const verdict = c.relay
-          ? 'Online play should work from anywhere: if a direct connection is blocked, the relay takes over.'
-          : c.direct
-            ? 'Direct connections work, but the relay doesn\'t. Friends on some networks (many phone carriers, some home routers) won\'t be able to connect to you.'
-            : 'Only same-network connections will work from here. Try a different network.';
+        const verdict = !c.configured ? 'Online play isn\'t set up in this copy of the game.'
+          : !c.ok ? 'Couldn\'t reach the game server. Check your internet connection; if other sites work, the server may be down for a moment.'
+          : !c.sameVersion ? 'The game has been updated: refresh the page to play online.'
+          : 'Online play should work from here.';
         return `
         <h1>Connection check</h1>
         <ul class="check-list">
-          ${row(keyText)}
-          ${row([c.direct, c.direct ? 'Direct connections through your router work' : 'Direct connections are blocked on this network'])}
-          ${row([c.relay, c.relay ? 'Relay connection works' : 'Relay connection not available'])}
+          ${row([c.ok, c.ok ? 'The game server is reachable' : 'The game server can\'t be reached'])}
+          ${c.ok ? row([c.sameVersion, c.sameVersion ? 'You have the latest version' : 'A newer version is out: refresh the page']) : ''}
         </ul>
         <p>${verdict}</p>
         <button class="primary" data-lobby="open">Back</button>`;
       },
       connecting: () => `
-        <h1>Battle a Friend</h1>
+        <h1>Battle</h1>
         <div class="spinner" aria-hidden="true"></div>
         <p>${esc(data.text ?? 'Connecting…')}</p>
         ${data.cancel ? '<button class="ghost" data-lobby="home">Cancel</button>' : ''}`,
@@ -1679,5 +1682,5 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     netEl.textContent = text;
   }
 
-  return { render, toast, showLobby, setOnline, setDeadline, setNetStatus, playIntro, lobbyView: () => lobbyView };
+  return { render, toast, showLobby, setOnline, setDeadline, setNetStatus, netStatus: () => netEl?.textContent ?? null, playIntro, lobbyView: () => lobbyView };
 }

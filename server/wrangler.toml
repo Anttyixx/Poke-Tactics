@@ -1,0 +1,21 @@
+# Cloudflare Worker for online play. Deployed by .github/workflows/pages.yml:
+# dev -> "poke-tactics-dev", main -> "poke-tactics" (each with its own rooms).
+name = "poke-tactics-dev"
+main = "worker.js"
+compatibility_date = "2025-06-01"
+
+[vars]
+BUILD = "local" # the deploy sets the commit, so only the matching site version can play
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "Room"
+
+[[durable_objects.bindings]]
+name = "QUEUE"
+class_name = "Queue"
+
+# The free plan only has SQLite-backed Durable Objects.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room", "Queue"]

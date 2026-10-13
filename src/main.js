@@ -1,73 +1,49 @@
-// Entry point. Three ways to play, all through the same dispatch() -> applyIntent():
-//   bot   - you (player 0) vs. the local bot (player 1)
-//   host  - you (player 0) vs. a friend online. This browser runs the match: the
-//           friend's intents arrive over the connection, are validated here like
-//           anyone's, and the new state is sent back after every change.
-//   guest - you (player 1) on a friend's match. Intents go to the host; the
-//           screen only ever shows the state the host sends.
-//
-// Protocol (JSON over the PeerJS connection; pings and goodbyes live in net.js):
-//   guest -> host  { type: 'hello', version, name, avatar, guestId }   first message; sent again with the
-//                  same guestId after a dropped connection, to pick the match back up
-//                  { type: 'intent', intent }
-//                  { type: 'rematch' }                 "Play again" after a match
-//   host -> guest  { type: 'state', state }            after every change
-//                  { type: 'reject', error }           the guest's intent was refused
-//                  { type: 'refuse', error }           can't play (different versions)
-//                  { type: 'full' }                    someone else already joined
-//                  { type: 'log', log }                the match log (at game over, or on request)
-//                  { type: 'resync' }                  "I can't hear you": the guest replaces its connection
-//   guest -> host  { type: 'getLog' }                  ask for the match log mid-match
-//                  { type: 'sync' }                    "are you there?": the host answers with the state
+// Entry point. Two ways to play, both shown by the same UI:
+//   bot    - you (player 0) vs. the local bot (player 1). The rules run here,
+//            through dispatch() -> applyIntent().
+//   online - vs. a friend or a random opponent. The match runs on the game
+//            server (server/worker.js, on Cloudflare); this browser sends what
+//            the player does and shows the state the server sends back
+//            (connection: src/online.js).
 
 import { createGame, applyIntent } from './game.js';
 import { botTurn } from './bot.js';
 import { createUI } from './ui.js';
 import { hashSeed } from './rng.js';
-import { hostRoom, joinRoom, cleanCode, isCode, checkConnection, randomCode, GONE_MS, netLog, note } from './net.js';
-import { loadProfile, saveProfile, recordBattle, recordMatch, removeFriend, cleanName, validAvatar, BOT_AVATAR, DEFAULT_AVATAR } from './profile.js';
+import { connect, cleanCode, isCode, randomCode, playerId, serverUrl, checkServer, netLog, note } from './online.js';
+import { loadProfile, saveProfile, recordBattle, recordMatch, removeFriend, cleanName, BOT_AVATAR } from './profile.js';
 
 const BOT = 1;
-// Online, each planning phase lasts this long; then everyone still planning is
-// locked in as they are. The host's clock decides; both screens count down.
-const PLAN_SECONDS = 30;
 
 const catalogText = await (await fetch('data/units.json')).text();
 const catalog = JSON.parse(catalogText);
 // What's new: newest first. Add an entry to data/changelog.json with each update.
 const changelog = await fetch('data/changelog.json').then((r) => (r.ok ? r.json() : [])).catch(() => []);
-// Both players must run the same rules and Pokémon. The deploy tags every file
-// with its build (?v=...); locally there's no tag, so compare the data instead.
-const VERSION = `${new URL(import.meta.url).searchParams.get('v') ?? 'local'}:${hashSeed(catalogText)}`;
+// Which deploy this is (the deploy tags every file with ?v=<commit>). The
+// server only lets in players on its own build, so everyone runs the same rules.
+const BUILD = new URL(import.meta.url).searchParams.get('v') ?? 'local';
 
 let state;
 let firstGame = true;
-let mode = 'bot'; // 'bot' | 'host' | 'guest'
-let link = null; // the connection to the friend, online
-let room = null; // host: the open room ({ code, cancel }), kept for the whole match so the guest can rejoin
-let guestId = null; // host: who the guest is; guest: who we are (to rejoin after a drop)
-let away = false; // the friend has gone quiet or their connection dropped
-let giveUpTimer = 0; // host: ends the match if a dropped guest doesn't come back
-let awayTimer = 0; // host: moves an away guest past the battle results
+let mode = 'bot'; // 'bot' | 'online'
+let conn = null; // online: the connection to the server (a room, or the queue)
+let roomCode = null; // online: the match's code
 let profile = loadProfile(); // name and picture, saved in this browser
 const myName = () => profile.name || 'You';
 let names = [myName(), 'Bot'];
 let avatars = [profile.avatar, BOT_AVATAR];
 let me = 0; // which player this browser is
-let timerKey = null; // the planning phase the countdown belongs to ("seed:round")
-let lockTimer = 0;
 // Every move both players make, in order. With the game's seed this rebuilds
-// the whole match exactly (tools/replay.mjs), for analysis after a PvP game.
-// Kept where the rules run (host, or bot games); the guest gets a copy.
+// the whole match exactly (tools/replay.mjs), for analysis afterwards. Online,
+// the server keeps it and sends a copy.
 let matchLog = null;
-let logWaiters = []; // guest: callbacks waiting for the host's copy
-const BUILD = new URL(import.meta.url).searchParams.get('v') ?? 'local';
+let logWaiters = [];
 
 const ui = createUI({
   catalog,
   viewer: 0,
-  onIntent: (intent) => (mode === 'guest' ? sendIntent(intent) : dispatch(me, intent)),
-  onNewGame: () => (mode === 'guest' ? link?.send({ type: 'rematch' }) : newGame()),
+  onIntent: (intent) => (mode === 'online' ? sendIntent(intent) : dispatch(me, intent)),
+  onNewGame: () => (mode === 'online' ? conn?.send({ type: 'rematch' }) : newGame()),
   onLobby: lobby,
   onProfile: updateProfile,
   onRemoveFriend: (id) => { profile = removeFriend(id); return profile; },
@@ -83,51 +59,43 @@ const ui = createUI({
 // online connection, for looking into drops).
 function getLog() {
   const withNet = (log) => (log && mode !== 'bot' ? { ...log, connection: [...netLog] } : log);
-  if (mode !== 'guest') return Promise.resolve(withNet(matchLog));
+  if (mode !== 'online') return Promise.resolve(withNet(matchLog));
   return new Promise((resolve) => {
     const done = (log) => resolve(withNet(log));
     logWaiters.push(done);
-    link?.send({ type: 'getLog' });
+    conn?.send({ type: 'getLog' });
     setTimeout(() => { logWaiters = logWaiters.filter((w) => w !== done); done(matchLog); }, 4000);
   });
 }
 
-// ---- surviving a reload ------------------------------------------------------
-// Phones often reload a page that was in the background, and players reload
-// when something looks stuck. The current online match is kept in this browser
-// so it can be picked back up: the host keeps the whole match (it runs it); the
-// guest keeps the code and its guestId, so the host knows it's the same player.
+// The current online match's code is kept in this browser, so after a reload
+// (phones often reload pages that were in the background) the player can go
+// straight back in. The server keeps the match itself.
 const SESSION_KEY = 'poke-tactics-session';
-// The last online match's log with this browser's connection log, kept so it
-// can still be copied after a drop or a reload (Match ended screen, start menu).
-const LAST_LOG_KEY = 'poke-tactics-last-log';
-function lastLogText() {
-  const log = mode === 'host' || mode === 'bot' ? matchLog : null;
-  const base = log ?? { format: 'poke-tactics-match', v: 1, build: BUILD, mode: 'pvp', role: 'guest', seed: state?.seed, round: state?.round, names: state?.players.map((p) => p.name) };
-  return JSON.stringify({ ...base, role: mode === 'guest' ? 'guest' : 'host', round: state?.round, connection: [...netLog], copied: new Date().toISOString() });
-}
-function saveLastLog() {
-  if (mode === 'bot') return;
-  try { localStorage.setItem(LAST_LOG_KEY, lastLogText()); } catch {}
-}
-const SESSION_MS = 10 * 60 * 1000; // older than this: forget it
-function saveSession(data) {
-  try { localStorage.setItem(SESSION_KEY, JSON.stringify({ ...data, at: Date.now() })); } catch {}
+const SESSION_MS = 15 * 60 * 1000; // the server forgets an empty room after 15 minutes
+function saveSession() {
+  try { localStorage.setItem(SESSION_KEY, JSON.stringify({ code: roomCode, opponent: state?.players[1 - me]?.name ?? null, at: Date.now() })); } catch {}
 }
 function loadSession() {
   try {
     const s = JSON.parse(localStorage.getItem(SESSION_KEY) ?? 'null');
-    if (s && Date.now() - s.at < SESSION_MS && (s.role === 'host' || s.role === 'guest') && isCode(s.code)) return s;
+    if (s && Date.now() - s.at < SESSION_MS && isCode(s.code)) return s;
   } catch {}
   return null;
 }
 function clearSession() {
   try { localStorage.removeItem(SESSION_KEY); } catch {}
 }
-function saveHostSession() {
-  if (mode !== 'host' || !room) return;
-  if (state.phase === 'gameover') return clearSession();
-  saveSession({ role: 'host', code: room.code, guestId, state, matchLog, names, avatars, opponent: names[1] });
+// The last online match's log with this browser's connection log, kept so it
+// can still be copied after a drop or a reload (Match ended screen, start menu).
+const LAST_LOG_KEY = 'poke-tactics-last-log';
+function lastLogText() {
+  const base = matchLog ?? { format: 'poke-tactics-match', v: 1, build: BUILD, mode: 'pvp', seed: state?.seed, names: state?.players.map((p) => p.name) };
+  return JSON.stringify({ ...base, code: roomCode, player: me, round: state?.round, connection: [...netLog], copied: new Date().toISOString() });
+}
+function saveLastLog() {
+  if (mode === 'bot') return;
+  try { localStorage.setItem(LAST_LOG_KEY, lastLogText()); } catch {}
 }
 
 const record = (player, intent) => matchLog?.intents.push([player, intent]);
@@ -149,7 +117,6 @@ function newGame() {
   if (featured && !state.featured) setTimeout(() => ui.toast(`Unknown unit "${featured}" in ?unit=`), 0);
   runBot();
   show();
-  broadcast();
 }
 
 function dispatch(player, intent) {
@@ -157,13 +124,11 @@ function dispatch(player, intent) {
   if (res.ok) record(player, intent);
   if (!res.ok) {
     if (player === me) ui.toast(res.error);
-    else if (mode === 'host') link?.send({ type: 'reject', error: res.error });
     else console.warn('Bot intent rejected', intent, res.error);
     return res;
   }
   runBot();
   show();
-  broadcast();
   return res;
 }
 
@@ -204,22 +169,6 @@ function show() {
   saveLastLog();
   keepAwake();
   ui.render(state);
-  planClock();
-  awayContinue();
-}
-
-// Host: a guest who's away can't press Continue after a battle. Once the
-// battle has had time to play out, continue for them so the match goes on.
-let awayKey = null;
-function awayContinue() {
-  if (mode !== 'host' || !away || state.phase !== 'combat' || state.players[1].ready) return;
-  const key = `${state.seed}:${state.round}`;
-  if (key === awayKey) return;
-  awayKey = key;
-  clearTimeout(awayTimer);
-  awayTimer = setTimeout(() => {
-    if (mode === 'host' && away && state.phase === 'combat' && `${state.seed}:${state.round}` === key && !state.players[1].ready) dispatch(1, { type: 'continue' });
-  }, state.combat.result.ticks * 100 + 5000);
 }
 
 // Profile stats: each battle counts the Pokémon this player fielded; each
@@ -236,32 +185,9 @@ function trackStats() {
   }
 }
 
-// Start the countdown when a new planning phase begins (online only).
-function planClock() {
-  if (mode === 'bot' || state.phase !== 'planning') return;
-  const key = `${state.seed}:${state.round}`;
-  if (key === timerKey) return;
-  timerKey = key;
-  ui.setDeadline(Date.now() + PLAN_SECONDS * 1000);
-  if (mode !== 'host') return;
-  clearTimeout(lockTimer);
-  lockTimer = setTimeout(() => {
-    if (mode !== 'host' || state.phase !== 'planning' || `${state.seed}:${state.round}` !== key) return;
-    for (const p of [0, 1]) if (state.phase === 'planning' && !state.players[p].ready) dispatch(p, { type: 'ready' });
-  }, PLAN_SECONDS * 1000);
-}
-
-const broadcast = () => {
-  if (mode !== 'host') return;
-  saveHostSession();
-  link?.send({ type: 'state', state });
-  if (state.phase === 'gameover') link?.send({ type: 'log', log: matchLog });
-};
-
-// The guest can't check intents itself (the host has the real state), so it
-// reports success; a refusal comes back as a toast.
+// Online, intents go to the server; a refusal comes back as a toast.
 function sendIntent(intent) {
-  link?.send({ type: 'intent', intent });
+  conn?.send({ type: 'intent', intent });
   return { ok: true };
 }
 
@@ -287,362 +213,169 @@ function updateProfile(next) {
   return profile;
 }
 
+const NO_SERVER = 'Online play isn\'t available in this copy of the game.';
+
 function lobby(action, data = {}) {
   if (action === 'open') {
     const join = cleanCode(new URLSearchParams(location.search).get('join'));
     return ui.showLobby('menu', { name: savedName(), code: join });
   }
-  if (action === 'host') return host(playerName(data.name) || 'Player 1');
+  if (!serverUrl() && ['host', 'join', 'queue', 'resume'].includes(action)) return ui.showLobby('error', { error: NO_SERVER });
+  if (action === 'host') { playerName(data.name); return openRoom(randomCode(), { create: true }); }
   if (action === 'join') {
     const code = cleanCode(data.code);
     if (!isCode(code)) return ui.toast('Codes are 5 letters and numbers, like KOKO4.');
-    return join(code, playerName(data.name) || 'Player 2');
+    playerName(data.name);
+    return openRoom(code);
   }
-  if (action === 'cancel') { stopHosting(); link = null; return ui.showLobby('menu', { name: savedName() }); }
+  if (action === 'queue') { playerName(data.name); return findMatch(); }
+  if (action === 'cancel') { stopOnline(); return ui.showLobby('menu', { name: savedName() }); }
   if (action === 'leave') return leave();
   if (action === 'check') {
     ui.showLobby('checking');
-    return checkConnection().then((result) => {
-      console.info('Connection check', result);
-      if (ui.lobbyView() === 'checking') ui.showLobby('check', result);
+    return checkServer().then((health) => {
+      if (ui.lobbyView() === 'checking') ui.showLobby('check', { ok: Boolean(health), sameVersion: health?.build === BUILD, configured: Boolean(serverUrl()) });
     });
   }
-  if (action === 'home') return goHome();
+  if (action === 'home') { stopOnline(); return goHome(); }
   if (action === 'resume') {
     const saved = loadSession();
     if (!saved) { ui.toast('That match has expired.'); return ui.showLobby('menu', { name: savedName() }); }
-    return saved.role === 'host' ? resumeHost(saved) : join(saved.code, savedName() || 'Player 2');
+    return openRoom(saved.code, { resuming: true });
   }
   if (action === 'discard') { clearSession(); return ui.showLobby('menu', { name: savedName() }); }
 }
 
-// Host after a reload: reopen the room under the same code with the saved
-// match. The guest's game is already trying to reconnect, and finds it.
-async function resumeHost(saved) {
-  stopHosting();
-  ui.showLobby('connecting', { text: `Reopening game ${saved.code}…` });
-  note(`resuming match ${saved.code} as host`);
-  try {
-    const r = await hostRoom({
-      code: saved.code,
-      onMessage: hostMessage,
-      onClose: hostLinkClosed,
-      onQuiet: (quiet, l) => { if (l === link && mode === 'host') { setAway(quiet); if (quiet) nudge(l); } },
-      onError: () => {},
-    });
-    room = r;
-    guestId = saved.guestId;
-    names = saved.names;
-    avatars = saved.avatars;
-    mode = 'host';
-    me = 0;
-    link = null;
-    ui.setOnline({ viewer: 0 });
-    state = saved.state;
-    matchLog = saved.matchLog;
-    trackedKey = `${state.seed}:${state.round}:${state.phase}`; // already counted before the reload
-    show();
-    setAway(true);
-    clearTimeout(giveUpTimer);
-    giveUpTimer = setTimeout(() => { if (mode === 'host' && !link) disconnected('timeout'); }, GONE_MS);
-  } catch (err) {
-    clearSession();
-    ui.showLobby('error', { error: err.message });
-  }
+const who = () => ({ pid: playerId(), name: savedName() || 'Player', avatar: profile.avatar, build: BUILD });
+
+function stopOnline() {
+  conn?.close();
+  conn = null;
+  ui.setNetStatus(null);
 }
 
-async function host(name) {
-  stopHosting();
-  ui.showLobby('connecting', { text: 'Creating a game…' });
-  try {
-    const r = await hostRoom({
-      onMessage: hostMessage,
-      onClose: hostLinkClosed,
-      onQuiet: (quiet, l) => { if (l === link && mode === 'host') { setAway(quiet); if (quiet) nudge(l); } },
-      onError: (error) => { stopHosting(); ui.showLobby('error', { error }); },
-    });
-    room = r;
-    guestId = null;
-    names = [name, 'Friend'];
-    avatars = [profile.avatar, DEFAULT_AVATAR];
-    const url = new URL(location.href);
-    url.search = `?join=${r.code}`;
-    ui.showLobby('hosting', { code: r.code, link: url.href });
-  } catch (err) {
-    ui.showLobby('error', { error: err.message });
-  }
-}
-
-function hostMessage(msg, l) {
-  if (msg.type === 'hello') {
-    if (l === link) return; // a repeat (the guest re-sends until the game starts)
-    if (mode === 'host') {
-      // Mid-match: only the same guest, coming back after a dropped connection.
-      if (typeof msg.guestId === 'string' && msg.guestId === guestId) {
-        const old = link;
-        link = l;
-        old?.close();
-        clearTimeout(giveUpTimer);
-        setAway(false);
-        l.send({ type: 'state', state });
-      } else {
-        l.send({ type: 'full' });
-        setTimeout(() => l.close(), 300);
-      }
-      return;
-    }
-    if (!room) return;
-    if (msg.version !== VERSION) {
-      l.send({ type: 'refuse', error: 'You and your friend have different versions of the game. Both of you refresh the page (or open the same link) and try again.' });
-      setTimeout(() => l.close(), 300);
-      ui.showLobby('error', { error: 'Your friend has a different version of the game. Both of you refresh the page (or open the same link) and try again.' });
-      stopHosting();
-      return;
-    }
-    link = l;
-    guestId = typeof msg.guestId === 'string' ? msg.guestId.slice(0, 40) : null;
-    mode = 'host';
-    me = 0;
-    names = [names[0], cleanName(msg.name) || 'Player 2'];
-    avatars = [profile.avatar, validAvatar(msg.avatar) ? msg.avatar : DEFAULT_AVATAR]; // untrusted: only known pictures
-    ui.setOnline({ viewer: 0 });
-    newGame();
-    ui.playIntro(names, avatars);
-  } else if (mode !== 'host' || l !== link) {
-    // Not in a match yet, or not the player: ignore anything else.
-  } else if (msg.type === 'intent') {
-    dispatch(1, msg.intent);
-  } else if (msg.type === 'getLog') {
-    l.send({ type: 'log', log: matchLog });
-  } else if (msg.type === 'sync') {
-    l.send({ type: 'state', state });
-  } else if (msg.type === 'rematch' && state.phase === 'gameover') {
-    newGame();
-  }
-}
-
-// Host: the guest has gone quiet. Their page may be asleep, or their messages
-// may not be getting through even though ours reach them; keep telling them to
-// reconnect until they're back.
-let nudgeTimer = 0;
-function nudge(l) {
-  clearInterval(nudgeTimer);
-  l.send({ type: 'resync' });
-  nudgeTimer = setInterval(() => {
-    if (mode !== 'host' || link !== l || !away) return clearInterval(nudgeTimer);
-    l.send({ type: 'resync' });
-  }, 3000);
-}
-
-// Host: a connection closed. Only the player's matters. If it broke (rather
-// than the guest leaving), keep the match going and wait for them to rejoin.
-function hostLinkClosed(reason, l) {
-  if (l !== link) return;
-  link = null;
-  if (mode !== 'host') return; // still in the waiting room: wait for someone else
-  if (reason === 'lost') {
-    setAway(true);
-    clearTimeout(giveUpTimer);
-    giveUpTimer = setTimeout(() => { if (mode === 'host' && !link) disconnected('timeout'); }, GONE_MS);
-    return;
-  }
-  disconnected(reason);
-}
-
-// The friend went quiet or dropped (true), or is back (false).
-function setAway(isAway) {
-  if (away === isAway) return;
-  away = isAway;
-  const who = mode === 'host' ? names[1] : state?.players[0]?.name ?? 'your friend';
-  if (isAway) {
-    ui.setNetStatus(mode === 'host'
-      ? `${who}'s connection dropped. They're locked in when the timer runs out; waiting for them to come back…`
-      : `Lost touch with ${who}. Reconnecting…`);
-    awayKey = null;
-    if (state) awayContinue();
-  } else {
-    ui.setNetStatus(null);
-    clearTimeout(awayTimer);
-    ui.toast(mode === 'host' ? `${who} is back` : 'Reconnected');
-  }
-}
-
-// Guest: check the connection still works (set while in a match).
-let guestResync = null;
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') guestResync?.(); });
-
-async function join(code, name) {
-  stopHosting();
-  ui.showLobby('connecting', { text: `Joining ${code}…`, cancel: true });
-  // Joining a match this browser was already in (after a reload, or typing the
-  // code again): come back as the same player.
-  const saved = loadSession();
-  guestId = saved?.role === 'guest' && saved.code === code ? saved.guestId : randomCode() + randomCode();
-  const myId = guestId;
-  note(`joining ${code}${saved?.role === 'guest' && saved.code === code ? ' (rejoining)' : ''}`);
-  const live = () => guestId === myId;
-  let started = false;
-  let statesSeen = 0;
-  let reconnecting = false;
-  let giveUpAt = 0; // while getting back in: when to stop trying
-  let syncTimer = 0;
-
-  // Each connection gets its own handlers, and only the current one counts:
-  // an old connection that closes or wakes up late can't disturb the new one.
-  const handlersFor = (box) => ({
+// Find a random opponent: wait in the server's queue until it pairs us up,
+// then join the room it made.
+function findMatch() {
+  stopOnline();
+  ui.showLobby('queue');
+  note('looking for a match');
+  const c = connect('/queue', who(), {
     onMessage: (msg) => {
-      if (!live() || box.link !== link) return;
-      if (msg.type === 'state') {
-        statesSeen++;
-        giveUpAt = 0;
-        clearTimeout(syncTimer);
-        if (!started) {
-          started = true;
-          mode = 'guest';
-          me = 1;
-          ui.setOnline({ viewer: 1 });
-          const [mine, theirs] = [msg.state.players[1], msg.state.players[0]];
-          ui.playIntro([mine.name, theirs.name], [mine.avatar, theirs.avatar]);
+      if (c !== conn) return;
+      if (msg.type === 'matched') { note(`matched: ${msg.code}`); stopOnline(); openRoom(msg.code); }
+      else if (msg.type === 'refuse') { stopOnline(); ui.showLobby('error', { error: msg.text }); }
+    },
+    onStatus: (s) => { if (c === conn && s === 'replaced') { stopOnline(); ui.showLobby('menu', { name: savedName() }); } },
+  });
+  conn = c;
+}
+
+// Create (create: true), join or rejoin the room with this code.
+function openRoom(code, { create = false, resuming = false, tries = 0 } = {}) {
+  stopOnline();
+  roomCode = code;
+  let inMatch = false; // this connection has had a state with a match in it
+  let lastSeed = null;
+  let planKey = null;
+  ui.showLobby('connecting', { text: create ? 'Creating a game…' : resuming ? 'Getting back into your match…' : `Joining ${code}…`, cancel: true });
+  note(`${create ? 'creating' : 'joining'} ${code}`);
+  const c = connect('/room', { ...who(), code, create: create ? '1' : null }, {
+    onMessage: (msg) => {
+      if (c !== conn) return;
+      if (msg.type === 'welcome') {
+        me = msg.you;
+        if (create && !inMatch && mode !== 'online') {
+          const url = new URL(location.href);
+          url.search = `?join=${code}`;
+          ui.showLobby('hosting', { code, link: url.href });
+        } else if (!inMatch && mode !== 'online') {
+          ui.showLobby('connecting', { text: 'Connected! Waiting for the game to start…', cancel: true });
         }
-        state = msg.state;
-        if (state.phase === 'gameover') clearSession();
-        else saveSession({ role: 'guest', code, guestId: myId, opponent: state.players[0]?.name });
+      } else if (msg.type === 'state') {
+        const next = msg.state;
+        if (mode !== 'online') {
+          mode = 'online';
+          ui.setOnline({ viewer: me });
+        }
+        // A new match (the first, or a rematch): play the intro.
+        if (next.seed !== lastSeed) {
+          lastSeed = next.seed;
+          if (next.phase === 'team' && !next.players[me].ready) {
+            ui.playIntro([next.players[me].name, next.players[1 - me].name], [next.players[me].avatar, next.players[1 - me].avatar]);
+          }
+          matchLog = null;
+        }
+        inMatch = true;
+        state = next;
+        if (state.phase === 'gameover') clearSession(); else saveSession();
+        // The server's clock decides when planning ends; both screens count down.
+        if (state.phase === 'planning' && msg.deadlineIn !== null && msg.deadlineIn !== undefined) {
+          const key = `${state.seed}:${state.round}`;
+          if (key !== planKey) { planKey = key; ui.setDeadline(Date.now() + msg.deadlineIn); }
+        } else if (state.phase !== 'planning') { planKey = null; ui.setDeadline(null); }
+        ui.setNetStatus(null);
         show();
-        setAway(false); // the host answered: we're really back
+      } else if (msg.type === 'presence') {
+        const there = msg.connected?.[1 - me];
+        const name = state?.players[1 - me]?.name ?? 'Your opponent';
+        if (inMatch && state?.phase !== 'gameover') {
+          if (there === false) ui.setNetStatus(`${name}'s connection dropped. They're locked in when the timer runs out; waiting for them to come back…`);
+          else if (there) { if (ui.netStatus()) ui.toast(`${name} is back`); ui.setNetStatus(null); }
+        }
       } else if (msg.type === 'reject') ui.toast(msg.error);
-      else if (msg.type === 'resync') {
-        // The host can't hear us: this connection only works one way. Replace it.
-        if (started && !reconnecting) { const l = link; link = null; l.drop(); reconnect(); }
-      } else if (msg.type === 'log') {
+      else if (msg.type === 'log') {
         matchLog = msg.log;
         for (const w of logWaiters) w(matchLog);
         logWaiters = [];
-      } else if (msg.type === 'refuse' || msg.type === 'full') {
-        const l = link;
-        link = null;
-        l?.close();
-        if (started) return disconnected('refused');
-        ui.showLobby('error', { error: msg.type === 'full' ? 'That game already has two players.' : msg.error });
+      } else if (msg.type === 'ended') {
+        endMatch(`${msg.who ?? 'Your opponent'} left the game.`);
+      } else if (msg.type === 'refuse') {
+        note(`refused: ${msg.reason}`);
+        stopOnline();
+        if (msg.reason === 'taken' && create && tries < 4) return openRoom(randomCode(), { create: true, tries: tries + 1 });
+        clearSession();
+        if (mode === 'online') return endMatch(msg.text);
+        ui.showLobby('error', { error: msg.text });
       }
     },
-    // Gone quiet: check whether the host is still there.
-    onQuiet: (quiet) => { if (live() && box.link === link && started && quiet) { setAway(true); resync(); } },
-    onClose: (reason) => {
-      if (!live() || box.link !== link || reason === 'self') return;
-      link = null;
-      if (started && reason !== 'left') return reconnect();
-      disconnected(reason);
+    onStatus: (s) => {
+      if (c !== conn) return;
+      if (s === 'reconnecting' && inMatch) ui.setNetStatus('Connection lost. Reconnecting…');
+      if (s === 'replaced') { conn = null; endMatch('This match was opened somewhere else (another tab or device).'); }
     },
   });
-
-  // Say hello until a state arrives, in case the first one is lost.
-  const greet = (l) => {
-    const before = statesSeen;
-    const hello = () => {
-      if (link !== l || statesSeen !== before) return;
-      l.send({ type: 'hello', version: VERSION, name, avatar: profile.avatar, guestId: myId });
-      setTimeout(hello, 1000);
-    };
-    hello();
-  };
-
-  // Ask the host for the state. No answer in a few seconds means this
-  // connection is dead even if it looks open (phones often wake up like
-  // that): replace it.
-  const resync = () => {
-    if (!live() || mode !== 'guest' || !link || reconnecting) return;
-    const l = link;
-    const before = statesSeen;
-    l.send({ type: 'sync' });
-    clearTimeout(syncTimer);
-    syncTimer = setTimeout(() => {
-      if (live() && link === l && statesSeen === before) { link = null; l.drop(); reconnect(); }
-    }, 4000);
-  };
-  guestResync = resync;
-
-  // Mid-match the connection broke: get back into the same room. The host
-  // knows us by guestId and picks the match back up.
-  const reconnect = async () => {
-    if (reconnecting) return;
-    reconnecting = true;
-    setAway(true);
-    giveUpAt ||= Date.now() + GONE_MS;
-    while (live() && mode === 'guest' && !link) {
-      if (Date.now() > giveUpAt) { reconnecting = false; return disconnected('timeout'); }
-      try {
-        const box = {};
-        const l = await joinRoom(code, handlersFor(box));
-        if (!live() || mode !== 'guest' || link) { l.drop(); break; }
-        box.link = l;
-        link = l;
-        greet(l); // "Reconnected" shows once the host sends the state back
-      } catch {
-        await new Promise((r) => setTimeout(r, 2000));
-      }
-    }
-    reconnecting = false;
-  };
-
-  try {
-    const box = {};
-    const l = await joinRoom(code, handlersFor(box));
-    if (ui.lobbyView() !== 'connecting' || !live()) { l.close(); return; } // cancelled while connecting
-    box.link = l;
-    link = l;
-    greet(l);
-    ui.showLobby('connecting', { text: 'Connected! Waiting for the game to start…' });
-  } catch (err) {
-    if (ui.lobbyView() === 'connecting') ui.showLobby('error', { error: err.message });
-  }
+  conn = c;
 }
 
-function stopHosting() {
-  room?.cancel();
-  room = null;
-}
-
-// The match is over for good: tell the player why.
-function disconnected(reason) {
-  clearSession();
-  note(`match ended: ${reason}`);
-  const wasPlaying = mode !== 'bot';
-  link?.close();
-  link = null;
-  stopHosting();
-  guestId = null;
-  clearTimeout(lockTimer); // nobody to lock in any more
-  clearTimeout(giveUpTimer);
-  clearTimeout(awayTimer);
-  away = false;
-  ui.setNetStatus(null);
-  ui.setDeadline(null);
-  if (reason === 'self' || !wasPlaying) return;
-  const who = mode === 'host' ? names[1] : state?.players[0]?.name ?? names[0];
+// The match is over for good (opponent left, or we can't get back in).
+function endMatch(text) {
+  note(`match ended: ${text}`);
   saveLastLog();
-  ui.showLobby('disconnected', { log: lastLogText(), error: reason === 'timeout' ? `Lost the connection to ${who}.` : reason === 'refused' ? `Couldn't get back into the game with ${who}.` : `${who} left the game.` });
+  const log = lastLogText();
+  stopOnline();
+  clearSession();
+  ui.setDeadline(null);
+  ui.showLobby('disconnected', { log, error: text });
 }
 
 function leave() {
+  conn?.send({ type: 'leave' });
+  const c = conn;
+  conn = null;
+  setTimeout(() => c?.close(), 300); // let the goodbye go out
   clearSession();
-  link?.close();
-  link = null;
-  guestId = null;
+  ui.setNetStatus(null);
   goHome();
 }
 
 // Back to the start screen with a fresh game against the bot.
 function goHome() {
-  stopHosting();
-  guestId = null;
-  clearTimeout(giveUpTimer);
-  clearTimeout(awayTimer);
-  away = false;
-  ui.setNetStatus(null);
-  clearTimeout(lockTimer);
-  timerKey = null;
+  stopOnline();
+  ui.setDeadline(null);
   mode = 'bot';
   me = 0;
+  roomCode = null;
   names = [myName(), 'Bot'];
   avatars = [profile.avatar, BOT_AVATAR];
   ui.setOnline(null);
@@ -655,6 +388,6 @@ window.game = { get state() { return state; }, get mode() { return mode; }, cata
 newGame();
 // An online match this browser was in (before a reload) can be picked back up;
 // otherwise a shared invite link (?join=CODE) goes straight to the join screen.
-const unfinished = loadSession();
-if (unfinished) ui.showLobby('resume', { code: unfinished.code, role: unfinished.role, opponent: unfinished.opponent });
+const unfinished = serverUrl() ? loadSession() : null;
+if (unfinished) ui.showLobby('resume', { code: unfinished.code, opponent: unfinished.opponent });
 else if (new URLSearchParams(location.search).get('join')) lobby('open');

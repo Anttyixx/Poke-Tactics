@@ -1,0 +1,13 @@
+{
+  "name": "poke-tactics-server",
+  "private": true,
+  "type": "module",
+  "description": "Online play: a Cloudflare Worker with one Durable Object per match (and one for the matchmaking queue).",
+  "scripts": {
+    "dev": "wrangler dev --port 8787",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "4.145.0"
+  }
+}

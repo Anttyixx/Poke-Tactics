@@ -2,57 +2,60 @@
 
 A browser-based 1v1 auto-battler. Buy units, place them on your half of the grid,
 then watch the fight play out by itself. Plain HTML/CSS/JS with ES modules. There is
-no build step, and it deploys to GitHub Pages as static files. The only third-party
-code is PeerJS (MIT, copied into `vendor/`) for online play.
+no build step, and it deploys to GitHub Pages as static files. Online play runs on a small
+Cloudflare Worker (`server/`), deployed by the same workflow.
 
-**Status:** play against the bot, or a friend online with a game code.
+**Status:** play against the bot, a friend online with a game code, or a random opponent.
 
 ## Online play
 
-**Battle** on the start screen. One player taps **Create game** and gets a
-5-character code (and an invite link, `?join=CODE`); the other enters it under **Join**.
+**Battle** on the start screen: **Find a match** pairs you with the next player looking, or
+play a friend: one taps **Create game** and gets a 5-character code (and an invite link,
+`?join=CODE`); the other enters it under **Join**.
 
-- When the two connect, a battle-style screen wipe shows both trainers' names.
-- Each planning phase lasts 30 seconds (the Fight button counts down, red for the last 10).
-  When time runs out, anyone still planning is locked in as they are. The host's clock decides.
-- Browsers connect directly over WebRTC (`src/net.js`); PeerJS's free public server only
-  introduces them. Strict networks (some school/work Wi-Fi, some mobile data) can block
-  direct connections; then the join fails with a message suggesting another network.
-- The host's browser runs the match (`src/main.js`): the guest sends intents, the host
-  validates them with `applyIntent()` like anyone's and sends the new state back after
-  every change. Both players must run the same build; otherwise the join is refused.
-- A player whose page goes quiet (phone screen locked, switched apps, a network blip) stays
-  in the match: the other player sees a notice, the quiet player is locked in when the
-  planning timer runs out, and the host continues past the battle results for them. If the
-  connection itself drops, the guest reconnects to the same room by itself and picks the match
-  back up (the host keeps the room open and recognises the guest by the `guestId` in its
-  hello). A connection can also die while still looking open (common when a phone wakes up),
-  or work in one direction only, so: when the guest hears nothing, or comes back to the page,
-  it asks the host for the state (`sync`) and replaces the connection if there's no answer
-  within 4 seconds; when the host hears nothing from the guest, it tells the guest to
-  reconnect (`resync`). "Reconnected" only shows once the host has sent the state back.
-- **Reloads:** the current online match is saved in the browser (`poke-tactics-session`, for
-  10 minutes): the host saves the whole match, the guest its code and `guestId`. After a reload
-  (phones often reload pages that were in the background) the game offers to pick it back up:
-  the host reopens the room under the same code, and the guest rejoins as the same player.
-  Typing the same code again also rejoins. Closing or reloading the page sends `gone` (the
-  other side waits for a rejoin, up to 2 minutes); only **Leave match** sends `bye`.
-- **Connection log:** each browser notes what its connection did (route: direct or relay,
-  quiet spells, drops, reconnects, matchmaking-server hiccups); it's included in the copied
-  match log under `connection`, to look into drops. The last online match's log is kept in
-  localStorage (`poke-tactics-last-log`): **Copy match log** on the "Match ended" screen, or
-  **Menu → Last online match log** on the start screen (also after a reload).
-- **Screen stays on** during online matches (Screen Wake Lock API, where the browser allows it):
-  phones that lock themselves mid-match pause the page and drop the connection. The match only ends when a player leaves (closing the page or **Leave match**), or
-  after 2 minutes without hearing from them. After a match: **Rematch**.
-- Players on different networks often can't connect directly; then a TURN relay from
-  Metered.ca carries the messages (`src/net-config.js`). Its username and password (from
-  "New credential" in Metered's TURN dashboard) live in the `METERED_TURN_USERNAME` and
-  `METERED_TURN_PASSWORD` repository secrets; the deploy workflow writes them into the site.
-- **Battle → Check my connection** shows whether the relay login is set and whether
-  direct and relayed routes work on that device.
-- `?peer=host:port` uses your own PeerJS server instead of the public one, e.g.
-  `npx peerjs --port 9000` for testing two tabs locally.
+- **The match runs on a server**, not in either player's browser: a Cloudflare Worker
+  (`server/worker.js`) with one Durable Object per match, found by its code. It runs the
+  same rules code as the game (`src/game.js`, `data/units.json`), checks every move with
+  `applyIntent()`, and sends both players the new state after every change. A phone locking
+  or a page reloading never stops the match. Another Durable Object is the matchmaking queue.
+- Browsers talk to it over a WebSocket (`src/online.js`, protocol at the top of the file):
+  plain HTTPS, so it works on any network that can open a website (no relay needed).
+- **Each planning phase lasts 30 seconds** on the server's clock (both screens count down);
+  then anyone still planning is locked in as they are. After a battle has played out, anyone
+  who hasn't pressed Continue within 20 seconds is moved on.
+- **Dropping out and coming back:** each browser keeps a random player id
+  (`poke-tactics-pid` in localStorage), which is how the server knows a returning player. The
+  connection pings every 5 seconds; silence for 15 seconds, the page coming back on screen,
+  or the network coming back makes it reconnect at once, straight back into the match. Moves
+  made while reconnecting are sent when it's back. The other player sees a notice while
+  someone's away; the match carries on (the absent player is locked in each round).
+- **Reloads:** the match's code is saved (`poke-tactics-session`, 15 minutes); after a
+  reload the game offers **Rejoin the match**. Typing the code again also rejoins.
+- **Leaving:** **Leave match** ends it for both at once. A room nobody is connected to is
+  deleted after 15 minutes.
+- **Versions:** the server only lets in players on the same build as itself (the deploy
+  tags both with the commit), so everyone runs the same rules. An old tab is told to refresh.
+- **Screen stays on** during online matches (Screen Wake Lock API, where the browser allows
+  it): a phone locking itself pauses the page.
+- **Connection log:** each browser notes what its connection did; it's included in the
+  copied match log under `connection`. The last online match's log is kept in localStorage
+  (`poke-tactics-last-log`): **Copy match log** on the "Match ended" screen, or **Menu → Last
+  online match log** on the start screen.
+- **Battle → Check my connection** checks the server can be reached and is on your version.
+
+### The server (`server/`)
+
+- Deployed by `.github/workflows/pages.yml` on every push: `dev` → Worker `poke-tactics-dev`,
+  `main` → `poke-tactics`, each with its own matches. The workflow writes the Worker's address
+  into `src/server-config.js` in the published site. It needs two repository secrets:
+  `CLOUDFLARE_API_TOKEN` (an API token from the "Edit Cloudflare Workers" template) and
+  `CLOUDFLARE_ACCOUNT_ID`. Without them, or if the server deploy fails, the site still deploys
+  with online play off (the run shows a warning or error).
+- Free plan: Workers plus SQLite-backed Durable Objects, with WebSocket hibernation so idle
+  connections cost nothing.
+- **Run it locally:** `cd server && npm install && npm run dev` (Wrangler, port 8787), then
+  open the game with `?server=http://localhost:8787`. Locally both sides use the build
+  `local`.
 
 ## Run locally
 
@@ -258,13 +261,15 @@ src/combat.js       simulate(catalog, boards). Pure and deterministic, returns a
 src/game.js         rules: createGame(), applyIntent(). The only thing that changes state
 src/bot.js          dummy opponent. Uses the same intents as a human
 src/ui.js           DOM rendering, input -> intents, replays combat from the event log
-src/main.js         wires game + bot + UI together (single player)
+src/main.js         wires game + bot + UI together; online matches through src/online.js
+src/online.js       WebSocket connection to the game server, reconnecting by itself
+src/server-config.js  the server's address (written by the deploy)
+server/             the online game server (Cloudflare Worker + Durable Objects)
 src/profile.js      the player's profile (name + picture), saved in localStorage
 tests/run.js        Node test runner
 .github/workflows/pages.yml   deploys main -> / and dev -> /dev/
 ```
 
-`src/network.js` will arrive in Phase 2.
 
 ## Hosting and branches
 
@@ -295,19 +300,19 @@ Branch to `gh-pages`, and folder to `/ (root)`.
 
 All asset paths are relative, so the game works at both the site root and `/dev/`.
 
-## Architecture notes for Phase 3 (host-authoritative)
+## Architecture notes (server-authoritative)
 
-The Phase 1 code is built to make the multiplayer phase easy:
+The same rules code runs the bot game in the browser and every online match on the server:
 
 - **One state object, one way to change it.** All match state is in a plain JSON object.
   The UI never mutates it. Clicks become intents (`buy`, `sell`, `reroll`, `move`, `ready`,
   `continue`) and go through `applyIntent(state, catalog, player, intent)`, which validates them.
-  The bot already plays through this API, so in Phase 3 the guest's intents just replace the bot's.
+  The bot plays through this API; online, both players' intents reach it on the server.
 - **Deterministic, pure combat.** `simulate()` uses integer math and fixed tie-breaking. It never
   calls `Math.random`. It returns an event log (`move`, `attack`, `damage`, `cast`, …). Clients
   only replay that log, which is the "render from received state" model in the brief.
 - **Seeded, per-player RNG.** Shop rolls use an RNG whose state is stored in each player's
-  state. The host owns it, and one player's rerolls can't change the other player's shops.
+  state. The server owns it, and one player's rerolls can't change the other player's shops.
 - **Symmetric seats.** Both players place units in "own" coordinates (front line = row 0) and the
   simulation mirrors side 1. The UI flips the view so each player sees their own side at the bottom.
 - **Phases advance on "everyone ready."** Combat starts when every player sends `ready`. The next
