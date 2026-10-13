@@ -1,5 +1,19 @@
 [
   {
+    "id": "2026-10-14-game-server",
+    "version": "0.12.0",
+    "date": "2026-10-14",
+    "title": "Online play on a game server",
+    "intro": "Online matches now run on a game server instead of on the host's phone. Phones locking, apps switching and pages reloading no longer break a match: you just come straight back in.",
+    "changes": [
+      { "kind": "new", "text": "Find a match: Battle → Find a match pairs you with the next player looking for a battle." },
+      { "kind": "change", "text": "Matches run on a server, so the match keeps going even if a player's phone locks or the page reloads." },
+      { "kind": "fix", "text": "Dropped connections come back by themselves within seconds, straight into the match, including after a reload or opening the game again." },
+      { "kind": "change", "text": "Works on any network that can open a website, with no special connection setup." },
+      { "kind": "change", "text": "Battle → Check my connection now checks the game server can be reached." }
+    ]
+  },
+  {
     "id": "2026-10-13-wake-lock",
     "version": "0.11.5",
     "date": "2026-10-13",

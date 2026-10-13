@@ -1257,3 +1257,10 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   font-size: 13px; font-weight: 800; box-shadow: 0 8px 24px #0008;
   pointer-events: none;
 }
+
+/* Battle lobby: random match first, then the friend options. */
+.lobby-queue { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-top: 14px; display: grid; justify-items: center; }
+.lobby-queue h2 { margin: 0 0 4px; }
+.lobby-queue p { margin: 0 0 10px; }
+#overlay .lobby-queue button { width: 100%; max-width: 320px; }
+.lobby-or { margin: 14px 0 -6px; font-size: 13px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
