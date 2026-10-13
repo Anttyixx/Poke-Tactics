@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=73e2a1e';
+import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=13ca1c7';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=73e2a1e';
-import { AVATARS, NAME_MAX, avatarUrl } from './profile.js?v=73e2a1e';
+} from './game.js?v=13ca1c7';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=13ca1c7';
 
 const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
 // Attack-effect colour when a unit doesn't set its own "fx" colour in units.json.
@@ -95,7 +95,7 @@ export const powerCadence = (def) => {
   return `Power every ${def.energy} attacks`;
 };
 
-export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProfile = () => {}, getProfile = () => ({ name: '', avatar: null, saved: false }), getLog, changelog = [], version = null, build = null }) {
+export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProfile = () => {}, onRemoveFriend = () => {}, getProfile = () => ({ name: '', avatar: null, saved: false }), getLog, changelog = [], version = null, build = null }) {
   const $ = (id) => document.getElementById(id);
   const arena = $('arena');
   const layer = $('units');
@@ -334,6 +334,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       profileDraft.avatar = pic.dataset.avatar;
       for (const b of menuEl.querySelectorAll('button[data-avatar]')) b.setAttribute('aria-pressed', String(b === pic));
       menuEl.querySelector('.profile-preview .avatar').style.backgroundImage = `url('${avatarUrl(profileDraft.avatar)}')`;
+      togglePicker(false);
       return;
     }
     const btn = e.target.closest('button[data-menu]');
@@ -345,6 +346,11 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     else if (action === 'leave-confirmed') { closeMenu(); onLobby('leave'); }
     else if (action === 'copy-log') copyLog(btn);
     else if (action === 'profile-save') saveProfileForm();
+    else if (action === 'profile-pick') togglePicker();
+    else if (action === 'friend-remove') {
+      const p = onRemoveFriend(btn.dataset.id);
+      menuEl.querySelector('.friend-section').outerHTML = friendsHTML(p.friends);
+    }
     else if (action === 'start-battle') { closeMenu(); onLobby('open'); }
     else if (action === 'start-training') { closeMenu(); started = true; overlay.classList.remove('start-screen'); showTeamBuilder(); }
     else openMenu(action); // 'main', 'help', 'new'
@@ -499,13 +505,20 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       const p = getProfile();
       profileDraft = { name: p.name, avatar: p.avatar };
       panel.innerHTML = `${close}${back}<h1>Profile</h1>
-        <div class="profile-preview">${avatar(profileDraft.avatar, 'big')}</div>
-        <label class="field">Your name<input id="profile-name" maxlength="${NAME_MAX}" autocomplete="nickname" placeholder="Trainer" value="${esc(p.name)}"></label>
-        <p class="field-label">Profile picture</p>
-        <div class="avatar-grid" role="group" aria-label="Profile picture">${AVATARS.map((id) =>
-          `<button type="button" data-avatar="${id}" aria-pressed="${id === profileDraft.avatar}" title="${esc(catalog[id]?.name ?? id)}">${avatar(id)}</button>`).join('')}</div>
-        <button class="primary" data-menu="profile-save">Save</button>
-        <p class="muted small">Saved in this browser, so it's here next time you play. Clearing your browser's site data resets it.</p>`;
+        <div class="profile-head">
+          <div class="profile-preview">${avatar(profileDraft.avatar, 'big')}
+            <button type="button" class="ghost change-pic" data-menu="profile-pick" aria-expanded="false">Change</button></div>
+          <label class="field">Your name<input id="profile-name" maxlength="${NAME_MAX}" autocomplete="nickname" placeholder="Trainer" value="${esc(p.name)}"></label>
+        </div>
+        <div class="avatar-picker" hidden>
+          <p class="field-label">Pick a profile picture</p>
+          <div class="avatar-grid" role="group" aria-label="Profile picture">${AVATARS.map((id) =>
+            `<button type="button" data-avatar="${id}" aria-pressed="${id === profileDraft.avatar}" title="${esc(catalog[id]?.name ?? id)}">${avatar(id)}</button>`).join('')}</div>
+        </div>
+        <button class="primary profile-save" data-menu="profile-save">Save</button>
+        ${statsHTML(p.stats)}
+        ${friendsHTML(p.friends)}
+        <p class="muted small">Your profile, stats and friends are saved in this browser, so they're here next time you play. Clearing your browser's site data resets them.</p>`;
       menuEl.hidden = false;
       panel.querySelector('#profile-name').focus();
       return;
@@ -523,7 +536,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         <div class="menu-list">
           <button data-menu="start-battle"><span>⚔</span><div>Battle<small>Play a friend online</small></div></button>
           <button data-menu="start-training"><span>▶</span><div>Training<small>Play against the bot</small></div></button>
-          <button data-menu="profile"><span>☺</span><div>Profile<small>Your name and picture</small></div></button>
+          <button data-menu="profile"><span>☺</span><div>Profile<small>Your name, picture, stats and friends</small></div></button>
           <button data-menu="news" class="${hasUnread() ? 'unread' : ''}"><span>★</span><div>What's new<small>${esc(changelog[0]?.title ?? 'Updates to the game')}</small></div></button>
           <button data-menu="help"><span>?</span><div>How to play<small>Rules, controls and keys</small></div></button>
           <button data-menu="dex"><span>◎</span><div>Pokédex<small>Every Pokémon's stats and power</small></div></button>
@@ -537,7 +550,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
           <button data-menu="help"><span>?</span><div>How to play<small>Rules, controls and keys</small></div></button>
           <button data-menu="dex"><span>◎</span><div>Pokédex<small>Every Pokémon's stats and power</small></div></button>
           <button data-menu="log"><span>⧉</span><div>Match log<small>Copy every move this match, with notes</small></div></button>
-          <button data-menu="profile"><span>☺</span><div>Profile<small>${online ? 'Changes show from your next match' : 'Your name and picture'}</small></div></button>
+          <button data-menu="profile"><span>☺</span><div>Profile<small>Your name, picture, stats and friends</small></div></button>
           ${online
             ? '<button data-menu="leave"><span>⏏</span><div>Leave match<small>Disconnect from your friend</small></div></button>'
             : '<button data-menu="new"><span>↻</span><div>New game<small>Start over with a new team</small></div></button>'}
@@ -589,6 +602,52 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   function closeMenu() {
     menuEl.hidden = true;
     profileDraft = null;
+  }
+
+  // The profile picture options only show after pressing Change.
+  function togglePicker(open) {
+    const picker = menuEl.querySelector('.avatar-picker');
+    const btn = menuEl.querySelector('.change-pic');
+    if (!picker || !btn) return;
+    const show = open ?? picker.hidden;
+    picker.hidden = !show;
+    btn.setAttribute('aria-expanded', String(show));
+    btn.textContent = show ? 'Done' : 'Change';
+    if (show) picker.querySelector('[aria-pressed="true"]')?.focus();
+  }
+
+  function statsHTML(stats) {
+    const total = { wins: 0, losses: 0, draws: 0 };
+    for (const r of [stats.online, stats.training]) for (const k in total) total[k] += r[k];
+    const played = total.wins + total.losses + total.draws;
+    const rate = played ? `${Math.round((100 * total.wins) / played)}%` : '–';
+    const row = (label, r) => `<tr><th>${label}</th><td>${r.wins}</td><td>${r.losses}</td><td>${r.draws}</td></tr>`;
+    const fav = favouriteTroop(stats);
+    const favDef = fav && catalog[fav.id];
+    return `<section class="profile-section">
+        <h2>Stats</h2>
+        <div class="stat-tiles">
+          <div><b>${total.wins}</b><span>Wins</span></div>
+          <div><b>${total.losses}</b><span>Losses</span></div>
+          <div><b>${rate}</b><span>Win rate</span></div>
+        </div>
+        <table class="record"><thead><tr><th></th><th>Wins</th><th>Losses</th><th>Draws</th></tr></thead>
+          <tbody>${row('Online', stats.online)}${row('Training', stats.training)}</tbody></table>
+        <div class="favourite">${favDef
+          ? `${avatar(fav.id)}<div><small>Most used Pokémon</small><b>${esc(favDef.name)}</b><span>in ${fav.battles} ${fav.battles === 1 ? 'battle' : 'battles'}</span></div>`
+          : '<div><small>Most used Pokémon</small><span>Play a battle to find out.</span></div>'}</div>
+      </section>`;
+  }
+
+  function friendsHTML(friends) {
+    return `<section class="profile-section friend-section">
+        <h2>Friends <span class="count">${friends.length}</span></h2>
+        ${friends.length
+          ? `<ul class="friend-list">${friends.map((f) => `<li>${avatar(f.avatar)}<span>${esc(f.name)}</span>
+              <button type="button" class="ghost danger-text" data-menu="friend-remove" data-id="${esc(f.id)}" aria-label="Remove ${esc(f.name)}">Remove</button></li>`).join('')}</ul>`
+          : '<p class="muted">No friends yet.</p>'}
+        <button type="button" class="add-friend" disabled>+ Add friend <small>coming soon</small></button>
+      </section>`;
   }
 
   function saveProfileForm() {

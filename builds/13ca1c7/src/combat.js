@@ -21,8 +21,11 @@ export const MANA_PER_HIT = 0; // taking hits gives no energy
 export const STAT_SCALE = 1;
 // A critical hit deals 50% more damage. Only basic attacks can crit.
 export const CRIT_PCT = 150;
-// Movement speed tiers, in seconds per square.
-export const MOVE_SPEEDS = { 'very fast': 0.35, fast: 0.5, medium: 0.8, slow: 1.0, 'very slow': 1.3 };
+// Walking: a Pokémon waits its movement speed (seconds, below), then takes
+// STEP_TICKS to cross to the next square, then waits again before the next.
+export const STEP_TICKS = 5; // 0.5s per step
+// Movement speed tiers: the wait between steps, in seconds.
+export const MOVE_SPEEDS = { 'very fast': 0.35, fast: 0.5, medium: 0.8, slow: 1.0, 'very slow': 1.3, 'super slow': 2.0 };
 const ticksOf = (seconds) => Math.max(1, Math.round(seconds / TICK_SECONDS));
 
 // A unit's combat stats at a star level, in internal units (integers).
@@ -31,7 +34,7 @@ export function unitStats(def, star) {
     hp: Math.round(def.hp[star] * STAT_SCALE),
     atk: Math.round(def.damage[star] * STAT_SCALE),
     attackCd: ticksOf(def.secPerHit), // ticks per attack
-    moveCd: ticksOf(MOVE_SPEEDS[def.moveSpeed]), // ticks per square
+    moveCd: ticksOf(MOVE_SPEEDS[def.moveSpeed]), // ticks of waiting before each step
     crit: def.critChance ?? 0, // percent
     energy: def.energy,
   };
@@ -66,8 +69,14 @@ const coin = (seed, t) => hash(seed, t) & 1;
 // share the same rolls slot for slot, so luck never favours a side.
 const critRoll = (seed, t, slot) => hash(seed, t, slot + 1) % 100;
 
-const dist = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+// Distance is the number of steps between two squares: units walk
+// up/down/left/right, so a diagonal neighbour is 2 away. "Nearest" and
+// "farthest" enemy use it.
 const manhattan = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+const dist = manhattan;
+// Attack range (and blast radius) is a square around the Pokémon instead:
+// range 1 = the 3x3 around it (diagonals included), range 2 = the 5x5, ...
+const reach = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 
 function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, inst.y)) {
   const def = catalog[inst.unitId];
@@ -75,6 +84,7 @@ function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, in
   return {
     id, side, slot, uid: inst.uid, unitId: inst.unitId, star: inst.star,
     x: pos.x, y: pos.y,
+    sp: { x: pos.x, y: pos.y }, // where it stood at the start of the tick (see at())
     hp: stats.hp, maxHp: stats.hp,
     atk: stats.atk, crit: stats.crit,
     armor: def.armor ?? 0, range: def.range,
@@ -85,7 +95,9 @@ function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, in
     power: def.ability,
     shield: 0, stun: 0,
     pendingMana: 0, pendingStun: 0, // applied at the end of the tick
-    atkTimer: stats.attackCd, moveTimer: 0,
+    atkTimer: stats.attackCd,
+    moveTimer: stats.moveCd, // waiting before the next step (it waits before its first one too)
+    stepTimer: 0, // mid-step: ticks until it reaches the square it's walking to
     hasteUntil: 0, hastePct: 0, stealthFrom: 0, stealthUntil: 0,
     hold: 0, // ticks it can't move or attack (riding a Psywave); cooldowns still run
     landStun: 0, // stun applied when the hold ends (it has landed)
@@ -93,7 +105,13 @@ function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, in
     sprite: def.sprite, // changes when it transforms (Ash-Greninja, Minior, Ditto)
     form: null, // name of the form it has transformed into, if any
     pendingForm: false, // transform at the end of this tick (Minior's low-HP trigger)
+    pendingRebirth: false, // Minior: knocked out in Rock form, comes back as Star Form at the end of the tick
     copyOf: null, // Ditto: id of the unit it is copying
+    pendingCopy: null, pendingRevert: false, // Ditto: copy / turn back at the end of the tick
+    morphUntil: 0, // mid-transformation (Minior, Ditto) through this tick: it can't act
+    immuneFrom: 0, immuneUntil: 0, // nothing affects it in these ticks (Minior transforming, Tapu Koko dashing)
+    dashTarget: null, dashUntil: 0, // Tapu Koko: who it strikes when its dash arrives
+    blink: false, // Minior's Star Form: zips straight to its target instead of walking
     fuse: 0, fused: false, // Golem: ticks left before it explodes after being knocked out
     target: null, alive: true, summoned: Boolean(inst.summoned),
   };
@@ -106,7 +124,9 @@ const snapshot = (u) => ({
 });
 
 // `seed` decides crits and which side acts first on each tick (see below).
-export function simulate(catalog, boards, seed = 0) {
+// { record: false } skips the event log (faster; for simulations that only
+// need the outcome). The fight itself is identical either way.
+export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
   const units = [];
   boards.forEach((board, side) => {
     [...board].sort((a, b) => a.uid - b.uid)
@@ -116,9 +136,12 @@ export function simulate(catalog, boards, seed = 0) {
   const bySide = [0, 1].map((side) => units.filter((u) => u.side === side));
   const events = [];
   let t = 0;
-  const emit = (type, data) => events.push({ t, type, ...data });
+  const emit = record ? (type, data) => events.push({ t, type, ...data }) : () => {};
   const inside = (x, y) => x >= 0 && y >= 0 && x < COLS && y < ROWS;
-  const unitAt = (x, y) => units.find((u) => u.alive && u.x === x && u.y === y);
+  const unitAt = (x, y) => {
+    for (let i = 0; i < units.length; i++) { const u = units[i]; if (u.alive && u.x === x && u.y === y) return u; }
+    return undefined;
+  };
   const occupied = (x, y) => Boolean(unitAt(x, y));
   // Ticks resolve simultaneously: a unit knocked out this tick (hp 0) still acts
   // this tick (its `alive` flag only clears at the end of the tick), but nobody
@@ -131,22 +154,33 @@ export function simulate(catalog, boards, seed = 0) {
   // Mana gained from being hit, and stuns, also wait for the end of the tick, so
   // a unit's action this tick never depends on who happened to act before it.
   // Events report mana as it will be once the tick ends.
+  // Minior transforming and Tapu Koko dashing can't be hurt, stunned or moved.
+  // Immunity always starts on a new tick, so it never decides a same-tick trade.
+  const immune = (u) => t >= u.immuneFrom && t <= u.immuneUntil;
   const shownMana = (u) => Math.min(u.maxMana, u.mana + u.pendingMana);
   // Where a unit stood at the start of the tick. Targeting, range and pathing
   // all read this, so a unit that moved earlier in the tick isn't seen at its
   // new square until next tick. (Square occupancy stays live: no two units
   // can ever share a square.)
-  const at = (u) => ({ x: u.sx, y: u.sy });
+  const at = (u) => u.sp; // { x, y }, set at the start of each tick (read-only)
   // Side 1's board is point-mirrored, so it reads direction lists mirrored too;
   // otherwise the two sides would break ties differently.
-  const dirs = (u, list = NEIGHBORS) => list.map(([dx, dy]) => (u.side === 1 ? [-dx, -dy] : [dx, dy]));
+  const dirCache = new Map();
+  const dirs = (u, list = NEIGHBORS) => {
+    let pair = dirCache.get(list);
+    if (!pair) dirCache.set(list, (pair = [list, list.map(([dx, dy]) => [-dx, -dy])]));
+    return pair[u.side === 1 ? 1 : 0];
+  };
   const enemiesOf = (u) => units.filter((e) => e.side !== u.side && visible(e));
+  // nearest/farthest scan units in the same order as enemiesOf, without building the list.
 
   function nearestEnemy(u) {
     let best = null;
     let bestDist = Infinity;
-    for (const e of enemiesOf(u)) {
-      const d = dist(u, at(e));
+    for (let i = 0; i < units.length; i++) {
+      const e = units[i];
+      if (e.side === u.side || !visible(e)) continue;
+      const d = dist(u, e.sp);
       if (d < bestDist) { best = e; bestDist = d; }
     }
     return best;
@@ -155,8 +189,10 @@ export function simulate(catalog, boards, seed = 0) {
   function farthestEnemy(u) {
     let best = null;
     let bestDist = -1;
-    for (const e of enemiesOf(u)) {
-      const d = dist(u, at(e));
+    for (let i = 0; i < units.length; i++) {
+      const e = units[i];
+      if (e.side === u.side || !visible(e)) continue;
+      const d = dist(u, e.sp);
       if (d > bestDist) { best = e; bestDist = d; }
     }
     return best;
@@ -164,7 +200,7 @@ export function simulate(catalog, boards, seed = 0) {
 
   // Returns the damage actually dealt to HP.
   function damage(target, amount, src, crit = false) {
-    if (!standing(target)) return 0;
+    if (!standing(target) || immune(target)) return 0;
     const absorbed = Math.min(target.shield, amount);
     target.shield -= absorbed;
     const before = target.hp;
@@ -174,7 +210,7 @@ export function simulate(catalog, boards, seed = 0) {
     if (target.hp === 0) knockedOut(target);
     // Minior: dropping to its HP threshold transforms it (at the end of the tick).
     const p = target.power;
-    if (target.hp > 0 && p?.kind === 'transform' && p.trigger === 'lowHp' && !target.form && target.hp * 100 <= target.maxHp * p.hpPct) target.pendingForm = true;
+    if (target.hp > 0 && p?.kind === 'transform' && p.trigger === 'lowHp' && !target.form && !target.morphUntil && target.hp * 100 <= target.maxHp * p.hpPct) target.pendingForm = true;
     return before - target.hp;
   }
 
@@ -187,7 +223,12 @@ export function simulate(catalog, boards, seed = 0) {
   // HP reached 0. Usually that's a knockout; a Golem instead lights its fuse:
   // it stays on its square (it can't be hit or targeted) and explodes later.
   function knockedOut(u) {
-    if (u.power?.kind === 'selfdestruct' && !u.fused) {
+    if (u.power?.kind === 'transform' && u.power.trigger === 'knockedOut' && !u.form && !u.pendingRebirth) {
+      // Minior: Rock form breaks open instead of fainting. Like any knockout it
+      // can't be hit or targeted for the rest of this tick; at the end of the
+      // tick it comes back with Star Form's own HP (see the main loop).
+      u.pendingRebirth = true;
+    } else if (u.power?.kind === 'selfdestruct' && !u.fused) {
       u.fused = true;
       u.fuse = u.power.delay;
       u.fusedAt = t; // it still acts this tick, like anyone knocked out mid-tick
@@ -201,7 +242,7 @@ export function simulate(catalog, boards, seed = 0) {
     const p = u.power;
     emit('explode', { id: u.id, radius: p.radius });
     const amount = Math.floor((u.atk * p.damagePct) / 100);
-    for (const e of units) if (e.side !== u.side && standing(e) && dist(u, e) <= p.radius) damage(e, amount, u);
+    for (const e of units) if (e.side !== u.side && standing(e) && reach(u, e) <= p.radius) damage(e, amount, u);
     emit('death', { id: u.id });
   }
 
@@ -213,25 +254,49 @@ export function simulate(catalog, boards, seed = 0) {
   }
   function applyForm(u, form) {
     u.form = form.name;
-    u.maxMana = 0; // its power is spent: no more counting
+    // Its power is spent: no more counting, unless the form has a power of its
+    // own (Star Form's hop every `energy` attacks).
+    u.maxMana = form.hop ? form.energy : 0;
+    u.mana = 0;
     setStats(u, {
       atk: Math.round(form.damage[u.star] * STAT_SCALE), attackCd: ticksOf(form.secPerHit),
       moveCd: ticksOf(MOVE_SPEEDS[form.moveSpeed]), range: form.range, sprite: form.sprite,
-    }, { name: form.name });
+      blink: Boolean(form.blink),
+    }, { name: form.name, maxMana: u.maxMana });
+    // A faster form doesn't sit out the rest of its old, slower attack timer.
+    u.atkTimer = Math.min(u.atkTimer, u.attackCd);
+    // A shock wave as it changes: stuns every enemy in the square around it
+    // (radius 1 = the 3x3). Stuns land at the end of the tick, as always.
+    const wave = form.shockwave;
+    if (wave) {
+      emit('shockwave', { id: u.id, radius: wave.radius });
+      for (const e of units) if (e.side !== u.side && standing(e) && reach(u, e) <= wave.radius) stun(e, wave.stun);
+    }
   }
-  // Ditto: copy everything about `e`'s fighting except its power and HP.
+  // Ditto: a new max HP keeps the same share of HP left (never rounding down to 0).
+  const rescaleHp = (u, maxHp) => {
+    u.hp = Math.max(1, Math.round((u.hp * maxHp) / u.maxHp));
+    u.maxHp = maxHp;
+  };
+  // Ditto: copy everything about `e`'s fighting, including its max HP, except
+  // its power and movement (a copied Ditto stands still). Runs at the end of
+  // the tick, since it changes Ditto's HP.
   function copyUnit(u, e) {
     u.copyOf = e.id;
-    setStats(u, { atk: e.atk, attackCd: e.attackCd, moveCd: e.moveCd, range: e.range, crit: e.crit, sprite: e.sprite }, { name: catalog[e.unitId].name, copy: e.unitId });
+    rescaleHp(u, e.maxHp);
+    setStats(u, { atk: e.atk, attackCd: e.attackCd, range: e.range, crit: e.crit, sprite: e.sprite }, { name: catalog[e.unitId].name, copy: e.unitId, hp: u.hp, maxHp: u.maxHp });
   }
   function revertCopy(u) {
     const def = catalog[u.unitId];
     const base = unitStats(def, u.star);
     u.copyOf = null;
-    setStats(u, { atk: base.atk, attackCd: base.attackCd, moveCd: base.moveCd, range: def.range, crit: base.crit, sprite: def.sprite }, { name: def.name, revert: true });
+    u.target = null;
+    rescaleHp(u, base.hp);
+    setStats(u, { atk: base.atk, attackCd: base.attackCd, range: def.range, crit: base.crit, sprite: def.sprite }, { name: def.name, revert: true, hp: u.hp, maxHp: u.maxHp });
   }
 
   function stun(target, duration) {
+    if (immune(target)) return;
     target.pendingStun = Math.max(target.pendingStun, duration);
     emit('stun', { id: target.id, duration });
   }
@@ -349,6 +414,7 @@ export function simulate(catalog, boards, seed = 0) {
     const kin = units.length;
     const star = u.power.summonStar ?? u.star;
     const pal = spawn(catalog, { uid: -kin, unitId: u.power.unit, star, summoned: true }, u.side, kin, bySide[u.side].length, cell);
+    pal.sp = { x: pal.x, y: pal.y };
     pal.sx = pal.x;
     pal.sy = pal.y;
     units.push(pal);
@@ -401,6 +467,7 @@ export function simulate(catalog, boards, seed = 0) {
         break;
       }
       case 'transform':
+        if (u.form) { hop(u, target); break; } // Star Form's own power
         emit('cast', { id: u.id, target: null });
         applyForm(u, p.form);
         break;
@@ -450,6 +517,26 @@ export function simulate(catalog, boards, seed = 0) {
 
   const cooldown = (u) => (u.hasteUntil > t ? Math.max(1, Math.round((u.attackCd * 100) / (100 + u.hastePct))) : u.attackCd);
 
+  // Minior's Star Form, every `energy` attacks: it picks a new target (a
+  // seeded pick among the other enemies it can land beside) and zips to the
+  // open square beside it closest to it. With no other enemy to reach, it
+  // moves to another square beside its current target; with none free, it stays.
+  function hop(u, target) {
+    u.mana = 0;
+    const options = [];
+    for (const e of units) {
+      if (e.side === u.side || e === target || !visible(e)) continue;
+      const cell = dashSpot(u, e);
+      if (cell) options.push({ e, cell });
+    }
+    let pick = options.length ? options[hash(seed, t, u.slot + 101) % options.length] : null;
+    if (!pick) { const cell = dashSpot(u, target); if (cell) pick = { e: target, cell }; }
+    emit('cast', { id: u.id, target: pick ? pick.e.id : null });
+    if (!pick) return;
+    relocate(u, pick.cell, 'blink', { fromX: u.x, fromY: u.y, hop: true });
+    u.target = pick.e.id;
+  }
+
   // Shortest walk (breadth-first search, up/down/left/right) from `u` around
   // every other unit to a square where some enemy is within its attack range.
   // Returns the first square of that walk and the enemy it leads to, or null if
@@ -457,32 +544,49 @@ export function simulate(catalog, boards, seed = 0) {
   // both sides break ties the same way.
   function findPath(u) {
     const enemies = enemiesOf(u);
-    const key = (c) => c.y * COLS + c.x;
-    const start = { x: u.x, y: u.y };
-    const prev = new Map([[key(start), null]]);
-    const queue = [start];
-    for (let i = 0; i < queue.length; i++) {
-      const c = queue[i];
-      if (c !== start) {
-        let reachable = null;
+    const N = COLS * ROWS;
+    // Squares taken right now (live occupancy, like occupied()).
+    const blocked = new Uint8Array(N);
+    for (let i = 0; i < units.length; i++) { const o = units[i]; if (o.alive) blocked[o.y * COLS + o.x] = 1; }
+    const prev = new Int16Array(N).fill(-2); // -2 = unseen, -1 = start
+    const queue = new Int16Array(N);
+    const startK = u.y * COLS + u.x;
+    prev[startK] = -1;
+    queue[0] = startK;
+    let tail = 1;
+    const ds = dirs(u);
+    for (let qi = 0; qi < tail; qi++) {
+      const k = queue[qi];
+      const cx = k % COLS, cy = (k - cx) / COLS;
+      if (k !== startK) {
+        let best = null, bestD = 0;
         for (const e of enemies) {
-          const d = dist(c, at(e));
-          if (d <= u.range && (!reachable || d < reachable.d)) reachable = { e, d };
+          const d = Math.max(Math.abs(cx - e.sp.x), Math.abs(cy - e.sp.y));
+          if (d <= u.range && (!best || d < bestD)) { best = e; bestD = d; }
         }
-        if (reachable) {
-          let first = c;
-          while (prev.get(key(first)) !== start) first = prev.get(key(first));
-          return { next: first, target: reachable.e };
+        if (best) {
+          let first = k;
+          while (prev[first] !== startK) first = prev[first];
+          const fx = first % COLS;
+          return { next: { x: fx, y: (first - fx) / COLS }, target: best };
         }
       }
-      for (const [dx, dy] of dirs(u)) {
-        const n = { x: c.x + dx, y: c.y + dy };
-        if (!inside(n.x, n.y) || prev.has(key(n)) || occupied(n.x, n.y)) continue;
-        prev.set(key(n), c);
-        queue.push(n);
+      for (let di = 0; di < ds.length; di++) {
+        const nx = cx + ds[di][0], ny = cy + ds[di][1];
+        if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS) continue;
+        const nk = ny * COLS + nx;
+        if (prev[nk] !== -2 || blocked[nk]) continue;
+        prev[nk] = k;
+        queue[tail++] = nk;
       }
     }
     return null;
+  }
+
+  // A step: STEP_TICKS crossing to the new square, then the movement-speed wait.
+  function startStep(u) {
+    u.stepTimer = STEP_TICKS;
+    u.moveTimer = STEP_TICKS + u.moveCd;
   }
 
   function moveTo(u, cell) {
@@ -517,6 +621,17 @@ export function simulate(catalog, boards, seed = 0) {
     if (u.stun > 0) { u.stun--; if (u.stun === 0) u.target = null; return; }
     if (u.atkTimer > 0) u.atkTimer--;
     if (u.moveTimer > 0) u.moveTimer--;
+    if (u.stepTimer > 0) u.stepTimer--;
+    if (t <= u.morphUntil) return; // transforming
+    if (t <= u.dashUntil) return; // mid-dash
+    // Tapu Koko's dash has arrived: strike the Pokémon it dashed at (no dashing
+    // off again before that).
+    const arrived = u.dashTarget !== null;
+    if (arrived) {
+      const far = units[u.dashTarget];
+      u.dashTarget = null;
+      if (visible(far) && reach(u, at(far)) <= u.range) u.target = far.id;
+    }
     if (u.hold > 0) {
       u.hold--;
       if (u.hold === 0) {
@@ -526,19 +641,34 @@ export function simulate(catalog, boards, seed = 0) {
       return;
     }
 
-    // Ditto: when the Pokémon it copies faints, it turns back and copies the
-    // nearest enemy instead (straight away, no lost time).
+    // Ditto walks (as itself) toward the nearest enemy until it is within that
+    // enemy's range, then takes `morph` ticks to turn into it. A copied Ditto
+    // can't move: when the Pokémon it copied faints, or no enemy is in range,
+    // it turns back into Ditto (at the end of the tick) and walks again.
     if (u.power?.kind === 'copy') {
-      if (u.copyOf !== null && !standing(units[u.copyOf])) revertCopy(u);
       if (u.copyOf === null) {
         const e = nearestEnemy(u);
         if (!e) return;
-        copyUnit(u, e);
+        u.target = e.id;
+        if (u.stepTimer > 0) return; // finish the step first
+        if (reach(u, at(e)) <= e.range) {
+          u.pendingCopy = e.id;
+          u.morphUntil = t + u.power.morph - 1;
+          emit('morphStart', { id: u.id, target: e.id, duration: u.power.morph });
+          return;
+        }
+        u.range = e.range; // walk until it is in reach of its own copy of `e`
+      } else {
+        const inReach = (e) => e && visible(e) && e.side !== u.side && reach(u, at(e)) <= u.range;
+        let e = u.target === null ? null : units[u.target];
+        if (!inReach(e)) e = enemiesOf(u).filter(inReach).sort((a, b) => dist(u, at(a)) - dist(u, at(b)))[0];
+        if (!standing(units[u.copyOf]) || !e) { u.pendingRevert = true; return; }
+        u.target = e.id;
       }
     }
 
     let target = u.target === null ? null : units[u.target];
-    if (!target || !visible(target) || target.side === u.side || dist(u, at(target)) > u.range) target = nearestEnemy(u);
+    if (!target || !visible(target) || target.side === u.side || reach(u, at(target)) > u.range) target = nearestEnemy(u);
     if (!target) return;
     u.target = target.id;
 
@@ -547,35 +677,41 @@ export function simulate(catalog, boards, seed = 0) {
     if (empowered && u.power.teleport && u.atkTimer === 0) {
       // No need to teleport if the farthest enemy is already in reach.
       const far = farthestEnemy(u);
-      const cell = far && dist(u, at(far)) > u.range && freeBeside(u, far);
+      const cell = far && reach(u, at(far)) > u.range && freeBeside(u, far);
       if (cell) {
         relocate(u, cell, 'teleport');
-        u.moveTimer = 0;
+        u.moveTimer = u.stepTimer = 0;
         target = far;
         u.target = far.id;
       }
     }
-    if (empowered && u.power.dash && u.atkTimer === 0) {
+    if (empowered && u.power.dash && u.atkTimer === 0 && !arrived) {
       // Dash in a straight line next to the farthest enemy, stunning every
       // enemy it passes through on the way.
       const far = farthestEnemy(u);
-      const cell = far && dist(u, at(far)) > u.range && dashSpot(u, far);
+      const cell = far && reach(u, at(far)) > u.range && dashSpot(u, far);
       if (cell) {
         const from = { x: u.x, y: u.y };
         for (const c of lineCells(from, cell)) {
           const o = unitAt(c.x, c.y);
           if (o && o !== far && o.side !== u.side && standing(o)) stun(o, u.power.stun);
         }
-        relocate(u, cell, 'dash', { fromX: from.x, fromY: from.y });
-        u.moveTimer = 0;
-        target = far;
+        // The dash takes a tick per square, during which Tapu Koko is immune
+        // to everything; it strikes when it arrives.
+        const travel = Math.max(2, Math.max(Math.abs(cell.x - from.x), Math.abs(cell.y - from.y)));
+        relocate(u, cell, 'dash', { fromX: from.x, fromY: from.y, duration: travel });
+        u.moveTimer = u.stepTimer = 0;
         u.target = far.id;
+        u.dashTarget = far.id;
+        u.dashUntil = u.immuneUntil = t + travel;
+        u.immuneFrom = t + 1;
+        return;
       }
     }
 
-    if (dist(u, at(target)) <= u.range) {
-      // A step takes the unit's whole move time; it can't attack mid-step.
-      if (u.atkTimer > 0 || u.moveTimer > 0) return;
+    if (reach(u, at(target)) <= u.range) {
+      // It can't attack mid-step; waiting between steps doesn't stop it.
+      if (u.atkTimer > 0 || u.stepTimer > 0) return;
       if (empowered) {
         powerStrike(u, target);
       } else {
@@ -596,16 +732,30 @@ export function simulate(catalog, boards, seed = 0) {
         if (u.power && u.power.kind !== 'empower' && u.maxMana > 0 && u.mana >= u.maxMana) instantPower(u, target);
       }
       u.atkTimer = cooldown(u);
-    } else if (u.moveTimer === 0) {
+    } else if (u.blink && u.moveTimer === 0 && u.stepTimer === 0) {
+      // Minior's Star Form doesn't walk: it zips straight to the open square
+      // beside its target closest to it, then waits its movement speed before
+      // it can zip again. If every square beside the target is taken, it walks.
+      const cell = dashSpot(u, target);
+      const from = { x: u.x, y: u.y };
+      if (cell) {
+        relocate(u, cell, 'blink', { fromX: from.x, fromY: from.y });
+        u.moveTimer = u.moveCd;
+      } else {
+        const path = findPath(u);
+        if (path) { u.target = path.target.id; moveTo(u, path.next); startStep(u); }
+        else if (step(u, target)) startStep(u);
+      }
+    } else if (u.moveTimer === 0 && u.stepTimer === 0 && u.copyOf === null) {
       // Out of range: walk around anyone in the way toward the enemy that can
       // be reached soonest (which may not be the one closest as the crow flies).
       const path = findPath(u);
       if (path) {
         u.target = path.target.id;
         moveTo(u, path.next);
-        u.moveTimer = u.moveCd;
+        startStep(u);
       } else if (step(u, target)) {
-        u.moveTimer = u.moveCd;
+        startStep(u);
       }
     }
   }
@@ -618,16 +768,20 @@ export function simulate(catalog, boards, seed = 0) {
     return a ? 0 : b ? 1 : null;
   };
 
+  let orders = null;
+  let orderSize = -1; // rebuilt when a summon joins
   let winner = outcome();
   while (winner === undefined && t < MAX_TICKS) {
     t++;
-    for (const u of units) { u.sx = u.x; u.sy = u.y; }
+    // Knocked-out units never move again, so only the living need updating.
+    for (const u of units) if (u.alive) { u.sx = u.x; u.sy = u.y; u.sp.x = u.x; u.sp.y = u.y; }
     // Which side acts first each tick is a seeded coin flip. Attacks, mana and
     // stuns resolve simultaneously anyway; this only decides who claims a
     // contested square first. A fixed pattern (e.g. odd/even) would line up with
     // cooldowns and always favour the same side. Each side keeps its unit order,
     // and units summoned this tick wait until the next one.
-    const order = coin(seed, t) ? [...bySide[0], ...bySide[1]] : [...bySide[1], ...bySide[0]];
+    if (orderSize !== units.length) { orders = [[...bySide[0], ...bySide[1]], [...bySide[1], ...bySide[0]]]; orderSize = units.length; }
+    const order = coin(seed, t) ? orders[0] : orders[1];
     // Battle-start powers go off on the first tick, before anyone acts.
     if (t === 1) for (const u of order) if (u.power?.kind === 'opening' && standing(u)) openingPower(u);
     for (const u of order) if (u.alive) act(u);
@@ -637,25 +791,62 @@ export function simulate(catalog, boards, seed = 0) {
       // ignores shields. Same amount for everyone: the weakest fall first.
       const drain = Math.round((SUDDEN_DEATH_HP_PER_SECOND * STAT_SCALE) * TICK_SECONDS);
       for (const u of units) {
-        if (!standing(u)) continue;
+        if (!standing(u) || immune(u)) continue;
         u.hp = Math.max(0, u.hp - drain);
         emit('drain', { id: u.id, amount: drain, hp: u.hp });
         if (u.hp === 0) knockedOut(u);
       }
     }
-    for (const k of knocks) if (standing(k.target)) land(k.target, k.goal, k.side);
+    for (const k of knocks) if (standing(k.target) && !immune(k.target)) land(k.target, k.goal, k.side);
     knocks = [];
     for (const u of units) {
+      if (!u.alive) continue; // out since an earlier tick: nothing left to resolve
       if (u.pendingHeal && u.hp > 0) {
         const gained = Math.min(u.pendingHeal, u.maxHp - u.hp);
         u.hp += gained;
         emit('heal', { id: u.id, amount: gained, hp: u.hp });
       }
       u.pendingHeal = 0;
-      if (u.pendingForm && u.hp > 0) { emit('cast', { id: u.id, target: null }); applyForm(u, u.power.form); }
+      // Minior: a low-HP transformation takes `morph` ticks, during which it
+      // is immune to everything; then it becomes its new form.
+      if (u.pendingForm && u.hp > 0) {
+        emit('cast', { id: u.id, target: null });
+        const m = u.power.morph ?? 0;
+        if (m) {
+          u.morphUntil = u.immuneUntil = t + m;
+          u.immuneFrom = t + 1;
+          u.stun = u.pendingStun = 0;
+          emit('morphStart', { id: u.id, duration: m });
+        } else applyForm(u, u.power.form);
+      }
       u.pendingForm = false;
+      // Minior knocked out in Rock form: Star Form's own HP, then the same
+      // immune transformation as above.
+      if (u.pendingRebirth) {
+        u.pendingRebirth = false;
+        u.form = 'breaking'; // no second rebirth, even before the new form lands
+        u.maxHp = u.hp = Math.round(u.power.form.hp[u.star] * STAT_SCALE);
+        u.shield = 0;
+        emit('cast', { id: u.id, target: null });
+        const m = u.power.morph ?? 0;
+        u.morphUntil = u.immuneUntil = t + Math.max(1, m);
+        u.immuneFrom = t + 1;
+        u.stun = u.pendingStun = 0;
+        u.pendingMana = 0;
+        emit('morphStart', { id: u.id, duration: Math.max(1, m), hp: u.hp, maxHp: u.maxHp });
+      }
+      if (u.power?.kind === 'transform' && u.morphUntil === t && u.hp > 0) { applyForm(u, u.power.form); u.target = null; }
+      // Ditto finishes turning into its target (if that one is still standing),
+      // or turns back.
+      if (u.pendingCopy !== null && u.morphUntil === t) {
+        if (u.hp > 0 && standing(units[u.pendingCopy])) copyUnit(u, units[u.pendingCopy]);
+        u.pendingCopy = null;
+      }
+      if (u.pendingRevert && u.hp > 0) revertCopy(u);
+      u.pendingRevert = false;
     }
     for (const u of units) {
+      if (!u.alive) continue;
       if (u.hp === 0 && !(u.fuse > 0)) u.alive = false; // knocked out this tick (a lit Golem stays)
       u.mana = shownMana(u);
       u.stun = Math.max(u.stun, u.pendingStun);

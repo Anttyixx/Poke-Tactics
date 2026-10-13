@@ -1,5 +1,17 @@
 [
   {
+    "id": "2026-10-13-profile-stats",
+    "version": "0.11.0",
+    "date": "2026-10-13",
+    "title": "Profile stats and friends",
+    "intro": "Your profile now keeps track of how you play, and has a place for your friends.",
+    "changes": [
+      { "kind": "new", "text": "Stats on your profile: wins, losses and win rate, split into online and training, plus your most used Pokémon." },
+      { "kind": "new", "text": "A friends list on your profile, where you can remove friends. Adding friends is coming soon." },
+      { "kind": "change", "text": "The profile pictures stay hidden until you press Change under your picture." }
+    ]
+  },
+  {
     "id": "2026-10-13-profile-polish",
     "version": "0.10.1",
     "date": "2026-10-13",

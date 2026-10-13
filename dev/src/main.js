@@ -17,22 +17,22 @@
 //                  { type: 'log', log }                the match log (at game over, or on request)
 //   guest -> host  { type: 'getLog' }                  ask for the match log mid-match
 
-import { createGame, applyIntent } from './game.js?v=73e2a1e';
-import { botTurn } from './bot.js?v=73e2a1e';
-import { createUI } from './ui.js?v=73e2a1e';
-import { hashSeed } from './rng.js?v=73e2a1e';
-import { hostRoom, joinRoom, cleanCode, isCode, checkConnection } from './net.js?v=73e2a1e';
-import { loadProfile, saveProfile, cleanName, validAvatar, BOT_AVATAR, DEFAULT_AVATAR } from './profile.js?v=73e2a1e';
+import { createGame, applyIntent } from './game.js?v=13ca1c7';
+import { botTurn } from './bot.js?v=13ca1c7';
+import { createUI } from './ui.js?v=13ca1c7';
+import { hashSeed } from './rng.js?v=13ca1c7';
+import { hostRoom, joinRoom, cleanCode, isCode, checkConnection } from './net.js?v=13ca1c7';
+import { loadProfile, saveProfile, recordBattle, recordMatch, removeFriend, cleanName, validAvatar, BOT_AVATAR, DEFAULT_AVATAR } from './profile.js?v=13ca1c7';
 
 const BOT = 1;
 // Online, each planning phase lasts this long; then everyone still planning is
 // locked in as they are. The host's clock decides; both screens count down.
 const PLAN_SECONDS = 30;
 
-const catalogText = await (await fetch('data/units.json?v=73e2a1e')).text();
+const catalogText = await (await fetch('data/units.json?v=13ca1c7')).text();
 const catalog = JSON.parse(catalogText);
 // What's new: newest first. Add an entry to data/changelog.json with each update.
-const changelog = await fetch('data/changelog.json?v=73e2a1e').then((r) => (r.ok ? r.json() : [])).catch(() => []);
+const changelog = await fetch('data/changelog.json?v=13ca1c7').then((r) => (r.ok ? r.json() : [])).catch(() => []);
 // Both players must run the same rules and Pokémon. The deploy tags every file
 // with its build (?v=...); locally there's no tag, so compare the data instead.
 const VERSION = `${new URL(import.meta.url).searchParams.get('v') ?? 'local'}:${hashSeed(catalogText)}`;
@@ -63,6 +63,7 @@ const ui = createUI({
   onNewGame: () => (mode === 'guest' ? link?.send({ type: 'rematch' }) : newGame()),
   onLobby: lobby,
   onProfile: updateProfile,
+  onRemoveFriend: (id) => { profile = removeFriend(id); return profile; },
   getProfile: () => profile,
   getLog,
   changelog,
@@ -128,8 +129,23 @@ function runBot() {
 }
 
 function show() {
+  trackStats();
   ui.render(state);
   planClock();
+}
+
+// Profile stats: each battle counts the Pokémon this player fielded; each
+// finished match counts a win, loss or draw (online and training separately).
+let trackedKey = null;
+function trackStats() {
+  const key = `${state.seed}:${state.round}:${state.phase}`;
+  if (key === trackedKey) return;
+  trackedKey = key;
+  if (state.phase === 'combat') {
+    profile = recordBattle(state.combat.result.initial.filter((u) => u.side === me && !u.summoned).map((u) => u.unitId));
+  } else if (state.phase === 'gameover') {
+    profile = recordMatch(mode === 'bot' ? 'training' : 'online', state.winner === me ? 'win' : state.winner === null ? 'draw' : 'loss');
+  }
 }
 
 // Start the countdown when a new planning phase begins (online only).

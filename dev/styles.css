@@ -1208,7 +1208,37 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 #overlay:not(.start-screen) .profile-chip { display: none; }
 
 /* Profile screen. */
-.profile-preview { display: flex; justify-content: center; margin: 4px 0 -4px; }
+/* Profile screen: picture + name, then stats and friends. */
+.profile-head { display: flex; align-items: center; gap: 16px; }
+.profile-head .field { flex: 1; margin: 0; max-width: none; }
+.profile-preview { display: grid; justify-items: center; gap: 6px; flex: none; }
+.profile-preview .change-pic { min-width: 0; padding: 4px 12px; font-size: 13px; }
+.avatar-picker { margin-top: 4px; }
+.profile-save { margin-top: 14px; width: 100%; }
+.profile-section { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.profile-section h2 { font-size: 16px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+.profile-section h2 .count { font-size: 12px; color: var(--muted); background: var(--panel-2); border-radius: 99px; padding: 2px 8px; }
+.stat-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.stat-tiles div { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 6px; text-align: center; display: grid; gap: 2px; }
+.stat-tiles b { font-size: 22px; font-variant-numeric: tabular-nums; }
+.stat-tiles span { font-size: 12px; font-weight: 800; color: var(--muted); }
+.record { width: 100%; margin-top: 10px; border-collapse: collapse; font-size: 14px; }
+.record th, .record td { padding: 5px 6px; text-align: center; font-variant-numeric: tabular-nums; }
+.record thead th { font-size: 12px; color: var(--muted); font-weight: 800; }
+.record tbody th { text-align: left; font-weight: 800; }
+.record tbody tr + tr { border-top: 1px solid var(--line); }
+.favourite { display: flex; align-items: center; gap: 12px; margin-top: 10px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.favourite .avatar { width: 44px; height: 44px; }
+.favourite div { display: grid; gap: 1px; }
+.favourite small { font-size: 12px; font-weight: 800; color: var(--muted); }
+.favourite span { font-size: 13px; color: var(--muted); }
+.friend-list { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; }
+.friend-list li { display: flex; align-items: center; gap: 10px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 6px 8px 6px 6px; }
+.friend-list li > span:not(.avatar) { flex: 1; text-align: left; font-weight: 800; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.friend-list li .avatar { width: 34px; height: 34px; }
+.friend-list .danger-text { color: var(--enemy); min-width: 0; padding: 4px 10px; font-size: 13px; }
+.add-friend { width: 100%; min-width: 0; }
+.add-friend small { font-weight: 700; color: var(--muted); margin-left: 4px; }
 .profile-preview .avatar.big { width: 96px; height: 96px; background-color: #ffffff10; border-radius: 50%; box-shadow: 0 0 0 3px #ffffff22; background-size: 70%; }
 .field-label { margin: 14px 0 6px; font-weight: 800; font-size: 13px; color: var(--muted); }
 .avatar-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 6px; margin-bottom: 14px; }

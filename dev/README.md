@@ -129,6 +129,10 @@ test a set of changes together. Team styles to pit against each other live in `A
   private window starts fresh. Your name and picture show in the HUD and the versus intro; online,
   your opponent sees them too (the host only accepts pictures from the list). The name typed on the
   online lobby screen is saved to the profile as well.
+  The profile screen also shows **stats** (wins, losses and draws for online and training matches,
+  win rate, and the most used Pokémon: the one fielded in the most battles; matches left before the
+  end aren't counted) and a **friends** list where friends can be removed. Adding friends isn't built
+  yet; `addFriend()` in `src/profile.js` is ready for it. Stats and friends are saved with the profile.
 - **Team:** before round 1, each player picks 6 Pokémon. Each one puts 4 copies into that player's own
   pool. The board starts empty: everything you field, you buy.
 - **Coins:** you start with 10. Every round after that you get 5 coins, plus 1 for each of your own
