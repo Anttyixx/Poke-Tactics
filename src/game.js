@@ -57,7 +57,8 @@ const isIndex = (v, n) => Number.isInteger(v) && v >= 0 && v < n;
 
 // `featured` (optional, for testing): a troop id that is put in the first shop
 // slot whenever the player's pool still has a copy of it. Invalid ids are ignored.
-export function createGame({ seed, catalog, names, featured = null }) {
+// `avatars` (optional): each player's profile picture id, for display only.
+export function createGame({ seed, catalog, names, avatars = [], featured = null }) {
   return {
     version: 3,
     seed: seed >>> 0,
@@ -67,6 +68,7 @@ export function createGame({ seed, catalog, names, featured = null }) {
     nextUid: 1,
     players: names.map((name, i) => ({
       name,
+      avatar: avatars[i] ?? null,
       hp: START_HP,
       coins: START_COINS,
       shopRolls: 0, // counts shop refreshes (the UI deals new cards in when it changes)

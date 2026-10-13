@@ -12,6 +12,7 @@ import {
   simulate, MAX_TICKS, COLS, HALF, SUDDEN_DEATH_TICK, SUDDEN_DEATH_HP_PER_SECOND, MOVE_SPEEDS, STEP_TICKS, CRIT_PCT, STAT_SCALE, TICK_SECONDS,
 } from '../src/combat.js';
 import { botTurn } from '../src/bot.js';
+import { loadProfile, saveProfile, AVATARS, DEFAULT_AVATAR, NAME_MAX } from '../src/profile.js';
 
 const catalog = JSON.parse(readFileSync(new URL('../data/units.json', import.meta.url), 'utf8'));
 const tests = [];
@@ -948,6 +949,39 @@ test('every fight starts with power progress at 0 and a full attack cooldown bef
     }
     if (state.phase === 'combat') { fights++; assert.ok(state.combat.result.initial.every((u) => u.mana === 0), `fight ${fights}`); }
   }
+});
+
+// ---- profile -------------------------------------------------------------------
+
+test('profile: saved in browser storage and loaded back; old saved names carry over; bad data is cleaned', () => {
+  const store = new Map();
+  globalThis.localStorage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)) };
+  try {
+    assert.deepEqual(loadProfile(), { name: '', avatar: DEFAULT_AVATAR, saved: false }, 'nothing saved yet');
+    store.set('poke-tactics-name', 'Misty');
+    assert.deepEqual(loadProfile(), { name: 'Misty', avatar: DEFAULT_AVATAR, saved: true }, 'the name saved before profiles');
+    const pic = AVATARS[0];
+    assert.equal(saveProfile({ name: '  Brock   the  Rock ', avatar: pic }).stored, true);
+    assert.deepEqual(loadProfile(), { name: 'Brock the Rock', avatar: pic, saved: true }, 'comes back after a reload');
+    saveProfile({ name: 'x'.repeat(40), avatar: '../../evil.png' });
+    const p = loadProfile();
+    assert.equal(p.name.length, NAME_MAX);
+    assert.equal(p.avatar, DEFAULT_AVATAR, 'only pictures from the list');
+    store.set('poke-tactics-profile', '{not json');
+    assert.equal(loadProfile().avatar, DEFAULT_AVATAR, 'corrupt data is ignored');
+    globalThis.localStorage = { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('blocked'); } };
+    assert.equal(saveProfile({ name: 'A', avatar: pic }).stored, false, 'blocked storage is reported, not thrown');
+    assert.equal(loadProfile().saved, false);
+  } finally {
+    delete globalThis.localStorage;
+  }
+  for (const id of AVATARS) assert.ok(existsSync(new URL(`../assets/sprites/${id}.png`, import.meta.url)), `${id} picture exists`);
+});
+
+test('each player\'s profile picture is part of the game state', () => {
+  const s = createGame({ seed: 1, catalog, names: ['A', 'B'], avatars: ['infernape', 'golem'] });
+  assert.deepEqual(s.players.map((p) => p.avatar), ['infernape', 'golem']);
+  assert.deepEqual(createGame({ seed: 1, catalog, names: ['A', 'B'] }).players.map((p) => p.avatar), [null, null]);
 });
 
 test('power progress never goes down except when the power is used', () => {

@@ -7,7 +7,7 @@
 //           screen only ever shows the state the host sends.
 //
 // Protocol (JSON over the PeerJS connection; pings and goodbyes live in net.js):
-//   guest -> host  { type: 'hello', version, name }   first message
+//   guest -> host  { type: 'hello', version, name, avatar }   first message
 //                  { type: 'intent', intent }
 //                  { type: 'rematch' }                 "Play again" after a match
 //   host -> guest  { type: 'state', state }            after every change
@@ -22,12 +22,12 @@ import { botTurn } from './bot.js';
 import { createUI } from './ui.js';
 import { hashSeed } from './rng.js';
 import { hostRoom, joinRoom, cleanCode, isCode, checkConnection } from './net.js';
+import { loadProfile, saveProfile, cleanName, validAvatar, BOT_AVATAR, DEFAULT_AVATAR } from './profile.js';
 
 const BOT = 1;
 // Online, each planning phase lasts this long; then everyone still planning is
 // locked in as they are. The host's clock decides; both screens count down.
 const PLAN_SECONDS = 30;
-const NAME_KEY = 'poke-tactics-name';
 
 const catalogText = await (await fetch('data/units.json')).text();
 const catalog = JSON.parse(catalogText);
@@ -42,7 +42,10 @@ let firstGame = true;
 let mode = 'bot'; // 'bot' | 'host' | 'guest'
 let link = null; // the connection to the friend, online
 let hosting = null; // a room waiting for a friend: { code, cancel }
-let names = ['You', 'Bot'];
+let profile = loadProfile(); // name and picture, saved in this browser
+const myName = () => profile.name || 'You';
+let names = [myName(), 'Bot'];
+let avatars = [profile.avatar, BOT_AVATAR];
 let me = 0; // which player this browser is
 let timerKey = null; // the planning phase the countdown belongs to ("seed:round")
 let lockTimer = 0;
@@ -59,6 +62,8 @@ const ui = createUI({
   onIntent: (intent) => (mode === 'guest' ? sendIntent(intent) : dispatch(me, intent)),
   onNewGame: () => (mode === 'guest' ? link?.send({ type: 'rematch' }) : newGame()),
   onLobby: lobby,
+  onProfile: updateProfile,
+  getProfile: () => profile,
   getLog,
   changelog,
   version: changelog[0]?.version ?? null,
@@ -84,7 +89,7 @@ function newGame() {
   firstGame = false;
   // ?unit=<id> puts that unit in the first slot of every shop (for testing new units).
   const featured = mode === 'bot' ? params.get('unit')?.toLowerCase() || null : null;
-  state = createGame({ seed, catalog, names, featured });
+  state = createGame({ seed, catalog, names, avatars, featured });
   matchLog = {
     format: 'poke-tactics-match', v: 1, build: BUILD, catalogHash: hashSeed(catalogText),
     mode: mode === 'bot' ? 'training' : 'pvp', started: new Date().toISOString(),
@@ -157,11 +162,24 @@ function sendIntent(intent) {
 
 // ---- online ----------------------------------------------------------------
 
-const savedName = () => { try { return localStorage.getItem(NAME_KEY) || ''; } catch { return ''; } };
+const savedName = () => profile.name;
+// The name typed in the lobby is saved to the profile too.
 function playerName(name) {
-  const clean = String(name ?? '').replace(/\s+/g, ' ').trim().slice(0, 16);
-  try { localStorage.setItem(NAME_KEY, clean); } catch {}
+  const clean = cleanName(name);
+  if (clean !== profile.name) profile = saveProfile({ ...profile, name: clean });
   return clean;
+}
+
+// The profile screen saved a new name or picture. In a game against the bot it
+// shows right away; online, from the next match.
+function updateProfile(next) {
+  profile = saveProfile(next);
+  if (mode === 'bot') {
+    names = [myName(), 'Bot'];
+    avatars = [profile.avatar, BOT_AVATAR];
+    if (state) { state.players[0].name = names[0]; state.players[0].avatar = avatars[0]; show(); }
+  }
+  return profile;
 }
 
 function lobby(action, data = {}) {
@@ -199,6 +217,7 @@ async function host(name) {
     });
     hosting = room;
     names = [name, 'Friend'];
+    avatars = [profile.avatar, DEFAULT_AVATAR];
     const url = new URL(location.href);
     url.search = `?join=${room.code}`;
     ui.showLobby('hosting', { code: room.code, link: url.href });
@@ -221,10 +240,11 @@ function hostMessage(msg, l) {
     hosting = null;
     mode = 'host';
     me = 0;
-    names = [names[0], String(msg.name ?? '').slice(0, 16) || 'Player 2'];
+    names = [names[0], cleanName(msg.name) || 'Player 2'];
+    avatars = [profile.avatar, validAvatar(msg.avatar) ? msg.avatar : DEFAULT_AVATAR]; // untrusted: only known pictures
     ui.setOnline({ viewer: 0 });
     newGame();
-    ui.playIntro(names);
+    ui.playIntro(names, avatars);
   } else if (mode !== 'host') {
     // Not in a match yet: ignore anything else.
   } else if (msg.type === 'intent') {
@@ -249,7 +269,8 @@ async function join(code, name) {
             mode = 'guest';
             me = 1;
             ui.setOnline({ viewer: 1 });
-            ui.playIntro([msg.state.players[1].name, msg.state.players[0].name]);
+            const [me, host] = [msg.state.players[1], msg.state.players[0]];
+            ui.playIntro([me.name, host.name], [me.avatar, host.avatar]);
           }
           state = msg.state;
           show();
@@ -270,7 +291,7 @@ async function join(code, name) {
     if (ui.lobbyView() !== 'connecting') { l.close(); return; } // cancelled while connecting
     link = l;
     // Say hello until the first state arrives, in case the first one is lost.
-    const hello = () => { if (!started && link === l) { l.send({ type: 'hello', version: VERSION, name }); setTimeout(hello, 1000); } };
+    const hello = () => { if (!started && link === l) { l.send({ type: 'hello', version: VERSION, name, avatar: profile.avatar }); setTimeout(hello, 1000); } };
     hello();
     ui.showLobby('connecting', { text: 'Connected! Waiting for the game to start…' });
   } catch (err) {
@@ -306,7 +327,8 @@ function goHome() {
   timerKey = null;
   mode = 'bot';
   me = 0;
-  names = ['You', 'Bot'];
+  names = [myName(), 'Bot'];
+  avatars = [profile.avatar, BOT_AVATAR];
   ui.setOnline(null);
   newGame();
 }

@@ -121,6 +121,13 @@ test a set of changes together. Team styles to pit against each other live in `A
 
 - **Start:** the game opens on a start screen; **Battle** plays a friend online (above); **Training** plays the bot. Pokémon are shown as
   cards (cost in the corner); tap one to pick it, or its **i** for its stats and power.
+- **Profile:** the chip at the top left of the start screen (or Menu → Profile) sets your name and
+  a profile picture from a fixed list (the Pokémon sprites, front frame; edit `AVATARS` in
+  `src/profile.js` to change the list). It's saved in the browser's localStorage under
+  `poke-tactics-profile`, so it's still there after closing the browser; clearing site data or a
+  private window starts fresh. Your name and picture show in the HUD and the versus intro; online,
+  your opponent sees them too (the host only accepts pictures from the list). The name typed on the
+  online lobby screen is saved to the profile as well.
 - **Team:** before round 1, each player picks 6 Pokémon. Each one puts 4 copies into that player's own
   pool. The board starts empty: everything you field, you buy.
 - **Coins:** you start with 10. Every round after that you get 5 coins, plus 1 for each of your own
@@ -225,6 +232,7 @@ src/game.js         rules: createGame(), applyIntent(). The only thing that chan
 src/bot.js          dummy opponent. Uses the same intents as a human
 src/ui.js           DOM rendering, input -> intents, replays combat from the event log
 src/main.js         wires game + bot + UI together (single player)
+src/profile.js      the player's profile (name + picture), saved in localStorage
 tests/run.js        Node test runner
 .github/workflows/pages.yml   deploys main -> / and dev -> /dev/
 ```
