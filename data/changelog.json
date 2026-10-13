@@ -1,5 +1,15 @@
 [
   {
+    "id": "2026-10-13-profile-polish",
+    "version": "0.10.1",
+    "date": "2026-10-13",
+    "title": "Profile polish",
+    "changes": [
+      { "kind": "change", "text": "The profile button on the start screen is a rounded rectangle." },
+      { "kind": "fix", "text": "Profile pictures are centred in their frame everywhere they appear." }
+    ]
+  },
+  {
     "id": "2026-10-13-profiles",
     "version": "0.10.0",
     "date": "2026-10-13",

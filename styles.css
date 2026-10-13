@@ -1186,10 +1186,11 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 }
 .menu-version { margin: 14px 0 0; text-align: center; font: 700 12px/1 ui-monospace, Menlo, monospace; color: var(--muted); }
 
-/* Profile pictures: the front-facing frame of a 4x4 sprite sheet. */
+/* Profile pictures: pre-cropped and centred (tools/make-avatars.py), so they
+   just fit the box. */
 .avatar {
   display: inline-block; flex: none; width: 32px; height: 32px;
-  background-size: 400% 400%; background-position: 0 0; background-repeat: no-repeat;
+  background-size: contain; background-position: center; background-repeat: no-repeat;
   image-rendering: pixelated; vertical-align: middle;
 }
 .hpbox .hud-avatar { width: 30px; height: 30px; margin: -6px -4px; }
@@ -1200,18 +1201,18 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 #overlay .profile-chip {
   position: fixed; z-index: 2; margin: 0; min-width: 0; max-width: calc(100vw - 100px);
   top: max(14px, env(safe-area-inset-top)); left: max(14px, env(safe-area-inset-left));
-  display: flex; align-items: center; gap: 8px; padding: 5px 14px 5px 6px; border-radius: 99px; font-size: 14px;
+  display: flex; align-items: center; gap: 10px; padding: 6px 14px 6px 6px; border-radius: 12px; font-size: 14px;
 }
 #overlay .profile-chip span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#overlay .profile-chip .avatar { width: 34px; height: 34px; background-color: #ffffff14; border-radius: 50%; }
+#overlay .profile-chip .avatar { width: 36px; height: 36px; background-color: #ffffff14; border-radius: 8px; background-size: 80%; }
 #overlay:not(.start-screen) .profile-chip { display: none; }
 
 /* Profile screen. */
 .profile-preview { display: flex; justify-content: center; margin: 4px 0 -4px; }
-.profile-preview .avatar.big { width: 96px; height: 96px; background-color: #ffffff10; border-radius: 50%; box-shadow: 0 0 0 3px #ffffff22; }
+.profile-preview .avatar.big { width: 96px; height: 96px; background-color: #ffffff10; border-radius: 50%; box-shadow: 0 0 0 3px #ffffff22; background-size: 70%; }
 .field-label { margin: 14px 0 6px; font-weight: 800; font-size: 13px; color: var(--muted); }
 .avatar-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 6px; margin-bottom: 14px; }
 .avatar-grid button { padding: 4px; min-width: 0; display: grid; place-items: center; border-radius: 12px; }
-.avatar-grid button .avatar { width: 40px; height: 40px; }
+.avatar-grid button .avatar { width: 36px; height: 36px; }
 .avatar-grid button[aria-pressed="true"] { outline: 3px solid var(--gold); outline-offset: -3px; background: #ffd85a22; }
 .muted.small { font-size: 12px; margin-top: 10px; }

@@ -975,7 +975,7 @@ test('profile: saved in browser storage and loaded back; old saved names carry o
   } finally {
     delete globalThis.localStorage;
   }
-  for (const id of AVATARS) assert.ok(existsSync(new URL(`../assets/sprites/${id}.png`, import.meta.url)), `${id} picture exists`);
+  for (const id of AVATARS) assert.ok(existsSync(new URL(`../assets/avatars/${id}.png`, import.meta.url)), `${id} picture exists (tools/make-avatars.py)`);
 });
 
 test('each player\'s profile picture is part of the game state', () => {

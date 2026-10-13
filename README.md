@@ -122,8 +122,9 @@ test a set of changes together. Team styles to pit against each other live in `A
 - **Start:** the game opens on a start screen; **Battle** plays a friend online (above); **Training** plays the bot. Pokémon are shown as
   cards (cost in the corner); tap one to pick it, or its **i** for its stats and power.
 - **Profile:** the chip at the top left of the start screen (or Menu → Profile) sets your name and
-  a profile picture from a fixed list (the Pokémon sprites, front frame; edit `AVATARS` in
-  `src/profile.js` to change the list). It's saved in the browser's localStorage under
+  a profile picture from a fixed list (the Pokémon sprites' front frame, cropped and centred into
+  `assets/avatars/`; to change the list, edit `AVATARS` in `src/profile.js` and run
+  `python3 tools/make-avatars.py`, which needs Pillow). It's saved in the browser's localStorage under
   `poke-tactics-profile`, so it's still there after closing the browser; clearing site data or a
   private window starts fresh. Your name and picture show in the HUD and the versus intro; online,
   your opponent sees them too (the host only accepts pictures from the list). The name typed on the
