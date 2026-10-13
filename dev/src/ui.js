@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=53acc65';
+import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=c200ba6';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=53acc65';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=53acc65';
+} from './game.js?v=c200ba6';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=c200ba6';
 
 const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
 // Attack-effect colour when a unit doesn't set its own "fx" colour in units.json.
@@ -1648,5 +1648,18 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       </div>`;
   }
 
-  return { render, toast, showLobby, setOnline, setDeadline, playIntro, lobbyView: () => lobbyView };
+  // A standing notice about the online connection (null hides it).
+  let netEl = null;
+  function setNetStatus(text) {
+    if (!text) { netEl?.remove(); netEl = null; return; }
+    if (!netEl) {
+      netEl = document.createElement('div');
+      netEl.className = 'net-status';
+      netEl.setAttribute('role', 'status');
+      document.body.append(netEl);
+    }
+    netEl.textContent = text;
+  }
+
+  return { render, toast, showLobby, setOnline, setDeadline, setNetStatus, playIntro, lobbyView: () => lobbyView };
 }

@@ -1246,3 +1246,14 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .avatar-grid button .avatar { width: 36px; height: 36px; }
 .avatar-grid button[aria-pressed="true"] { outline: 3px solid var(--gold); outline-offset: -3px; background: #ffd85a22; }
 .muted.small { font-size: 12px; margin-top: 10px; }
+
+/* Online: the friend's connection dropped (or ours), shown until it's back. */
+.net-status {
+  position: fixed; z-index: 60; left: 50%; translate: -50% 0;
+  top: max(76px, calc(env(safe-area-inset-top) + 70px));
+  width: max-content; max-width: calc(100vw - 32px);
+  padding: 8px 14px; border-radius: 12px; text-align: center;
+  background: #3a2a08f2; border: 1px solid #ffc93c88; color: #ffe7a8;
+  font-size: 13px; font-weight: 800; box-shadow: 0 8px 24px #0008;
+  pointer-events: none;
+}

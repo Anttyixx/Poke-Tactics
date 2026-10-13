@@ -1,3 +1,4 @@
+c200ba6	dev	2026-10-13 22:14 UTC	Online: a quiet player is locked in, not kicked; guests reconnect
 53acc65	dev	2026-10-13 21:55 UTC	Fix guest stuck on 'Waiting for the game to start'
 13ca1c7	dev	2026-10-13 21:35 UTC	Profile: stats, friends list, picture picker behind a Change button
 73e2a1e	dev	2026-10-13 21:30 UTC	Profile chip is a rounded rectangle; pictures centred
@@ -27,4 +28,3 @@ c530611	dev	2026-10-12 02:27 UTC	Online: keep the game code alive while waiting;
 823cf9c	dev	2026-10-12 01:46 UTC	Online: battle intro wipe and a 30-second planning timer
 f4cd70e	dev	2026-10-12 01:37 UTC	Online multiplayer: battle a friend with a game code (PeerJS)
 1f977e7	stable	2026-10-12 01:18 UTC	Tapu Koko is immune while dashing
-c8f6b7a	dev	2026-10-12 01:00 UTC	Count distance in steps; Tapu Koko range 2, 1.1s attacks, +15% HP
