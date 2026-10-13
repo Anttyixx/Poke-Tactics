@@ -647,7 +647,7 @@ test('Self-Destruct (Golem): knocked out, it stays put 3s, then explodes on adja
   assert.ok(!r.events.some((e) => e.type === 'damage' && e.id === g && e.t > fuse.t), 'it cannot be hit while the fuse burns');
 });
 
-test('Shining Star (Minior): at its HP threshold (50%) it spends 0.5s transforming, immune to everything, then takes its core form', () => {
+test('Shining Star (Minior): at its HP threshold it spends 0.5s transforming, immune to everything, then takes its core form', () => {
   const cat = powerCat();
   cat.brute = { ...cat.wall, range: 1, secPerHit: 1, damage: [125, 125, 125, 125] }; // 1485 HP: 9 hits leave 360 (24%)
   cat.stunner = { ...cat.brute, energy: 1, ability: { name: 'Stun', kind: 'empower', damagePct: 100, stun: 10 } };
@@ -668,6 +668,30 @@ test('Shining Star (Minior): at its HP threshold (50%) it spends 0.5s transformi
     assert.ok(!evs(r, 'stun', m).some((e) => e.t > start.t && e.t <= tf.t), 'no stuns while transforming');
     assert.ok(!r.events.some((e) => e.src === m && e.t > start.t && e.t <= tf.t), 'it does nothing while transforming');
   }
+});
+
+test('Shining Star (Minior): Star Form zips straight to the square beside its target instead of walking, after a shock wave', () => {
+  const cat = powerCat();
+  cat.brute = { ...cat.wall, range: 1, secPerHit: 1, hp: [150, 150, 150, 150], damage: [250, 250, 250, 250] };
+  cat.far = { ...cat.wall, moveSpeed: 'statue', hp: [99999, 99999, 99999, 99999] };
+  // Minior in front of a brute; once the brute is down, the only enemy left is far away in a corner.
+  const r = simulate(cat, [
+    [{ uid: 1, unitId: 'minior', star: 0, x: 2, y: 0 }],
+    [{ uid: 2, unitId: 'brute', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'far', star: 0, x: 0, y: 3 }],
+  ], 1);
+  const m = unitOf(r, 1).id;
+  const tf = evs(r, 'transform', m)[0];
+  assert.ok(tf, 'it transforms');
+  assert.ok(evs(r, 'shockwave', m).some((e) => e.t === tf.t), 'with a shock wave');
+  assert.ok(evs(r, 'stun', unitOf(r, 2).id).some((e) => e.t === tf.t), 'that stuns the enemy next to it');
+  assert.ok(!evs(r, 'move', m).some((e) => e.t > tf.t), 'it never walks in Star Form');
+  const zip = evs(r, 'blink', m)[0];
+  assert.ok(zip, 'it zips');
+  const far = unitOf(r, 3);
+  assert.equal(Math.max(Math.abs(zip.x - far.x), Math.abs(zip.y - far.y)), 1, 'right next to its target');
+  assert.ok(Math.max(Math.abs(zip.x - zip.fromX), Math.abs(zip.y - zip.fromY)) > 1, 'from more than a square away');
+  const hit = r.events.find((e) => e.type === 'attack' && e.id === m && e.t > zip.t);
+  assert.ok(hit && hit.t - zip.t <= 4, 'and attacks right away');
 });
 
 test('Wild Charge (Tapu Koko): dashes in a line next to the farthest enemy, immune on the way, then hits for 150%; stuns everyone it touches', () => {

@@ -110,6 +110,7 @@ function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, in
     morphUntil: 0, // mid-transformation (Minior, Ditto) through this tick: it can't act
     immuneFrom: 0, immuneUntil: 0, // nothing affects it in these ticks (Minior transforming, Tapu Koko dashing)
     dashTarget: null, dashUntil: 0, // Tapu Koko: who it strikes when its dash arrives
+    blink: false, // Minior's Star Form: zips straight to its target instead of walking
     fuse: 0, fused: false, // Golem: ticks left before it explodes after being knocked out
     target: null, alive: true, summoned: Boolean(inst.summoned),
   };
@@ -251,7 +252,10 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
     setStats(u, {
       atk: Math.round(form.damage[u.star] * STAT_SCALE), attackCd: ticksOf(form.secPerHit),
       moveCd: ticksOf(MOVE_SPEEDS[form.moveSpeed]), range: form.range, sprite: form.sprite,
+      blink: Boolean(form.blink),
     }, { name: form.name });
+    // A faster form doesn't sit out the rest of its old, slower attack timer.
+    u.atkTimer = Math.min(u.atkTimer, u.attackCd);
     // A shock wave as it changes: stuns every enemy in the square around it
     // (radius 1 = the 3x3). Stuns land at the end of the tick, as always.
     const wave = form.shockwave;
@@ -698,6 +702,20 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
         if (u.power && u.power.kind !== 'empower' && u.maxMana > 0 && u.mana >= u.maxMana) instantPower(u, target);
       }
       u.atkTimer = cooldown(u);
+    } else if (u.blink && u.moveTimer === 0 && u.stepTimer === 0) {
+      // Minior's Star Form doesn't walk: it zips straight to the open square
+      // beside its target closest to it, then waits its movement speed before
+      // it can zip again. If every square beside the target is taken, it walks.
+      const cell = dashSpot(u, target);
+      const from = { x: u.x, y: u.y };
+      if (cell) {
+        relocate(u, cell, 'blink', { fromX: from.x, fromY: from.y });
+        u.moveTimer = u.moveCd;
+      } else {
+        const path = findPath(u);
+        if (path) { u.target = path.target.id; moveTo(u, path.next); startStep(u); }
+        else if (step(u, target)) startStep(u);
+      }
     } else if (u.moveTimer === 0 && u.stepTimer === 0 && u.copyOf === null) {
       // Out of range: walk around anyone in the way toward the enemy that can
       // be reached soonest (which may not be the one closest as the crow flies).
