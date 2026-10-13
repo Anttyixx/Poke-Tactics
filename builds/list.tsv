@@ -1,3 +1,4 @@
+519c610	dev	2026-10-13 07:06 UTC	Shop refreshes on every purchase; rerolls cost 1 coin; new income
 a5c1264	dev	2026-10-13 06:56 UTC	Minior: second life as Star Form, hops every 10 attacks
 ae52230	dev	2026-10-13 04:50 UTC	Minior rework: tanky Rock form, Star Form zips to its target
 b15d0d7	dev	2026-10-13 04:29 UTC	Engine: optional shock wave when a Pokemon transforms
@@ -27,4 +28,3 @@ c8f6b7a	dev	2026-10-12 01:00 UTC	Count distance in steps; Tapu Koko range 2, 1.1
 d18c3f8	dev	2026-10-11 23:53 UTC	Add Torterra, Lilligant, Hoopa, Golem, Minior, Tapu Koko, Ditto; new Greninja
 4548b84	dev	2026-10-11 18:10 UTC	Vespiquen: more Combee at higher stars, placed sides-first
 e1629d9	dev	2026-10-10 00:57 UTC	Add a start screen and card-style team selection
-fb316c6	dev	2026-10-09 23:41 UTC	Faster shoves, and no diagonal-looking displacement

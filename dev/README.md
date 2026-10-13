@@ -123,12 +123,13 @@ test a set of changes together. Team styles to pit against each other live in `A
   cards (cost in the corner); tap one to pick it, or its **i** for its stats and power.
 - **Team:** before round 1, each player picks 6 Pokémon. Each one puts 4 copies into that player's own
   pool. The board starts empty: everything you field, you buy.
-- **Coins:** you start with 6. After each battle the winner gets 6 coins and the loser 9 (a draw pays
-  both 9). Coins carry over between rounds with no cap. Troops cost 2–5 coins per copy.
-- **Shop:** 3 slots, drawn from your pool (never more copies than the pool holds). The shop refreshes
-  by itself after every battle.
-- **Rerolls:** free, but limited. You start with 3 and get 1 more each round, up to a maximum of 3.
-  When you're out, you can't reroll until the next round.
+- **Coins:** you start with 10. Every round after that you get 5 coins, plus 1 for each of your own
+  Pokémon knocked out in the battle just fought (summons like Combee don't count; the loser of a
+  battle lost its whole board). Coins carry over between rounds with no cap. Troops cost 2–5 coins
+  per copy.
+- **Shop:** 3 slots, drawn from your pool (never more copies than the pool holds). It refreshes for
+  free every time you buy a Pokémon, and by itself after every battle.
+- **Rerolls:** 1 coin each, as many as you can pay for.
 - **Buying:** click a shop troop, then a square on your half (or drag the card onto the board). A copy
   you buy leaves your pool. There is no bench.
 - **Stars:** each troop can be on the board only once. Buying a copy of a troop you already field levels

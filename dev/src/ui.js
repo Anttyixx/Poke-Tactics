@@ -2,11 +2,11 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=a5c1264';
+import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=519c610';
 import {
-  COPIES_PER_TROOP, LOSS_COINS, MAX_REROLLS, WIN_COINS,
+  COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=a5c1264';
+} from './game.js?v=519c610';
 
 const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
 // Attack-effect colour when a unit doesn't set its own "fx" colour in units.json.
@@ -438,8 +438,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
     shownCoins = p.coins;
     hudEl.innerHTML = `
       <span class="chip"><span class="label">Round</span><b>${state.round || '–'}</b></span>
-      <span class="chip coins" title="Win a battle: +${WIN_COINS}. Lose: +${LOSS_COINS}. Coins carry over."><b class="gold${coinsChanged ? ' bump' : ''}">${p.coins}</b></span>
-      <span class="chip" title="Free rerolls. +1 each round, up to ${MAX_REROLLS}."><span class="label">Rerolls</span><b>${p.rerolls}/${MAX_REROLLS}</b></span>
+      <span class="chip coins" title="Each round: +${ROUND_COINS}, plus ${LOST_COIN} for each of your Pokémon knocked out last battle. Coins carry over."><b class="gold${coinsChanged ? ' bump' : ''}">${p.coins}</b></span>
       <div class="duel">${hpBox(p, 'ally')}<span class="vs">VS</span>${hpBox(foe(), 'enemy')}</div>
       <div class="hud-actions">
         <button id="open-dex" class="icon-btn dex-button" title="Every Pokémon's stats (P)">${ICON_DEX}<span class="label-text">Pokédex</span></button>
@@ -465,8 +464,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
           <li><b>Fight</b>: the battle plays out by itself. After 30 seconds, sudden death drains everyone until one side falls.</li>
           <li><b>Powers</b>: every Pokémon has one; the blue bar under it fills with each attack. See them all in the Pokédex.</li>
           <li><b>Scouting</b>: from round 2, the faded Pokémon on the enemy side show where your opponent placed theirs last round.</li>
-          <li><b>Coins</b>: you start with 6. Win a battle: +${WIN_COINS}. Lose: +${LOSS_COINS}. Coins carry over.</li>
-          <li><b>Rerolls</b> are free: ${MAX_REROLLS} to start, +1 each round (max ${MAX_REROLLS}). The shop refreshes after every battle.</li>
+          <li><b>Coins</b>: you start with ${START_COINS}. Every round after that: +${ROUND_COINS}, plus ${LOST_COIN} for each of your Pokémon knocked out in the last battle. Coins carry over.</li>
+          <li><b>Shop</b>: it refreshes for free every time you buy, and after every battle. A reroll costs ${REROLL_COST} coin.</li>
           <li><b>Win</b> by bringing your opponent from 100 HP to 0. The loser of a battle loses HP for every Pokémon still standing.</li>
         </ul>
         <p class="muted">Keys: <kbd>D</kbd> reroll · <kbd>F</kbd> fight · <kbd>E</kbd> sell · <kbd>Space</kbd> skip · <kbd>P</kbd> Pokédex · <kbd>M</kbd> menu</p>`;
@@ -631,8 +630,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
 
   function renderShop() {
     const p = me();
-    // A new round or a reroll deals the cards in; buying one doesn't.
-    const deal = `${state.round}|${p.rerolls}|${state.phase}`;
+    // A new round, a reroll or a purchase deals new cards in.
+    const deal = `${state.round}|${p.shopRolls}|${state.phase}`;
     const dealt = deal !== shownShop && state.phase === 'planning';
     shownShop = deal;
     shopEl.innerHTML = p.shop.map((id, slot) => {
@@ -651,8 +650,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
         <span class="left">${p.pool[id]} left in pool</span>
       </button>`;
     }).join('');
-    rerollBtn.textContent = p.rerolls > 0 ? `Reroll (${p.rerolls} left)` : 'No rerolls left';
-    rerollBtn.disabled = !canPlan() || p.rerolls <= 0;
+    rerollBtn.textContent = `Reroll (${REROLL_COST} coin)`;
+    rerollBtn.disabled = !canPlan() || p.coins < REROLL_COST;
     readyBtn.disabled = !canPlan();
     readyBtn.dataset.base = state.phase === 'planning' && p.ready ? 'Waiting for opponent…' : 'Fight!';
     tickDeadline();
@@ -1243,7 +1242,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, getLog
     showOverlay(`
       <h1 class="${draw ? '' : won ? 'win' : 'loss'}">${title}</h1>
       <p>${detail}</p>
-      <p class="muted">Round ${round} · Your HP ${me().hp} → ${hpAfter} · +${won ? WIN_COINS : LOSS_COINS} coins</p>
+      <p class="muted">Round ${round} · Your HP ${me().hp} → ${hpAfter} · +${ROUND_COINS + LOST_COIN * lostCount(result, viewer)} coins next round (${ROUND_COINS} + ${lostCount(result, viewer)} for Pokémon lost)</p>
       ${me().ready
         ? '<button disabled>Waiting for opponent…</button>'
         : '<button id="continue" class="primary" autofocus>Continue</button>'}`);
