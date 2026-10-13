@@ -26,7 +26,11 @@ code is PeerJS (MIT, copied into `vendor/`) for online play.
   planning timer runs out, and the host continues past the battle results for them. If the
   connection itself drops, the guest reconnects to the same room by itself and picks the match
   back up (the host keeps the room open and recognises the guest by the `guestId` in its
-  hello). The match only ends when a player leaves (closing the page or **Leave match**), or
+  hello). A connection can also die while still looking open (common when a phone wakes up),
+  or work in one direction only, so: when the guest hears nothing, or comes back to the page,
+  it asks the host for the state (`sync`) and replaces the connection if there's no answer
+  within 4 seconds; when the host hears nothing from the guest, it tells the guest to
+  reconnect (`resync`). "Reconnected" only shows once the host has sent the state back. The match only ends when a player leaves (closing the page or **Leave match**), or
   after 2 minutes without hearing from them. After a match: **Rematch**.
 - Players on different networks often can't connect directly; then a TURN relay from
   Metered.ca carries the messages (`src/net-config.js`). Its username and password (from

@@ -16,7 +16,9 @@
 //                  { type: 'refuse', error }           can't play (different versions)
 //                  { type: 'full' }                    someone else already joined
 //                  { type: 'log', log }                the match log (at game over, or on request)
+//                  { type: 'resync' }                  "I can't hear you": the guest replaces its connection
 //   guest -> host  { type: 'getLog' }                  ask for the match log mid-match
+//                  { type: 'sync' }                    "are you there?": the host answers with the state
 
 import { createGame, applyIntent } from './game.js';
 import { botTurn } from './bot.js';
@@ -248,7 +250,7 @@ async function host(name) {
     const r = await hostRoom({
       onMessage: hostMessage,
       onClose: hostLinkClosed,
-      onQuiet: (quiet, l) => { if (l === link && mode === 'host') setAway(quiet); },
+      onQuiet: (quiet, l) => { if (l === link && mode === 'host') { setAway(quiet); if (quiet) nudge(l); } },
       onError: (error) => { stopHosting(); ui.showLobby('error', { error }); },
     });
     room = r;
@@ -304,9 +306,24 @@ function hostMessage(msg, l) {
     dispatch(1, msg.intent);
   } else if (msg.type === 'getLog') {
     l.send({ type: 'log', log: matchLog });
+  } else if (msg.type === 'sync') {
+    l.send({ type: 'state', state });
   } else if (msg.type === 'rematch' && state.phase === 'gameover') {
     newGame();
   }
+}
+
+// Host: the guest has gone quiet. Their page may be asleep, or their messages
+// may not be getting through even though ours reach them; keep telling them to
+// reconnect until they're back.
+let nudgeTimer = 0;
+function nudge(l) {
+  clearInterval(nudgeTimer);
+  l.send({ type: 'resync' });
+  nudgeTimer = setInterval(() => {
+    if (mode !== 'host' || link !== l || !away) return clearInterval(nudgeTimer);
+    l.send({ type: 'resync' });
+  }, 3000);
 }
 
 // Host: a connection closed. Only the player's matters. If it broke (rather
@@ -342,18 +359,31 @@ function setAway(isAway) {
   }
 }
 
+// Guest: check the connection still works (set while in a match).
+let guestResync = null;
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') guestResync?.(); });
+
 async function join(code, name) {
   stopHosting();
   ui.showLobby('connecting', { text: `Joining ${code}…`, cancel: true });
   guestId = randomCode() + randomCode();
   const myId = guestId;
+  const live = () => guestId === myId;
   let started = false;
-  let giveUpAt = 0; // while reconnecting: when to stop trying
   let statesSeen = 0;
-  const handlers = {
+  let reconnecting = false;
+  let giveUpAt = 0; // while getting back in: when to stop trying
+  let syncTimer = 0;
+
+  // Each connection gets its own handlers, and only the current one counts:
+  // an old connection that closes or wakes up late can't disturb the new one.
+  const handlersFor = (box) => ({
     onMessage: (msg) => {
+      if (!live() || box.link !== link) return;
       if (msg.type === 'state') {
         statesSeen++;
+        giveUpAt = 0;
+        clearTimeout(syncTimer);
         if (!started) {
           started = true;
           mode = 'guest';
@@ -364,8 +394,12 @@ async function join(code, name) {
         }
         state = msg.state;
         show();
+        setAway(false); // the host answered: we're really back
       } else if (msg.type === 'reject') ui.toast(msg.error);
-      else if (msg.type === 'log') {
+      else if (msg.type === 'resync') {
+        // The host can't hear us: this connection only works one way. Replace it.
+        if (started && !reconnecting) { const l = link; link = null; l.drop(); reconnect(); }
+      } else if (msg.type === 'log') {
         matchLog = msg.log;
         for (const w of logWaiters) w(matchLog);
         logWaiters = [];
@@ -377,14 +411,16 @@ async function join(code, name) {
         ui.showLobby('error', { error: msg.type === 'full' ? 'That game already has two players.' : msg.error });
       }
     },
-    onQuiet: (quiet) => { if (started && mode === 'guest') setAway(quiet); },
+    // Gone quiet: check whether the host is still there.
+    onQuiet: (quiet) => { if (live() && box.link === link && started && quiet) { setAway(true); resync(); } },
     onClose: (reason) => {
-      if (reason === 'self' || guestId !== myId) return;
+      if (!live() || box.link !== link || reason === 'self') return;
       link = null;
-      if (started && mode === 'guest' && reason === 'lost') return reconnect();
+      if (started && reason !== 'left') return reconnect();
       disconnected(reason);
     },
-  };
+  });
+
   // Say hello until a state arrives, in case the first one is lost.
   const greet = (l) => {
     const before = statesSeen;
@@ -395,28 +431,50 @@ async function join(code, name) {
     };
     hello();
   };
-  // Mid-match the connection broke: keep trying to get back into the same room.
+
+  // Ask the host for the state. No answer in a few seconds means this
+  // connection is dead even if it looks open (phones often wake up like
+  // that): replace it.
+  const resync = () => {
+    if (!live() || mode !== 'guest' || !link || reconnecting) return;
+    const l = link;
+    const before = statesSeen;
+    l.send({ type: 'sync' });
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => {
+      if (live() && link === l && statesSeen === before) { link = null; l.drop(); reconnect(); }
+    }, 4000);
+  };
+  guestResync = resync;
+
+  // Mid-match the connection broke: get back into the same room. The host
+  // knows us by guestId and picks the match back up.
   const reconnect = async () => {
+    if (reconnecting) return;
+    reconnecting = true;
     setAway(true);
     giveUpAt ||= Date.now() + GONE_MS;
-    while (guestId === myId && mode === 'guest' && !link) {
-      if (Date.now() > giveUpAt) return disconnected('timeout');
+    while (live() && mode === 'guest' && !link) {
+      if (Date.now() > giveUpAt) { reconnecting = false; return disconnected('timeout'); }
       try {
-        const l = await joinRoom(code, handlers);
-        if (guestId !== myId || mode !== 'guest') { l.close(); return; }
+        const box = {};
+        const l = await joinRoom(code, handlersFor(box));
+        if (!live() || mode !== 'guest' || link) { l.drop(); break; }
+        box.link = l;
         link = l;
-        giveUpAt = 0;
-        greet(l);
-        setAway(false);
-        return;
+        greet(l); // "Reconnected" shows once the host sends the state back
       } catch {
         await new Promise((r) => setTimeout(r, 2000));
       }
     }
+    reconnecting = false;
   };
+
   try {
-    const l = await joinRoom(code, handlers);
-    if (ui.lobbyView() !== 'connecting') { l.close(); return; } // cancelled while connecting
+    const box = {};
+    const l = await joinRoom(code, handlersFor(box));
+    if (ui.lobbyView() !== 'connecting' || !live()) { l.close(); return; } // cancelled while connecting
+    box.link = l;
     link = l;
     greet(l);
     ui.showLobby('connecting', { text: 'Connected! Waiting for the game to start…' });

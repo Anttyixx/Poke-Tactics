@@ -1,5 +1,16 @@
 [
   {
+    "id": "2026-10-13-reconnect-fix",
+    "version": "0.11.3",
+    "date": "2026-10-13",
+    "title": "Reliable reconnecting",
+    "changes": [
+      { "kind": "fix", "text": "After a dropped connection, the player who rejoined could get stuck: the game said \"Reconnected\" but nothing they did reached the other player. The game now checks the connection really works and replaces it within a few seconds if it doesn't." },
+      { "kind": "fix", "text": "\"Reconnected\" only shows once you're actually back in the match." },
+      { "kind": "fix", "text": "Two drops in a row no longer confuse the game." }
+    ]
+  },
+  {
     "id": "2026-10-13-stay-in-match",
     "version": "0.11.2",
     "date": "2026-10-13",

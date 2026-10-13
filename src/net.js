@@ -145,7 +145,9 @@ function wrap(conn, { onMessage, onClose, onQuiet = () => {}, after = () => {} }
   });
   conn.on('close', () => end('lost'));
   conn.on('error', () => end('lost'));
-  return { send, close: () => { send({ type: 'bye' }); end('self'); } };
+  // close(): say goodbye and hang up. drop(): hang up without a goodbye (the
+  // connection seems dead; we're about to replace it, not leave).
+  return { send, close: () => { send({ type: 'bye' }); end('self'); }, drop: () => end('self') };
 }
 
 // Host a room. Resolves with { code, cancel } once the code is live. Every
