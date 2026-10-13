@@ -2,11 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=54dd4eb';
+import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=53acc65';
 import {
-  COPIES_PER_TROOP, LOSS_COINS, MAX_REROLLS, WIN_COINS,
+  COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=54dd4eb';
+} from './game.js?v=53acc65';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=53acc65';
 
 const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
 // Attack-effect colour when a unit doesn't set its own "fx" colour in units.json.
@@ -22,7 +23,7 @@ const secs = (ticks) => +(ticks * TICK_SECONDS).toFixed(1);
 const attackTime = (stats) => secs(stats.attackCd);
 const dps = (stats) => (show(stats.atk) / attackTime(stats)).toFixed(1);
 const SPEED_NAME = { 'very fast': 'Very fast', fast: 'Fast', medium: 'Medium', slow: 'Slow', 'very slow': 'Very slow', 'super slow': 'Super slow' };
-const moveText = (def) => `${SPEED_NAME[def.moveSpeed]} (${MOVE_SPEEDS[def.moveSpeed]}s per tile)`;
+const moveText = (def) => `${SPEED_NAME[def.moveSpeed]} (waits ${MOVE_SPEEDS[def.moveSpeed]}s between 0.5s steps)`;
 
 // Internal combat numbers -> the design sheet's units.
 const show = (v) => +(v / STAT_SCALE).toFixed(1);
@@ -37,7 +38,7 @@ export function describePower(def, star, catalog) {
     case 'empower': {
       const extras = [
         p.teleport && 'teleports next to the farthest enemy and',
-        p.dash && 'dashes in a straight line next to the farthest enemy and',
+        p.dash && 'dashes in a straight line next to the farthest enemy (immune to everything on the way) and',
         `hits for ${p.damagePct}% damage (${show(dmg)})`,
         p.knockback && `, knocking the target back ${p.knockback} squares`,
         p.stun && `${p.knockback ? 'and stunning it' : p.dash ? ', stunning the target and every enemy it dashes through' : 'and stuns the target'} for ${secs(p.stun)}s`,
@@ -60,13 +61,18 @@ export function describePower(def, star, catalog) {
     case 'haste': return `${every}, it's enraged: ${p.hastePct}% faster attacks for ${secs(p.duration)}s.`;
     case 'quake': return `With every ${def.energy}th attack, it shakes the whole board: every enemy takes ${p.damagePct}% damage (${show(dmg)})${p.stun ? ` and is stunned for ${secs(p.stun)}s` : ''}.`;
     case 'splashHeal': return `Every attack also heals your Pokémon directly left, right, above and below the square it hits, for ${p.healPct}% of its damage (${show(Math.floor((def.damage[star ?? 0] * STAT_SCALE * p.healPct) / 100))}).`;
-    case 'selfdestruct': return `When it's knocked out, it stays on its square for ${secs(p.delay)}s, then explodes: enemies within ${p.radius} square take ${p.damagePct}% damage (${show(dmg)}).`;
+    case 'selfdestruct': return `When it's knocked out, it stays on its square for ${secs(p.delay)}s, then explodes: enemies in the ${2 * p.radius + 1}x${2 * p.radius + 1} square around it take ${p.damagePct}% damage (${show(dmg)}).`;
     case 'copy': return `It walks toward the nearest enemy until it's within that enemy's range, then takes ${secs(p.morph)}s to transform into it: it copies its max HP, damage, attack speed, range and crit (not its power or movement) and keeps the same share of HP it had. Transformed, it doesn't move. When that Pokémon faints or nothing is in range, it turns back and walks to the next nearest.`;
     case 'transform': {
       const f = p.form;
-      const fs = `${SPEED_NAME[f.moveSpeed].toLowerCase()} movement, attacks every ${f.secPerHit}s for ${show(Math.round(f.damage[star ?? 0] * STAT_SCALE))} damage, range ${f.range}`;
+      const fs = `${f.hp ? `${show(Math.round(f.hp[star ?? 0] * STAT_SCALE))} HP, ` : ''}${SPEED_NAME[f.moveSpeed].toLowerCase()} movement, attacks every ${f.secPerHit}s for ${show(Math.round(f.damage[star ?? 0] * STAT_SCALE))} damage, range ${f.range}`;
       const morph = p.morph ? ` It takes ${secs(p.morph)}s to transform and can't be hurt, stunned or moved while it does.` : '';
-      return `${p.trigger === 'lowHp' ? `When its HP drops to ${p.hpPct}% or less` : every}, it transforms into ${f.name} for the rest of the fight (${fs}; HP stays the same).${morph}`;
+      const wave = f.shockwave ? ` As it changes, a shock wave stuns every enemy in the ${2 * f.shockwave.radius + 1}x${2 * f.shockwave.radius + 1} around it for ${secs(f.shockwave.stun)}s.` : '';
+      const zip = f.blink ? ' In Star Form it doesn\'t walk: it zips straight to the square beside its target.' : '';
+      const hop = f.hop ? ` Every ${f.energy} attacks it picks a different enemy and zips beside it (if there's no free square, it stays).` : '';
+      const when = p.trigger === 'knockedOut' ? 'When it would be knocked out' : p.trigger === 'lowHp' ? `When its HP drops to ${p.hpPct}% or less` : every;
+      const hpNote = f.hp ? 'with its own HP' : 'HP stays the same';
+      return `${when}, it transforms into ${f.name} for the rest of the fight (${fs}; ${hpNote}).${morph}${wave}${zip}${hop}`;
     }
     case 'opening': return `When the battle starts, it fires a wave down its column. The first enemy hit takes ${p.damagePct}% damage (${show(dmg)}) and is carried all the way to the other end of the board${p.stun ? `, stunned for ${secs(p.stun)}s when it lands` : ''}. Anyone already there is pushed to the side.`;
     default: return '';
@@ -85,10 +91,11 @@ export const powerCadence = (def) => {
   if (p.kind === 'selfdestruct') return 'Power when knocked out';
   if (p.kind === 'copy') return 'Copies the nearest enemy';
   if (p.trigger === 'lowHp') return `Power at ${p.hpPct}% HP`;
+  if (p.trigger === 'knockedOut') return 'Power when knocked out';
   return `Power every ${def.energy} attacks`;
 };
 
-export function createUI({ catalog, viewer, onIntent, onNewGame }) {
+export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProfile = () => {}, onRemoveFriend = () => {}, getProfile = () => ({ name: '', avatar: null, saved: false }), getLog, changelog = [], version = null, build = null }) {
   const $ = (id) => document.getElementById(id);
   const arena = $('arena');
   const layer = $('units');
@@ -119,6 +126,17 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   let shownShop = ''; // last shop drawn, to deal new cards in
   let seenUids = new Set(); // board units already drawn, to drop new ones in
   let started = false; // past the start screen (it shows once, when the game loads)
+  let online = false; // playing a friend (the menu offers Leave instead of New game)
+  let lobbyView = null; // which online-lobby screen is showing, if any
+  // What's new: the newest entry the player has opened, to flag unread updates.
+  const SEEN_KEY = 'poke-tactics-seen-update';
+  const latestUpdate = changelog[0]?.id ?? null;
+  const seenUpdate = () => { try { return localStorage.getItem(SEEN_KEY); } catch { return null; } };
+  const hasUnread = () => latestUpdate !== null && seenUpdate() !== latestUpdate;
+  // "v0.6.1 · dev 79ad49f": the game version (newest What's new entry) and build.
+  const channel = /\/builds\//.test(location.pathname) ? 'build' : /\/dev\//.test(location.pathname) ? 'dev' : null;
+  const versionText = [version && `v${version}`, build && (channel ? `${channel} ${build}` : build)].filter(Boolean).join(' · ');
+  let deadline = null; // online: when planning auto-locks (Date.now() ms), or null
   let peek = null; // unit id shown in the info pop-up (phones), opened with an ⓘ button
   const sheetBackdrop = $('info-backdrop');
 
@@ -172,14 +190,15 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   }
 
   const spriteStyle = (def) => `style="background-image:url('${def.sprite}')"`;
+  // A profile picture: the front-facing frame of a sprite sheet.
+  const avatar = (id, cls = '') => `<span class="avatar ${cls}" style="background-image:url('${avatarUrl(id)}')" aria-hidden="true"></span>`;
+  let profileDraft = null; // the profile screen's unsaved choices
 
   function unitEl(unitId, star, side = 'ally', facing = 'down') {
     const def = catalog[unitId];
     const el = document.createElement('div');
     el.className = `unit ${side}${def.sprite ? ' sprite-unit' : ''}${def.summon ? ' summon' : ''}`;
     el.dataset.type = def.type;
-    // Animation pacing follows movement speed (--step 1 = 0.5s per square).
-    el.style.setProperty('--step', unitStats(def, 0).moveCd / 5);
     const bars = '<div class="bars"><div class="hp"><i></i><b></b></div><div class="mana"><i></i></div></div>';
     const stars = `<div class="stars s${star}">${'★'.repeat(star)}</div>`;
     if (def.sprite) {
@@ -204,7 +223,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   }
 
   function showOverlay(html) {
-    overlay.classList.remove('start-screen');
+    lobbyView = null;
+    overlay.classList.remove('start-screen', 'lobby');
     overlay.querySelector('.card').innerHTML = html;
     overlay.hidden = false;
   }
@@ -309,24 +329,48 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   });
   menuEl.addEventListener('click', (e) => {
     if (e.target === menuEl) return closeMenu();
+    const pic = e.target.closest('button[data-avatar]');
+    if (pic && profileDraft) {
+      profileDraft.avatar = pic.dataset.avatar;
+      for (const b of menuEl.querySelectorAll('button[data-avatar]')) b.setAttribute('aria-pressed', String(b === pic));
+      menuEl.querySelector('.profile-preview .avatar').style.backgroundImage = `url('${avatarUrl(profileDraft.avatar)}')`;
+      togglePicker(false);
+      return;
+    }
     const btn = e.target.closest('button[data-menu]');
     if (!btn) return;
     const action = btn.dataset.menu;
     if (action === 'close') closeMenu();
     else if (action === 'dex') { closeMenu(); openDex(); }
     else if (action === 'new-confirmed') { closeMenu(); onNewGame(); }
+    else if (action === 'leave-confirmed') { closeMenu(); onLobby('leave'); }
+    else if (action === 'copy-log') copyLog(btn);
+    else if (action === 'profile-save') saveProfileForm();
+    else if (action === 'profile-pick') togglePicker();
+    else if (action === 'friend-remove') {
+      const p = onRemoveFriend(btn.dataset.id);
+      menuEl.querySelector('.friend-section').outerHTML = friendsHTML(p.friends);
+    }
+    else if (action === 'start-battle') { closeMenu(); onLobby('open'); }
+    else if (action === 'start-training') { closeMenu(); started = true; overlay.classList.remove('start-screen'); showTeamBuilder(); }
     else openMenu(action); // 'main', 'help', 'new'
   });
   overlay.addEventListener('click', (e) => {
     const btn = e.target.closest('button, [data-dex-info]');
     if (btn?.id === 'battle') { started = true; overlay.classList.remove('start-screen'); return showTeamBuilder(); }
-    if (btn?.id === 'start-help') return openMenu('help');
-    if (btn?.id === 'start-dex') return openDex();
+    if (btn?.id === 'friend') return onLobby('open');
+    if (btn?.dataset.lobby) return onLobby(btn.dataset.lobby, lobbyValues());
+    if (btn?.dataset.copy) return copyText(btn.dataset.copy, btn);
+    if (btn?.id === 'share-link') return navigator.share?.({ title: 'Poke Tactics', text: `Battle me in Poke Tactics! Code: ${btn.dataset.code}`, url: btn.dataset.url }).catch(() => {});
+    if (btn?.id === 'start-menu') return openMenu('main');
+    if (btn?.id === 'profile-chip') return openMenu('profile');
     const info = e.target.closest('[data-dex-info]');
     if (info) return openDex(info.dataset.dexInfo); // a team card's ⓘ: full stats and power
     if (e.target.id === 'open-dex') return openDex();
     if (e.target.id === 'continue') { e.target.disabled = true; onIntent({ type: 'continue' }); }
-    if (e.target.id === 'play-again') { started = true; onNewGame(); }
+    if (e.target.id === 'play-again') { started = true; if (online) { e.target.disabled = true; e.target.textContent = 'Waiting for the host…'; } onNewGame(); }
+    if (e.target.id === 'leave-match') return onLobby('leave');
+    if (e.target.id === 'game-log') return openMenu('log');
     if (state?.phase !== 'team' || me().ready) return;
     const troop = e.target.closest('[data-pick-troop]');
     if (troop) {
@@ -398,9 +442,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
   function hpBox(p, side) {
     const pct = Math.max(0, p.hp);
     return `<div class="hpbox ${side}" title="${esc(p.name)}: ${p.hp} HP">
-      ${side === 'ally' ? `<span class="name">${esc(p.name)}</span>` : `<b>${p.hp}</b>`}
+      ${side === 'ally' ? `${avatar(p.avatar, 'hud-avatar')}<span class="name">${esc(p.name)}</span>` : `<b>${p.hp}</b>`}
       <div class="hpbar"><i style="width:${pct}%"></i></div>
-      ${side === 'ally' ? `<b>${p.hp}</b>` : `<span class="name">${esc(p.name)}</span>`}
+      ${side === 'ally' ? `<b>${p.hp}</b>` : `<span class="name">${esc(p.name)}</span>${avatar(p.avatar, 'hud-avatar')}`}
     </div>`;
   }
 
@@ -413,12 +457,11 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     shownCoins = p.coins;
     hudEl.innerHTML = `
       <span class="chip"><span class="label">Round</span><b>${state.round || '–'}</b></span>
-      <span class="chip coins" title="Win a battle: +${WIN_COINS}. Lose: +${LOSS_COINS}. Coins carry over."><b class="gold${coinsChanged ? ' bump' : ''}">${p.coins}</b></span>
-      <span class="chip" title="Free rerolls. +1 each round, up to ${MAX_REROLLS}."><span class="label">Rerolls</span><b>${p.rerolls}/${MAX_REROLLS}</b></span>
+      <span class="chip coins" title="Each round: +${ROUND_COINS}, plus ${LOST_COIN} for each of your Pokémon knocked out last battle. Coins carry over."><b class="gold${coinsChanged ? ' bump' : ''}">${p.coins}</b></span>
       <div class="duel">${hpBox(p, 'ally')}<span class="vs">VS</span>${hpBox(foe(), 'enemy')}</div>
       <div class="hud-actions">
         <button id="open-dex" class="icon-btn dex-button" title="Every Pokémon's stats (P)">${ICON_DEX}<span class="label-text">Pokédex</span></button>
-        <button id="open-menu" class="icon-btn" title="Menu (M)" aria-label="Menu">${ICON_MENU}<span class="label-text">Menu</span></button>
+        <button id="open-menu" class="icon-btn${hasUnread() ? ' unread' : ''}" title="Menu (M)" aria-label="Menu">${ICON_MENU}<span class="label-text">Menu</span></button>
       </div>`;
   }
 
@@ -440,30 +483,179 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
           <li><b>Fight</b>: the battle plays out by itself. After 30 seconds, sudden death drains everyone until one side falls.</li>
           <li><b>Powers</b>: every Pokémon has one; the blue bar under it fills with each attack. See them all in the Pokédex.</li>
           <li><b>Scouting</b>: from round 2, the faded Pokémon on the enemy side show where your opponent placed theirs last round.</li>
-          <li><b>Coins</b>: you start with 6. Win a battle: +${WIN_COINS}. Lose: +${LOSS_COINS}. Coins carry over.</li>
-          <li><b>Rerolls</b> are free: ${MAX_REROLLS} to start, +1 each round (max ${MAX_REROLLS}). The shop refreshes after every battle.</li>
+          <li><b>Coins</b>: you start with ${START_COINS}. Every round after that: +${ROUND_COINS}, plus ${LOST_COIN} for each of your Pokémon knocked out in the last battle. Coins carry over.</li>
+          <li><b>Shop</b>: it refreshes for free every time you buy, and after every battle. A reroll costs ${REROLL_COST} coin.</li>
           <li><b>Win</b> by bringing your opponent from 100 HP to 0. The loser of a battle loses HP for every Pokémon still standing.</li>
         </ul>
         <p class="muted">Keys: <kbd>D</kbd> reroll · <kbd>F</kbd> fight · <kbd>E</kbd> sell · <kbd>Space</kbd> skip · <kbd>P</kbd> Pokédex · <kbd>M</kbd> menu</p>`;
+    } else if (view === 'news') {
+      try { localStorage.setItem(SEEN_KEY, latestUpdate); } catch {}
+      hudEl.querySelector('#open-menu')?.classList.remove('unread');
+      overlay.querySelector('#start-menu')?.classList.remove('unread');
+      panel.innerHTML = `${close}${back}<h1>What's new</h1>${changelogHTML()}`;
+    } else if (view === 'log') {
+      panel.innerHTML = `${close}${back}<h1>Match log</h1>
+        <p class="muted">Every move both players made this match. Paste it to Claude to analyse the match or test stat changes.</p>
+        <label class="field log-notes" for="log-notes">Your notes (optional)
+          <textarea id="log-notes" rows="4" placeholder="e.g. Mawile felt useless; Tapu Koko's dash won round 6"></textarea></label>
+        <button class="primary" data-menu="copy-log">Copy match log</button>
+        <p class="muted" id="log-status" aria-live="polite"></p>
+        <textarea id="log-text" class="log-text" rows="6" readonly hidden></textarea>`;
+    } else if (view === 'profile') {
+      const p = getProfile();
+      profileDraft = { name: p.name, avatar: p.avatar };
+      panel.innerHTML = `${close}${back}<h1>Profile</h1>
+        <div class="profile-head">
+          <div class="profile-preview">${avatar(profileDraft.avatar, 'big')}
+            <button type="button" class="ghost change-pic" data-menu="profile-pick" aria-expanded="false">Change</button></div>
+          <label class="field">Your name<input id="profile-name" maxlength="${NAME_MAX}" autocomplete="nickname" placeholder="Trainer" value="${esc(p.name)}"></label>
+        </div>
+        <div class="avatar-picker" hidden>
+          <p class="field-label">Pick a profile picture</p>
+          <div class="avatar-grid" role="group" aria-label="Profile picture">${AVATARS.map((id) =>
+            `<button type="button" data-avatar="${id}" aria-pressed="${id === profileDraft.avatar}" title="${esc(catalog[id]?.name ?? id)}">${avatar(id)}</button>`).join('')}</div>
+        </div>
+        <button class="primary profile-save" data-menu="profile-save">Save</button>
+        ${statsHTML(p.stats)}
+        ${friendsHTML(p.friends)}
+        <p class="muted small">Your profile, stats and friends are saved in this browser, so they're here next time you play. Clearing your browser's site data resets them.</p>`;
+      menuEl.hidden = false;
+      panel.querySelector('#profile-name').focus();
+      return;
+    } else if (view === 'leave') {
+      panel.innerHTML = `${close}<h1>Leave the match?</h1>
+        <p class="muted">Your friend will be told you left, and the match ends.</p>
+        <div class="confirm-row"><button data-menu="main">Keep playing</button><button class="danger" data-menu="leave-confirmed">Leave</button></div>`;
     } else if (view === 'new') {
       panel.innerHTML = `${close}<h1>New game?</h1>
         <p class="muted">This match will be lost.</p>
         <div class="confirm-row"><button data-menu="main">Keep playing</button><button class="danger" data-menu="new-confirmed">Start a new game</button></div>`;
+    } else if (!started) {
+      // From the start screen: everything a player can start from here.
+      panel.innerHTML = `${close}<h1>Menu</h1>
+        <div class="menu-list">
+          <button data-menu="start-battle"><span>⚔</span><div>Battle<small>Play a friend online</small></div></button>
+          <button data-menu="start-training"><span>▶</span><div>Training<small>Play against the bot</small></div></button>
+          <button data-menu="profile"><span>☺</span><div>Profile<small>Your name, picture, stats and friends</small></div></button>
+          <button data-menu="news" class="${hasUnread() ? 'unread' : ''}"><span>★</span><div>What's new<small>${esc(changelog[0]?.title ?? 'Updates to the game')}</small></div></button>
+          <button data-menu="help"><span>?</span><div>How to play<small>Rules, controls and keys</small></div></button>
+          <button data-menu="dex"><span>◎</span><div>Pokédex<small>Every Pokémon's stats and power</small></div></button>
+        </div>
+        ${versionText ? `<p class="menu-version">${esc(versionText)}</p>` : ''}`;
     } else {
       panel.innerHTML = `${close}<h1>Menu</h1>
         <div class="menu-list">
           <button data-menu="close"><span>▶</span><div>Resume</div></button>
+          <button data-menu="news" class="${hasUnread() ? 'unread' : ''}"><span>★</span><div>What's new<small>${esc(changelog[0]?.title ?? 'Updates to the game')}</small></div></button>
           <button data-menu="help"><span>?</span><div>How to play<small>Rules, controls and keys</small></div></button>
           <button data-menu="dex"><span>◎</span><div>Pokédex<small>Every Pokémon's stats and power</small></div></button>
-          <button data-menu="new"><span>↻</span><div>New game<small>Start over with a new team</small></div></button>
+          <button data-menu="log"><span>⧉</span><div>Match log<small>Copy every move this match, with notes</small></div></button>
+          <button data-menu="profile"><span>☺</span><div>Profile<small>Your name, picture, stats and friends</small></div></button>
+          ${online
+            ? '<button data-menu="leave"><span>⏏</span><div>Leave match<small>Disconnect from your friend</small></div></button>'
+            : '<button data-menu="new"><span>↻</span><div>New game<small>Start over with a new team</small></div></button>'}
         </div>`;
     }
     menuEl.hidden = false;
     panel.querySelector('button:not(.menu-close)')?.focus();
   }
 
+  const KIND = { buff: 'Buff', nerf: 'Nerf', new: 'New', change: 'Change', fix: 'Fix' };
+  function changelogHTML() {
+    if (!changelog.length) return '<p class="muted">No updates yet.</p>';
+    const date = (d) => { try { return new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }); } catch { return d; } };
+    return `<div class="news">${changelog.map((u) => `
+      <section class="news-entry">
+        <div class="news-date">${esc(date(u.date))}</div>
+        <h2>${esc(u.title)}</h2>
+        ${u.intro ? `<p class="muted">${esc(u.intro)}</p>` : ''}
+        <ul>${u.changes.map((c) => {
+          const def = c.pokemon && catalog[c.pokemon];
+          return `<li>${def ? portrait(def) : '<span class="news-dot" aria-hidden="true"></span>'}
+            <div>${c.kind ? `<span class="tag ${c.kind}">${KIND[c.kind] ?? esc(c.kind)}</span>` : ''}${def && !c.text.startsWith(def.name) ? `<b>${esc(def.name)}</b> ` : ''}${esc(c.text)}</div></li>`;
+        }).join('')}</ul>
+      </section>`).join('')}</div>`;
+  }
+
+  async function copyLog(btn) {
+    const status = menuEl.querySelector('#log-status');
+    btn.disabled = true;
+    status.textContent = 'Getting the match log…';
+    const log = await getLog?.();
+    btn.disabled = false;
+    if (!log?.intents?.length) { status.textContent = 'No moves recorded yet. Start a match first.'; return; }
+    const notes = menuEl.querySelector('#log-notes').value.trim();
+    const text = JSON.stringify({ ...log, notes, viewer: log.names[viewer], copied: new Date().toISOString() });
+    try {
+      await navigator.clipboard.writeText(text);
+      status.textContent = `Copied ${log.intents.length} moves. Paste them into your chat with Claude.`;
+    } catch {
+      const box = menuEl.querySelector('#log-text');
+      box.hidden = false;
+      box.value = text;
+      box.focus();
+      box.select();
+      status.textContent = 'Copying was blocked here. The log is selected below: copy it yourself.';
+    }
+  }
+
   function closeMenu() {
     menuEl.hidden = true;
+    profileDraft = null;
+  }
+
+  // The profile picture options only show after pressing Change.
+  function togglePicker(open) {
+    const picker = menuEl.querySelector('.avatar-picker');
+    const btn = menuEl.querySelector('.change-pic');
+    if (!picker || !btn) return;
+    const show = open ?? picker.hidden;
+    picker.hidden = !show;
+    btn.setAttribute('aria-expanded', String(show));
+    btn.textContent = show ? 'Done' : 'Change';
+    if (show) picker.querySelector('[aria-pressed="true"]')?.focus();
+  }
+
+  function statsHTML(stats) {
+    const total = { wins: 0, losses: 0, draws: 0 };
+    for (const r of [stats.online, stats.training]) for (const k in total) total[k] += r[k];
+    const played = total.wins + total.losses + total.draws;
+    const rate = played ? `${Math.round((100 * total.wins) / played)}%` : '–';
+    const row = (label, r) => `<tr><th>${label}</th><td>${r.wins}</td><td>${r.losses}</td><td>${r.draws}</td></tr>`;
+    const fav = favouriteTroop(stats);
+    const favDef = fav && catalog[fav.id];
+    return `<section class="profile-section">
+        <h2>Stats</h2>
+        <div class="stat-tiles">
+          <div><b>${total.wins}</b><span>Wins</span></div>
+          <div><b>${total.losses}</b><span>Losses</span></div>
+          <div><b>${rate}</b><span>Win rate</span></div>
+        </div>
+        <table class="record"><thead><tr><th></th><th>Wins</th><th>Losses</th><th>Draws</th></tr></thead>
+          <tbody>${row('Online', stats.online)}${row('Training', stats.training)}</tbody></table>
+        <div class="favourite">${favDef
+          ? `${avatar(fav.id)}<div><small>Most used Pokémon</small><b>${esc(favDef.name)}</b><span>in ${fav.battles} ${fav.battles === 1 ? 'battle' : 'battles'}</span></div>`
+          : '<div><small>Most used Pokémon</small><span>Play a battle to find out.</span></div>'}</div>
+      </section>`;
+  }
+
+  function friendsHTML(friends) {
+    return `<section class="profile-section friend-section">
+        <h2>Friends <span class="count">${friends.length}</span></h2>
+        ${friends.length
+          ? `<ul class="friend-list">${friends.map((f) => `<li>${avatar(f.avatar)}<span>${esc(f.name)}</span>
+              <button type="button" class="ghost danger-text" data-menu="friend-remove" data-id="${esc(f.id)}" aria-label="Remove ${esc(f.name)}">Remove</button></li>`).join('')}</ul>`
+          : '<p class="muted">No friends yet.</p>'}
+        <button type="button" class="add-friend" disabled>+ Add friend <small>coming soon</small></button>
+      </section>`;
+  }
+
+  function saveProfileForm() {
+    const name = menuEl.querySelector('#profile-name')?.value ?? '';
+    const saved = onProfile({ name, avatar: profileDraft.avatar });
+    toast(saved?.stored === false ? 'This browser blocked saving. Your profile lasts until you close the page.' : 'Profile saved');
+    closeMenu();
+    if (overlay.classList.contains('start-screen')) showStart();
   }
 
   // Phones: Pokémon details open as a pop-up sheet over the game (the layout
@@ -535,8 +727,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
 
   function renderShop() {
     const p = me();
-    // A new round or a reroll deals the cards in; buying one doesn't.
-    const deal = `${state.round}|${p.rerolls}|${state.phase}`;
+    // A new round, a reroll or a purchase deals new cards in.
+    const deal = `${state.round}|${p.shopRolls}|${state.phase}`;
     const dealt = deal !== shownShop && state.phase === 'planning';
     shownShop = deal;
     shopEl.innerHTML = p.shop.map((id, slot) => {
@@ -555,10 +747,11 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         <span class="left">${p.pool[id]} left in pool</span>
       </button>`;
     }).join('');
-    rerollBtn.textContent = p.rerolls > 0 ? `Reroll (${p.rerolls} left)` : 'No rerolls left';
-    rerollBtn.disabled = !canPlan() || p.rerolls <= 0;
+    rerollBtn.textContent = `Reroll (${REROLL_COST} coin)`;
+    rerollBtn.disabled = !canPlan() || p.coins < REROLL_COST;
     readyBtn.disabled = !canPlan();
-    readyBtn.textContent = state.phase === 'planning' && p.ready ? 'Waiting for opponent…' : 'Fight!';
+    readyBtn.dataset.base = state.phase === 'planning' && p.ready ? 'Waiting for opponent…' : 'Fight!';
+    tickDeadline();
   }
 
   function portrait(def) {
@@ -848,7 +1041,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
           // Hop to the next square over the unit's whole move time, leaning into
           // the move; the walk cycle plays only while it's moving, and a little
           // dust puffs up where it lands.
-          const hopMs = (unitStats(catalog[a.unitId], 0).moveCd * TICK_MS) / speed;
+          const hopMs = (STEP_TICKS * TICK_MS) / speed; // every step takes 0.5s
           a.el.style.setProperty('--mx', Math.sign(p.x - from.x));
           play(a.el, 'hop', hopMs);
           play(a.el, 'moving', hopMs);
@@ -975,12 +1168,12 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         // morph, then the new sprite. A Ditto that turns back and copies again in
         // the same moment shows its own form briefly in between.
         a.range = ev.range;
+        if (ev.maxMana !== undefined) { a.maxMana = ev.maxMana; setMana(0); bars(a); } // a form with its own power counter
         // Ditto takes on the copied Pokémon's max HP (keeping its share of HP).
         if (ev.maxHp && newest()) { a.maxHp = ev.maxHp; a.hp = ev.hp; bars(a); }
         const spr = a.el.querySelector('.sprite');
         const apply = () => {
           if (spr) spr.style.backgroundImage = `url('${ev.sprite}')`;
-          a.el.style.setProperty('--step', ev.moveCd / 5);
           a.el.classList.toggle('copied', Boolean(ev.copy)); // a Ditto-coloured copy
         };
         if (!animate) { apply(); break; }
@@ -996,14 +1189,15 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         break;
       }
       case 'dash': {
-        // Tapu Koko: a straight-line dash, crackling along the way.
+        // Tapu Koko: a straight-line dash, crackling along the way (immune until it lands).
         const from = viewPos(ev.fromX, ev.fromY);
         a.x = ev.x;
         a.y = ev.y;
         const p = viewPos(a.x, a.y);
         face(a, p.x - from.x, p.y - from.y);
         if (!animate) { place(a.el, p.x, p.y); break; }
-        const ms = 240 / speed;
+        const ms = ((ev.duration ?? 2) * TICK_SECONDS * 1000) / speed;
+        play(a.el, 'immune', ms);
         a.el.style.transition = `left ${ms}ms cubic-bezier(.6,0,.2,1), top ${ms}ms cubic-bezier(.6,0,.2,1)`;
         place(a.el, p.x, p.y);
         play(a.el, 'dashing', ms + 80);
@@ -1015,7 +1209,26 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         setTimeout(() => { a.el.style.transition = ''; }, ms);
         break;
       }
+      case 'blink': {
+        // Minior's Star Form: a near-instant zip to its target, leaving sparks.
+        const from = viewPos(ev.fromX, ev.fromY);
+        a.x = ev.x;
+        a.y = ev.y;
+        const p = viewPos(a.x, a.y);
+        face(a, p.x - from.x, p.y - from.y);
+        if (!animate) { place(a.el, p.x, p.y); break; }
+        const ms = 120 / speed;
+        a.el.style.transition = `left ${ms}ms cubic-bezier(.5,0,.2,1), top ${ms}ms cubic-bezier(.5,0,.2,1)`;
+        place(a.el, p.x, p.y);
+        play(a.el, 'dashing', ms + 60);
+        fx(from.x, from.y, 'burst', fxColor(a.unitId), 0.9);
+        if (ev.hop) setTimeout(() => fx(p.x, p.y, 'ring', fxColor(a.unitId), 1.4), ms);
+        setTimeout(() => { a.el.style.transition = ''; }, ms);
+        break;
+      }
       case 'morphStart': { // Minior (immune) or Ditto changing form
+        // Minior's Rock form breaking: Star Form's own, full HP bar.
+        if (ev.maxHp && newest()) { a.maxHp = ev.maxHp; a.hp = ev.hp; a.shield = 0; later(ctx.hitDelay.get(a.id) ?? 0, () => bars(a)); }
         if (!animate) break;
         const immune = catalog[a.unitId].ability?.kind === 'transform';
         const cls = immune ? ['morphing', 'immune'] : ['morphing'];
@@ -1031,6 +1244,14 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
           if (animate) floatText(a, '!!', 'crit');
         });
         break;
+      case 'shockwave': { // Minior's Star Form arrives with a stunning burst
+        if (!animate) break;
+        const p = at();
+        fx(p.x, p.y, 'ring', fxColor(a.unitId), ev.radius * 2 + 1.4);
+        fx(p.x, p.y, 'burst', '#ffe14d', ev.radius * 2 + 0.4);
+        pulse(arena, 'shake');
+        break;
+      }
       case 'explode': {
         a.el.classList.remove('fusing');
         if (!animate) break;
@@ -1118,7 +1339,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     showOverlay(`
       <h1 class="${draw ? '' : won ? 'win' : 'loss'}">${title}</h1>
       <p>${detail}</p>
-      <p class="muted">Round ${round} · Your HP ${me().hp} → ${hpAfter} · +${won ? WIN_COINS : LOSS_COINS} coins</p>
+      <p class="muted">Round ${round} · Your HP ${me().hp} → ${hpAfter} · +${ROUND_COINS + LOST_COIN * lostCount(result, viewer)} coins next round (${ROUND_COINS} + ${lostCount(result, viewer)} for Pokémon lost)</p>
       ${me().ready
         ? '<button disabled>Waiting for opponent…</button>'
         : '<button id="continue" class="primary" autofocus>Continue</button>'}`);
@@ -1139,6 +1360,11 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     </button>`;
   }
 
+  function profileChip() {
+    const p = getProfile();
+    return `<button id="profile-chip" class="profile-chip" title="Your profile">${avatar(p.avatar)}<span>${p.saved && p.name ? esc(p.name) : 'Set up your profile'}</span></button>`;
+  }
+
   function showStart() {
     const ids = troopIds(catalog);
     const parade = ids.map((id, i) => `<span class="walker" style="--i:${i};--n:${ids.length}" data-facing="right"><span class="sprite" ${spriteStyle(catalog[id])}></span></span>`).join('');
@@ -1147,14 +1373,16 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
         <div class="logo"><span>Poke</span><span>Tactics</span></div>
         <p class="tagline">Draft a team, place your Pokémon, and watch them battle it out.</p>
         <div class="parade" aria-hidden="true">${parade}</div>
-        <button id="battle" class="primary battle-btn">Battle</button>
-        <div class="start-links">
-          <button id="start-help" class="ghost">How to play</button>
-          <button id="start-dex" class="ghost">Pokédex</button>
+        <div class="start-modes">
+          <button id="friend" class="primary battle-btn">Battle</button>
+          <button id="battle" class="battle-btn training-btn">Training</button>
         </div>
+        <button id="start-menu" class="icon-btn start-menu${hasUnread() ? ' unread' : ''}" title="Menu (M)" aria-label="Menu">${ICON_MENU}</button>
+        ${profileChip()}
+        ${versionText ? `<div class="start-version">${esc(versionText)}</div>` : ''}
       </div>`);
     overlay.classList.add('start-screen');
-    overlay.querySelector('#battle').focus();
+    overlay.querySelector('#friend').focus();
   }
 
   function showTeamBuilder() {
@@ -1177,7 +1405,171 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
     showOverlay(`
       <h1 class="${state.winner === viewer ? 'win' : 'loss'}">${title}</h1>
       <p>The match lasted ${state.round} rounds. Final HP: ${me().hp} vs ${foe().hp}.</p>
-      <button id="play-again" class="primary">Play again</button>`);
+      ${online && viewer === 1
+        ? '<button id="play-again" class="primary">Ask for a rematch</button>'
+        : `<button id="play-again" class="primary">${online ? 'Rematch' : 'Play again'}</button>`}
+      <button id="game-log" class="ghost">Copy match log</button>
+      ${online ? '<button id="leave-match" class="ghost">Leave</button>' : ''}`);
+  }
+
+  // ---- online lobby ----------------------------------------------------------
+
+  const lobbyValues = () => ({
+    name: overlay.querySelector('#lobby-name')?.value ?? '',
+    code: overlay.querySelector('#lobby-code')?.value ?? '',
+  });
+
+  async function copyText(text, btn) {
+    try {
+      await navigator.clipboard.writeText(text);
+      const was = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = was; }, 1400);
+    } catch { toast('Copy blocked here. Select the text and copy it yourself.'); }
+  }
+
+  // Screens: 'menu' (name, create or join), 'connecting', 'hosting' (show the
+  // code), 'error' and 'disconnected'. main.js decides which one to show.
+  function showLobby(view, data = {}) {
+    const back = '<button class="ghost" data-lobby="home">Back</button>';
+    const html = {
+      menu: () => `
+        <h1>Battle a Friend</h1>
+        <label class="field">Your name<input id="lobby-name" maxlength="16" autocomplete="nickname" placeholder="Trainer" value="${esc(data.name ?? '')}"></label>
+        <div class="lobby-split">
+          <section>
+            <h2>Create a game</h2>
+            <p class="muted">Get a code to send your friend.</p>
+            <button class="primary" data-lobby="host">Create game</button>
+          </section>
+          <section>
+            <h2>Join a game</h2>
+            <p class="muted">Enter the code your friend sent you.</p>
+            <input id="lobby-code" class="code-input" maxlength="7" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCDE" value="${esc(data.code ?? '')}" aria-label="Game code">
+            <button class="primary" data-lobby="join">Join</button>
+          </section>
+        </div>
+        <div class="lobby-actions">${back}<button class="ghost" data-lobby="check">Check my connection</button></div>`,
+      checking: () => `
+        <h1>Checking your connection</h1>
+        <div class="spinner" aria-hidden="true"></div>
+        <p class="muted">This takes a few seconds.</p>`,
+      check: () => {
+        const c = data;
+        const keyText = {
+          ok: [true, 'Relay login is set'],
+          missing: [false, 'No relay login in this version of the game'],
+          unreachable: [false, 'Couldn\'t reach Metered to check the relay key'],
+        }[c.key] ?? [false, `Metered refused the relay key (${esc(c.key.replace('rejected', '').trim() || 'error')})`];
+        const row = ([ok, text]) => `<li class="${ok ? 'ok' : 'bad'}"><span aria-hidden="true">${ok ? '✓' : '✗'}</span>${text}</li>`;
+        const verdict = c.relay
+          ? 'Online play should work from anywhere: if a direct connection is blocked, the relay takes over.'
+          : c.direct
+            ? 'Direct connections work, but the relay doesn\'t. Friends on some networks (many phone carriers, some home routers) won\'t be able to connect to you.'
+            : 'Only same-network connections will work from here. Try a different network.';
+        return `
+        <h1>Connection check</h1>
+        <ul class="check-list">
+          ${row(keyText)}
+          ${row([c.direct, c.direct ? 'Direct connections through your router work' : 'Direct connections are blocked on this network'])}
+          ${row([c.relay, c.relay ? 'Relay connection works' : 'Relay connection not available'])}
+        </ul>
+        <p>${verdict}</p>
+        <button class="primary" data-lobby="open">Back</button>`;
+      },
+      connecting: () => `
+        <h1>Battle a Friend</h1>
+        <div class="spinner" aria-hidden="true"></div>
+        <p>${esc(data.text ?? 'Connecting…')}</p>
+        ${data.cancel ? '<button class="ghost" data-lobby="home">Cancel</button>' : ''}`,
+      hosting: () => `
+        <h1>Your game code</h1>
+        <p class="muted">Send this code to your friend. They open Poke Tactics, tap <b>Battle</b> and enter it.</p>
+        <div class="code-box" aria-label="Game code ${data.code.split('').join(' ')}">${data.code}</div>
+        <div class="lobby-actions">
+          <button data-copy="${esc(data.code)}">Copy code</button>
+          <button data-copy="${esc(data.link)}">Copy invite link</button>
+          ${navigator.share ? `<button id="share-link" data-code="${esc(data.code)}" data-url="${esc(data.link)}">Share…</button>` : ''}
+        </div>
+        <p class="waiting"><span class="spinner small" aria-hidden="true"></span> Waiting for your friend to join…</p>
+        <button class="ghost" data-lobby="cancel">Cancel</button>`,
+      error: () => `
+        <h1>Couldn't connect</h1>
+        <p>${esc(data.error)}</p>
+        <div class="lobby-actions"><button class="primary" data-lobby="open">Try again</button><button data-lobby="check">Check my connection</button>${back}</div>`,
+      disconnected: () => `
+        <h1>Match ended</h1>
+        <p>${esc(data.error)}</p>
+        <button class="primary" data-lobby="home">Back to start</button>`,
+    }[view]();
+    showOverlay(html);
+    overlay.classList.add('lobby');
+    lobbyView = view;
+    const focus = view === 'menu' ? (data.code ? '[data-lobby="join"]' : '#lobby-name') : 'button.primary, button';
+    overlay.querySelector(focus)?.focus();
+  }
+
+  overlay.addEventListener('input', (e) => {
+    if (e.target.id !== 'lobby-code') return;
+    const v = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (v !== e.target.value) e.target.value = v;
+  });
+  overlay.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    if (e.target.id === 'lobby-code') onLobby('join', lobbyValues());
+  });
+
+  // ---- online: planning countdown and the battle intro ----------------------
+
+  // Online, planning locks in automatically at `ms` (Date.now() time); null = no timer.
+  let deadlineTimer = 0;
+  function setDeadline(ms) {
+    deadline = ms;
+    clearInterval(deadlineTimer);
+    if (ms) deadlineTimer = setInterval(tickDeadline, 250);
+    tickDeadline();
+  }
+  function tickDeadline() {
+    const base = readyBtn.dataset.base || readyBtn.textContent;
+    const live = deadline && state?.phase === 'planning';
+    const left = live ? Math.max(0, Math.ceil((deadline - Date.now()) / 1000)) : null;
+    readyBtn.textContent = live ? `${base} 0:${String(left).padStart(2, '0')}` : base;
+    readyBtn.classList.toggle('hurry', live && left <= 10);
+    if (live && left === 0) clearInterval(deadlineTimer);
+  }
+
+  // A Pokémon-battle screen wipe: black bars sweep across, the two trainers'
+  // names meet over a Poké Ball, then the bars sweep away.
+  function playIntro(names, avatars = []) {
+    document.querySelector('#wipe')?.remove();
+    const el = document.createElement('div');
+    el.id = 'wipe';
+    el.setAttribute('aria-live', 'polite');
+    const bars = Array.from({ length: 8 }, (_, i) => `<i style="--i:${i}"></i>`).join('');
+    el.innerHTML = `<div class="bars">${bars}</div>
+      <div class="vs-card">
+        <span class="trainer left">${avatars[0] ? avatar(avatars[0], 'intro-avatar') : ''}${esc(names[0])}</span>
+        <span class="ball" aria-hidden="true"></span>
+        <span class="trainer right">${esc(names[1])}${avatars[1] ? avatar(avatars[1], 'intro-avatar') : ''}</span>
+        <span class="vs-text">VS</span>
+      </div>`;
+    el.setAttribute('aria-label', `${names[0]} versus ${names[1]}`);
+    document.body.append(el);
+    setTimeout(() => el.classList.add('out'), 2300);
+    setTimeout(() => el.remove(), 3100);
+  }
+
+  // Switch between playing the bot (null) and playing a friend as `viewer`.
+  function setOnline(opts) {
+    online = Boolean(opts);
+    viewer = opts?.viewer ?? 0;
+    setDeadline(null);
+    started = online;
+    playback?.cancel();
+    playback = null;
+    state = null; // the next render starts fresh, from this player's side
+    closeMenu();
+    closeDex();
   }
 
   // ---- Pokédex ---------------------------------------------------------------
@@ -1256,5 +1648,5 @@ export function createUI({ catalog, viewer, onIntent, onNewGame }) {
       </div>`;
   }
 
-  return { render, toast };
+  return { render, toast, showLobby, setOnline, setDeadline, playIntro, lobbyView: () => lobbyView };
 }

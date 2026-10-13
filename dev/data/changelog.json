@@ -1,5 +1,14 @@
 [
   {
+    "id": "2026-10-13-online-fix",
+    "version": "0.11.1",
+    "date": "2026-10-13",
+    "title": "Online play fixed",
+    "changes": [
+      { "kind": "fix", "text": "Joining a friend's game works again. Since 0.10.0 the player who joined got stuck on \"Waiting for the game to start\" until it timed out." }
+    ]
+  },
+  {
     "id": "2026-10-13-profile-stats",
     "version": "0.11.0",
     "date": "2026-10-13",
