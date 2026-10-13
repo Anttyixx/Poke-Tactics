@@ -76,7 +76,7 @@
   },
   "combee": {
     "name": "Combee", "summon": true, "sprite": "assets/sprites/combee.png", "fx": "#ffd35a", "type": "warrior", "cost": 0,
-    "hp": [188, 300, 481, 769], "damage": [30, 47, 75, 120], "range": 1, "moveSpeed": "fast", "secPerHit": 0.8, "critChance": 15, "energy": 0,
+    "hp": [188, 300, 481, 769], "damage": [30, 47, 75, 120], "range": 1, "moveSpeed": "very fast", "secPerHit": 0.8, "critChance": 15, "energy": 0,
     "ability": null
   }
 }

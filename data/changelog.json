@@ -1,5 +1,14 @@
 [
   {
+    "id": "2026-10-13-combee",
+    "version": "0.6.4",
+    "date": "2026-10-13",
+    "title": "Faster Combee",
+    "changes": [
+      { "pokemon": "combee", "kind": "buff", "text": "Movement speed fast → very fast (waits 0.35s between steps, was 0.5s)." }
+    ]
+  },
+  {
     "id": "2026-10-12-cleaner-start",
     "version": "0.6.3",
     "date": "2026-10-12",
