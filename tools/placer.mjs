@@ -110,7 +110,7 @@ export function applyLayout(layout, send) {
 //  - a short hill climb (move or swap one Pokémon), then the two best get
 //    `seeds` full-length fights each before choosing.
 // `memo` is one object per player per game; it remembers the last answer.
-export function quickLayout(catalog, state, p, { climb = 10, horizon = 150, tries = 4, seeds = 1, memo = {} } = {}) {
+export function quickLayout(catalog, state, p, { climb = 6, horizon = 150, tries = 4, seeds = 1, memo = {} } = {}) {
   const me = state.players[p];
   const foe = state.players[1 - p];
   if (!me.board.length || !foe.lastBoard?.length) return null;
