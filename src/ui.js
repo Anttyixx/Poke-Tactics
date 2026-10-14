@@ -225,7 +225,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   }
 
   function showOverlay(html) {
-    lobbyView = null;
+    closeLobby();
     overlay.classList.remove('start-screen', 'lobby');
     overlay.querySelector('.card').innerHTML = html;
     overlay.hidden = false;
@@ -368,7 +368,20 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     else if (action === 'start-training') { closeMenu(); started = true; overlay.classList.remove('start-screen'); showTeamBuilder(); }
     else openMenu(action); // 'main', 'help', 'new'
   });
-  overlay.addEventListener('click', (e) => {
+  // Online pop-ups get their own layer over the start screen (see showLobby).
+  const lobbyEl = document.createElement('div');
+  lobbyEl.id = 'lobby';
+  lobbyEl.className = 'lobby';
+  lobbyEl.hidden = true;
+  lobbyEl.setAttribute('role', 'dialog');
+  lobbyEl.innerHTML = '<div class="card"></div>';
+  document.body.append(lobbyEl);
+  function closeLobby() {
+    lobbyEl.hidden = true;
+    lobbyView = null;
+  }
+
+  const overlayClick = (e) => {
     const btn = e.target.closest('button, [data-dex-info]');
     if (btn?.id === 'battle') { started = true; overlay.classList.remove('start-screen'); return showTeamBuilder(); }
     if (btn?.id === 'friend') return onLobby('open');
@@ -399,7 +412,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       if (res?.ok) return;
     }
     if (troop) showTeamBuilder();
-  });
+  };
+  overlay.addEventListener('click', overlayClick);
+  lobbyEl.addEventListener('click', overlayClick);
   controls.addEventListener('click', (e) => {
     if (e.target.id === 'skip') return playback?.skip();
     const s = +e.target.dataset.speed;
@@ -426,6 +441,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   // ---- rendering -----------------------------------------------------------
 
   function render(next) {
+    // An online match is showing: any "connecting…" pop-up is done.
+    if (online) closeLobby();
     // Compare by content, not object identity: in multiplayer every update
     // arrives as a fresh state object deserialized from the network.
     if (!state || next.seed !== state.seed || next.round < state.round) {
@@ -750,7 +767,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   // Friends data changed: refresh whatever shows it.
   function showFriends() {
     renderChallenge();
-    const mine = overlay.querySelector('#my-friend-code');
+    const mine = lobbyEl.querySelector('#my-friend-code');
     const code = getFriends()?.code;
     if (mine && code) {
       mine.textContent = code;
@@ -1533,7 +1550,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   // ---- online lobby ----------------------------------------------------------
 
   const lobbyValues = () => ({
-    friendCode: overlay.querySelector('#lobby-friend-code')?.value ?? '',
+    friendCode: lobbyEl.querySelector('#lobby-friend-code')?.value ?? '',
   });
 
   async function copyText(text, btn) {
@@ -1606,19 +1623,27 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         ${data.log ? `<p class="muted small">Did the connection drop? Copy the match log and send it in: it shows what happened to the connection.</p>
         <button class="ghost" data-copy="${esc(data.log)}">Copy match log</button>` : ''}`,
     }[view]();
-    showOverlay(html);
-    overlay.classList.add('lobby');
+    // No match has started for this player yet: the start screen stays behind
+    // the pop-up (never an empty board).
+    if (!overlay.classList.contains('start-screen') || overlay.hidden) {
+      started = false;
+      playback?.cancel();
+      playback = null;
+      showStart();
+    }
+    lobbyEl.querySelector('.card').innerHTML = html;
+    lobbyEl.hidden = false;
     lobbyView = view;
     const focus = view === 'friend' ? '#lobby-friend-code' : 'button.primary, button';
-    overlay.querySelector(focus)?.focus();
+    lobbyEl.querySelector(focus)?.focus();
   }
 
-  overlay.addEventListener('input', (e) => {
+  lobbyEl.addEventListener('input', (e) => {
     if (e.target.id !== 'lobby-friend-code') return;
     const v = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (v !== e.target.value) e.target.value = v;
   });
-  overlay.addEventListener('keydown', (e) => {
+  lobbyEl.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
     if (e.target.id === 'lobby-friend-code') onLobby('challenge', lobbyValues());
   });

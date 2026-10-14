@@ -709,7 +709,7 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 @keyframes ready-glow { 50% { box-shadow: 0 4px 22px #4d8dffaa, inset 0 1px 0 #ffffff40; } }
 
 /* ---- Modals: overlay (team, results), Pokédex, Menu ---- */
-#overlay, .modal {
+:is(#overlay, #lobby), .modal {
   position: fixed; inset: 0; z-index: 50;
   display: flex; overflow-y: auto;
   padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
@@ -718,9 +718,9 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   animation: fade-in 0.2s ease-out;
 }
 .modal { z-index: 60; }
-#overlay[hidden], .modal[hidden] { display: none; }
+:is(#overlay, #lobby)[hidden], .modal[hidden] { display: none; }
 @keyframes fade-in { from { opacity: 0; } }
-#overlay .card, .dex-panel, .menu-panel {
+:is(#overlay, #lobby) .card, .dex-panel, .menu-panel {
   position: relative;
   margin: auto; /* centred, but scrolls instead of clipping when taller than the screen */
   width: 100%;
@@ -731,18 +731,18 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   animation: pop-in 0.35s var(--spring);
 }
 @keyframes pop-in { from { transform: translateY(14px) scale(0.94); opacity: 0; } }
-#overlay .card { max-width: 440px; padding: 26px 28px; text-align: center; }
-#overlay h1 { font-size: 34px; margin-bottom: 8px; }
-#overlay h1.win { color: var(--good); text-shadow: 0 0 24px #3ddc8466; animation: title-pop 0.6s var(--spring); }
-#overlay h1.loss { color: var(--enemy); animation: title-pop 0.6s var(--spring); }
+:is(#overlay, #lobby) .card { max-width: 440px; padding: 26px 28px; text-align: center; }
+:is(#overlay, #lobby) h1 { font-size: 34px; margin-bottom: 8px; }
+:is(#overlay, #lobby) h1.win { color: var(--good); text-shadow: 0 0 24px #3ddc8466; animation: title-pop 0.6s var(--spring); }
+:is(#overlay, #lobby) h1.loss { color: var(--enemy); animation: title-pop 0.6s var(--spring); }
 @keyframes title-pop { 0% { transform: scale(0.4); opacity: 0; } 100% { transform: scale(1); } }
-#overlay button { margin-top: 10px; min-width: 170px; }
+:is(#overlay, #lobby) button { margin-top: 10px; min-width: 170px; }
 
 /* Team picker */
-#overlay .card:has(.pick-grid) { max-width: 880px; }
+:is(#overlay, #lobby) .card:has(.pick-grid) { max-width: 880px; }
 .pick-title { margin: 16px 0 10px; text-align: left; }
 .pick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
-#overlay .leader-card {
+:is(#overlay, #lobby) .leader-card {
   margin: 0;
   min-width: 0;
   display: flex; flex-direction: column; align-items: center; gap: 4px;
@@ -754,14 +754,14 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   border: 2px solid var(--line);
   text-align: center;
 }
-#overlay .leader-card:hover:not(:disabled) { transform: translateY(-3px); }
+:is(#overlay, #lobby) .leader-card:hover:not(:disabled) { transform: translateY(-3px); }
 .leader-card .portrait { width: 92px; height: 92px; }
 .leader-card b { font-size: 16px; }
 .leader-card .muted { font-size: 12px; }
 .leader-card small { color: #c7cbe0; line-height: 1.35; font-weight: 700; }
-#overlay .leader-card.chosen { border-color: var(--good); box-shadow: 0 0 0 1px var(--good), 0 6px 20px #3ddc8433; }
-#overlay .leader-card.chosen::after { content: "✓"; position: absolute; top: 8px; right: 10px; color: var(--good); font-weight: 900; }
-#overlay .leader-card { position: relative; }
+:is(#overlay, #lobby) .leader-card.chosen { border-color: var(--good); box-shadow: 0 0 0 1px var(--good), 0 6px 20px #3ddc8433; }
+:is(#overlay, #lobby) .leader-card.chosen::after { content: "✓"; position: absolute; top: 8px; right: 10px; color: var(--good); font-weight: 900; }
+:is(#overlay, #lobby) .leader-card { position: relative; }
 #start-team { margin-top: 18px; }
 
 /* Menu */
@@ -873,8 +873,8 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   #shop-actions { flex-direction: row; width: 100%; }
   #shop-actions button { padding: 10px; }
   .pick-grid { grid-template-columns: 1fr; }
-  #overlay .card { padding: 20px 16px; }
-  #overlay .leader-card { display: grid; grid-template-columns: 72px 1fr; text-align: left; align-items: center; column-gap: 12px; }
+  :is(#overlay, #lobby) .card { padding: 20px 16px; }
+  :is(#overlay, #lobby) .leader-card { display: grid; grid-template-columns: 72px 1fr; text-align: left; align-items: center; column-gap: 12px; }
   .leader-card .portrait { width: 72px; height: 72px; grid-row: span 3; }
   .dex-body { grid-template-columns: 1fr; }
   .dex-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -959,7 +959,7 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   border: 2px solid var(--line);
   overflow: hidden;
 }
-#overlay .team-card { min-width: 0; margin: 0; }
+:is(#overlay, #lobby) .team-card { min-width: 0; margin: 0; }
 .team-card::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--type, var(--line)); }
 .team-card:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 8px 18px #0007; }
 .team-card .portrait { width: 64px; height: 64px; margin: -6px 0 -4px; }
@@ -972,8 +972,8 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 }
 .team-card .info-btn { display: grid; left: auto; right: 8px; top: 8px; }
 .team-card .info-btn:hover { background: var(--ally); border-color: #fff; }
-#overlay .card:has(.team-grid) { max-width: 720px; }
-#overlay .team-card.chosen, #overlay .team-card.chosen:hover:not(:disabled) {
+:is(#overlay, #lobby) .card:has(.team-grid) { max-width: 720px; }
+:is(#overlay, #lobby) .team-card.chosen, :is(#overlay, #lobby) .team-card.chosen:hover:not(:disabled) {
   border-color: var(--good);
   background:
     radial-gradient(120% 80% at 50% 0%, #3ddc8433, transparent 70%),
@@ -1001,7 +1001,7 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   .team-card { padding: 24px 2px 8px; border-radius: 12px; }
   .team-card .portrait { width: 50px; height: 50px; }
   .team-card .name { font-size: 11px; letter-spacing: -0.02em; }
-  #overlay .card:has(.team-grid) { padding: 18px 10px; }
+  :is(#overlay, #lobby) .card:has(.team-grid) { padding: 18px 10px; }
   .team-card .check { width: 18px; height: 18px; font-size: 11px; margin-left: 8px; }
   .team-card .type { display: none; }
   .team-card .cost { top: 5px; left: 5px; font-size: 11px; padding: 0 6px; }
@@ -1050,12 +1050,12 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 
 /* ---- Online play ---- */
 .start-modes { display: flex; flex-direction: column; align-items: center; gap: 14px; }
-#overlay .start-modes .battle-btn { margin-top: 0; }
+:is(#overlay, #lobby) .start-modes .battle-btn { margin-top: 0; }
 .training-btn { background: var(--panel-2); border: 2px solid var(--line-2); }
 .training-btn:hover:not(:disabled) { border-color: var(--ally); }
-#overlay.lobby .card { max-width: 560px; }
-#overlay.lobby h2 { font-size: 17px; margin: 0 0 4px; }
-#overlay.lobby p { margin: 6px 0; }
+:is(#overlay, #lobby).lobby .card { max-width: 560px; }
+:is(#overlay, #lobby).lobby h2 { font-size: 17px; margin: 0 0 4px; }
+:is(#overlay, #lobby).lobby p { margin: 6px 0; }
 .field { display: grid; gap: 6px; text-align: left; font-weight: 800; font-size: 13px; color: var(--muted); margin: 14px auto 4px; max-width: 320px; }
 .field input, .code-input {
   font: inherit; font-size: 16px; color: var(--text); background: var(--bg); border: 1px solid var(--line-2);
@@ -1066,13 +1066,13 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .code-input::placeholder { color: var(--line-2); }
 .lobby-split { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0 6px; }
 .lobby-split section { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; align-content: start; }
-#overlay .lobby-split button { min-width: 0; width: 100%; }
+:is(#overlay, #lobby) .lobby-split button { min-width: 0; width: 100%; }
 .code-box {
   font-size: clamp(34px, 11vw, 52px); font-weight: 900; letter-spacing: 0.22em; padding: 12px 0 12px 0.22em; margin: 14px 0 6px;
   background: var(--bg); border: 2px dashed var(--line-2); border-radius: 14px; color: var(--gold); user-select: all;
 }
 .lobby-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
-#overlay .lobby-actions button { min-width: 0; }
+:is(#overlay, #lobby) .lobby-actions button { min-width: 0; }
 .waiting { display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--muted); margin-top: 14px !important; }
 .spinner { width: 34px; height: 34px; margin: 14px auto 6px; border-radius: 50%; border: 4px solid var(--line-2); border-top-color: var(--ally); animation: spin 0.8s linear infinite; }
 .spinner.small { width: 16px; height: 16px; margin: 0; border-width: 3px; }
@@ -1162,19 +1162,19 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .tag.nerf { background: #4a1f2b; color: #ffb3c0; }
 .tag.new { background: #1d3561; color: #a9c9ff; }
 .tag.fix { background: #4a3b16; color: #ffd98a; }
-#overlay .start-links button { min-width: 0; }
+:is(#overlay, #lobby) .start-links button { min-width: 0; }
 /* Smallest phones: the Pokédex stat table tightens up instead of overflowing. */
 @media (max-width: 360px) {
   .dex-table { font-size: 13px; }
   .dex-table th, .dex-table td { padding: 6px 4px; }
 }
 @media (max-width: 520px) {
-  #overlay .start-links { gap: 8px; }
-  #overlay .start-links button { padding: 8px 11px; font-size: 14px; }
+  :is(#overlay, #lobby) .start-links { gap: 8px; }
+  :is(#overlay, #lobby) .start-links button { padding: 8px 11px; font-size: 14px; }
 }
 
 /* Start screen: menu button (top right) and version (bottom left). */
-#overlay .start-menu {
+:is(#overlay, #lobby) .start-menu {
   position: fixed; z-index: 2; margin: 0; min-width: 0;
   top: max(14px, env(safe-area-inset-top)); right: max(14px, env(safe-area-inset-right));
 }
@@ -1198,13 +1198,13 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 #wipe .intro-avatar { width: 1.6em; height: 1.6em; margin: 0 0.15em; vertical-align: -0.35em; }
 
 /* Start screen: profile chip (top left). */
-#overlay .profile-chip {
+:is(#overlay, #lobby) .profile-chip {
   position: fixed; z-index: 2; margin: 0; min-width: 0; max-width: calc(100vw - 100px);
   top: max(14px, env(safe-area-inset-top)); left: max(14px, env(safe-area-inset-left));
   display: flex; align-items: center; gap: 10px; padding: 6px 14px 6px 6px; border-radius: 12px; font-size: 14px;
 }
-#overlay .profile-chip span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#overlay .profile-chip .avatar { width: 36px; height: 36px; background-color: #ffffff14; border-radius: 8px; background-size: 80%; }
+:is(#overlay, #lobby) .profile-chip span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+:is(#overlay, #lobby) .profile-chip .avatar { width: 36px; height: 36px; background-color: #ffffff14; border-radius: 8px; background-size: 80%; }
 #overlay:not(.start-screen) .profile-chip { display: none; }
 
 /* Profile screen. */
@@ -1262,7 +1262,7 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .lobby-queue { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-top: 14px; display: grid; justify-items: center; }
 .lobby-queue h2 { margin: 0 0 4px; }
 .lobby-queue p { margin: 0 0 10px; }
-#overlay .lobby-queue button { width: 100%; max-width: 320px; }
+:is(#overlay, #lobby) .lobby-queue button { width: 100%; max-width: 320px; }
 .lobby-or { margin: 14px 0 -6px; font-size: 13px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
 
 /* Friends screen. */
@@ -1300,6 +1300,10 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .challenge-card .buttons { display: flex; gap: 8px; margin-left: auto; }
 .challenge-card .buttons button { min-width: 0; padding: 8px 14px; }
 @keyframes challenge-in { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }
-#overlay .friends-shortcut { width: 100%; margin: 12px 0 0; min-width: 0; }
+:is(#overlay, #lobby) .friends-shortcut { width: 100%; margin: 12px 0 0; min-width: 0; }
 .my-code { margin-top: 16px; display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--muted); font-size: 14px; font-weight: 700; }
 .my-code b { font: 900 18px/1 ui-monospace, Menlo, monospace; letter-spacing: 0.1em; color: var(--text, #fff); }
+
+/* Online pop-ups (waiting for an opponent, battle a friend, match ended…)
+   sit over the start screen, not over an empty board. */
+#lobby { z-index: 56; }

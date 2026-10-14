@@ -1,5 +1,15 @@
 [
   {
+    "id": "2026-10-14-popups-on-start",
+    "version": "0.14.1",
+    "date": "2026-10-14",
+    "title": "Pop-ups over the start screen",
+    "changes": [
+      { "kind": "fix", "text": "Waiting for opponent, Battle a friend and the other online pop-ups now appear over the start screen instead of an empty battle board." },
+      { "kind": "fix", "text": "Rejoining a match after a reload no longer leaves the \"Getting back into your match\" pop-up covering the board." }
+    ]
+  },
+  {
     "id": "2026-10-14-simpler-battle",
     "version": "0.14.0",
     "date": "2026-10-14",
