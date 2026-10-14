@@ -11,7 +11,7 @@
 // copies drawn from the pool; buying one places it straight onto the board and
 // removes that copy from the pool. There is no bench and no limit on how many
 // troops are on the board (which starts empty), but each troop can only be there once: buying a troop
-// you already field levels that one up instead (1 copy = 0★, 2 = 1★, 3 = 2★, 4 = 3★).
+// you already field levels that one up instead (1 copy = ★, 2 = ★★, 3 = ★★★, 4 = shiny; stored as star 0-3).
 //
 // Intents:
 //   { type: 'chooseTeam', troops }            before round 1; troops = TEAM_SIZE distinct troop ids

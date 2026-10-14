@@ -25,6 +25,12 @@ const dps = (stats) => (show(stats.atk) / attackTime(stats)).toFixed(1);
 const SPEED_NAME = { 'very fast': 'Very fast', fast: 'Fast', medium: 'Medium', slow: 'Slow', 'very slow': 'Very slow', 'super slow': 'Super slow' };
 const moveText = (def) => `${SPEED_NAME[def.moveSpeed]} (waits ${MOVE_SPEEDS[def.moveSpeed]}s between 0.5s steps)`;
 
+// Level marks: ★, ★★, ★★★, then the shiny star for a full set of copies.
+// `star` is the internal level (0-3).
+export const LEVEL_NAMES = ['1 star', '2 stars', '3 stars', 'Shiny'];
+export const levelMark = (star) => (star >= 3 ? '<span class="star-max" title="Shiny">★</span>' : '★'.repeat(star + 1));
+const levelSpan = (star) => `<span class="stars s${star}" aria-label="${LEVEL_NAMES[star]}">${levelMark(star)}</span>`;
+
 // Internal combat numbers -> the design sheet's units.
 const show = (v) => +(v / STAT_SCALE).toFixed(1);
 
@@ -53,9 +59,9 @@ export function describePower(def, star, catalog) {
       const counts = p.countByStar ?? [1, 1, 1, 1];
       const n = star === null ? (counts.every((c) => c === counts[0]) ? counts[0] : null) : counts[star];
       const what = n === null
-        ? `${counts.join(' / ')} ${name} (Base / ★ / ★★ / ★★★)`
+        ? `${counts.join(' / ')} ${name} (${[0, 1, 2, 3].map(levelMark).join(' / ')})`
         : n === 1 ? `a ${name}` : `${n} ${name}`;
-      return `${every}, it summons ${what} beside it (sides first, then behind, in front, and the diagonals).${p.summonStar !== undefined ? ` ${name} ${n === 1 ? 'is' : 'are'} always ${p.summonStar ? '★'.repeat(p.summonStar) : 'base level'}.` : ` ${n === 1 ? 'It comes' : 'They come'} at ${def.name}'s star level.`}`;
+      return `${every}, it summons ${what} beside it (sides first, then behind, in front, and the diagonals).${p.summonStar !== undefined ? ` ${name} ${n === 1 ? 'is' : 'are'} always ${levelMark(p.summonStar)}.` : ` ${n === 1 ? 'It comes' : 'They come'} at ${def.name}'s star level.`}`;
     }
     case 'stealth': return `${every}, it turns invisible for ${secs(p.duration)}s${p.hastePct ? ` and attacks ${p.hastePct}% faster` : ''}. Enemies can't target or follow it while it's invisible.`;
     case 'haste': return `${every}, it's enraged: ${p.hastePct}% faster attacks for ${secs(p.duration)}s.`;
@@ -204,7 +210,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     el.className = `unit ${side}${def.sprite ? ' sprite-unit' : ''}${def.summon ? ' summon' : ''}`;
     el.dataset.type = def.type;
     const bars = '<div class="bars"><div class="hp"><i></i><b></b></div><div class="mana"><i></i></div></div>';
-    const stars = `<div class="stars s${star}">${'★'.repeat(star)}</div>`;
+    const stars = `<div class="stars s${star}">${levelMark(star)}</div>`;
     if (def.sprite) {
       el.dataset.facing = facing;
       el.style.setProperty('--fx', fxColor(unitId));
@@ -214,7 +220,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     } else {
       el.innerHTML = `
         <div class="token"><span>${def.emoji}</span></div>
-        <div class="stars s${star}">${'★'.repeat(star)}</div>${bars}`;
+        <div class="stars s${star}">${levelMark(star)}</div>${bars}`;
     }
     return el;
   }
@@ -512,7 +518,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         <ul class="help-list">
           <li><b>Build a team</b> of ${teamSize(catalog)} Pokémon. Each puts ${COPIES_PER_TROOP} copies into your own pool, and your shop draws from it. Your board starts empty.</li>
           <li><b>Buy</b>: tap a shop card, then a square on your half (or drag the card onto the board).</li>
-          <li><b>Level up</b>: each Pokémon can be on the board only once. Buying another copy levels it up: 2 copies = ★, 3 = ★★, 4 = ★★★.</li>
+          <li><b>Level up</b>: each Pokémon can be on the board only once. Buying another copy levels it up: 1 copy = ★, 2 = ★★, 3 = ★★★, 4 = ${levelMark(3)} (shiny).</li>
           <li><b>Position</b>: the row nearest the middle is your front line. Tap a Pokémon, then a square, to move it (onto another Pokémon swaps them).</li>
           <li><b>Sell</b>: drag a Pokémon onto the shop, or tap it and press Sell. Its copies go back to your pool.</li>
           <li><b>Fight</b>: the battle plays out by itself. After 30 seconds, sudden death drains everyone until one side falls.</li>
@@ -879,7 +885,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         <span class="type">${def.type}</span>
         <span class="cost c${def.cost}" title="${def.cost} coins">${def.cost}</span>
         <span class="info-btn" data-info="${slot}" role="button" aria-label="${esc(def.name)} info">i</span>
-        ${fielded(p, id) ? `<span class="levelup">Level up ${'★'.repeat(fielded(p, id).star) || 'Base'}→${'★'.repeat(fielded(p, id).star + 1)}</span>` : ''}
+        ${fielded(p, id) ? `<span class="levelup">Level up ${levelMark(fielded(p, id).star)} → ${levelMark(fielded(p, id).star + 1)}</span>` : ''}
         <span class="left">${p.pool[id]} left in pool</span>
       </button>`;
     }).join('');
@@ -926,13 +932,13 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     const onBoard = shopId && !inst ? fielded(me(), shopId) : null;
     const hint = !shopId || inst || peek ? ''
       : onBoard
-        ? `<p class="hint">You already have a ${esc(def.name)} on the board. Click anywhere on your side to level it up to ${'★'.repeat(onBoard.star + 1)}.</p>`
+        ? `<p class="hint">You already have a ${esc(def.name)} on the board. Click anywhere on your side to level it up to ${levelSpan(onBoard.star + 1)}.</p>`
         : '<p class="hint">Click an empty square on your side to place it.</p>';
     infoEl.innerHTML = `
       <button id="info-close" class="ghost" aria-label="Close">✕</button>
       <div class="info-head" data-type="${def.type}">
         ${portrait(def)}
-        <div><h2>${esc(def.name)} <span class="stars s${star}">${'★'.repeat(star)}</span></h2>
+        <div><h2>${esc(def.name)} ${levelSpan(star)}</h2>
         <span class="sub">${def.type} · ${def.cost} coins · ${copies}/${COPIES_PER_TROOP} copies</span></div>
       </div>
       ${hint}
@@ -1717,7 +1723,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   // Every Pokémon's stats, read straight from units.json, so new Pokémon and
   // stat changes show up here automatically. The grid shows a card per
   // Pokémon (summons too); a card opens its entry, where a button steps through
-  // the levels (Base, ★, ★★, ★★★). A transformation is its own entry, opened
+  // the levels (★, ★★, ★★★, shiny). A transformation is its own entry, opened
   // from the Pokémon that transforms.
 
   let dexForm = false; // showing dexPick's transformed form
@@ -1769,7 +1775,6 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     if (key === 'escape' || key === 'p') closeDex();
   }
 
-  const levelName = (star) => (star ? '★'.repeat(star) : 'Base');
   const typeName = (type) => type[0].toUpperCase() + type.slice(1);
   const summonIds = () => Object.keys(catalog).filter((id) => catalog[id].summon).sort();
   // A transformed form as a Pokémon of its own (HP carries over when the form has none).
@@ -1863,8 +1868,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
             <h2>${esc(def.name)}</h2>
             <p class="dex-tags"><span class="dex-type">${typeName(def.type)}</span><span>${tag}</span></p>
             <div class="dex-levels">
-              <button id="dex-level" class="dex-level" title="Next level (→)"><small>Level</small><b>${levelName(star)}</b><i aria-hidden="true">▸</i></button>
-              <span class="dex-pips">${[0, 1, 2, 3].map((s) => `<button data-dex-star="${s}" class="${s === star ? 'on' : ''}" aria-label="${levelName(s)}" title="${levelName(s)}"></button>`).join('')}</span>
+              <button id="dex-level" class="dex-level" title="Next level (→)"><small>Level</small><b class="stars s${star}">${levelMark(star)}</b><i aria-hidden="true">▸</i></button>
+              <span class="dex-pips">${[0, 1, 2, 3].map((s) => `<button data-dex-star="${s}" class="${s === star ? 'on' : ''}" aria-label="${LEVEL_NAMES[s]}" title="${LEVEL_NAMES[s]}"></button>`).join('')}</span>
             </div>
           </div>
         </div>
@@ -1882,7 +1887,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         </div>
         ${power}
         ${links.length ? `<div class="dex-links">${links.join('')}</div>` : ''}
-        <p class="muted dex-foot">${def.summon ? 'A summon comes at the level the power gives it.' : 'Copies on the board: 1 = Base, 2 = ★, 3 = ★★, 4 = ★★★.'} A crit deals ${CRIT_PCT - 100}% more damage.</p>
+        <p class="muted dex-foot">${def.summon ? 'A summon comes at the level the power gives it.' : `Copies on the board: 1 = ★, 2 = ★★, 3 = ★★★, 4 = ${levelMark(3)} (shiny).`} A crit deals ${CRIT_PCT - 100}% more damage.</p>
       </section>`;
   }
 

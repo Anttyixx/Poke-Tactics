@@ -178,7 +178,7 @@ test a set of changes together. Team styles to pit against each other live in `A
 - **Buying:** click a shop troop, then a square on your half (or drag the card onto the board). A copy
   you buy leaves your pool. There is no bench.
 - **Stars:** each troop can be on the board only once. Buying a copy of a troop you already field levels
-  that troop up instead (click anywhere on your side): 1 copy = 0★, 2 = ★, 3 = ★★, 4 = ★★★. Each
+  that troop up instead (click anywhere on your side): 1 copy = ★, 2 = ★★, 3 = ★★★, 4 = a shiny star. Each
   Pokémon lists its own HP and damage for every star level. Moving a troop onto another unit swaps them.
 - **Selling:** drag a troop onto the shop (or press Sell) for its cost in coins per copy; all its copies go back
   to your pool.
