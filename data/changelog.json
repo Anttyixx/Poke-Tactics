@@ -1,5 +1,17 @@
 [
   {
+    "id": "2026-10-14-dreepy-next-action",
+    "version": "0.33.0",
+    "date": "2026-10-14",
+    "title": "Dreepy launch",
+    "intro": "Dragapult fires its Dreepy as soon as it can, and you can see them fly.",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "change", "text": "With both Dreepy home, Dragapult's next action fires them, whether it was about to attack or take a step. Before, it only fired in place of an attack." },
+      { "pokemon": "dragapult", "kind": "nerf", "text": "Attacks every 1.7s (was 1.5s), since it now fires its Dreepy sooner." },
+      { "pokemon": "dreepy", "kind": "new", "text": "Dreepy are shot out of Dragapult in a low arc, small at first and full size as they land." }
+    ]
+  },
+  {
     "id": "2026-10-14-dreepy-facing",
     "version": "0.32.2",
     "date": "2026-10-14",

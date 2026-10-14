@@ -961,6 +961,22 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     if (!target) return;
     u.target = target.id;
 
+    // Dragapult's Dragon Darts: with both Dreepy home, its next action (an
+    // attack, or a step toward its target) fires them instead, at the end of
+    // the tick. With a power counter it also needs that many attacks since the
+    // last pair.
+    if (u.powerKind === 'darts' && u.stepTimer === 0 && dartsHome(u) && !(u.maxMana > 0 && u.mana < u.maxMana)
+      && (!u.power.outside || units.some((e) => e.side !== u.side && visible(e) && reach(u, at(e)) > u.power.outside))) {
+      const inRange = reach(u, at(target)) <= u.range;
+      if (inRange ? u.atkTimer === 0 : u.moveTimer === 0) {
+        if (u.maxMana > 0) u.mana = 0;
+        dartQueue.push(u);
+        if (inRange) u.atkTimer = cooldown(u); // it used its attack
+        else u.moveTimer = slowed(u.moveCd, u); // it used its step: waits as if it had walked
+        return;
+      }
+    }
+
     // "Every N attacks, the next attack ..." powers.
     const empowered = u.powerKind === 'empower' && u.maxMana > 0 && u.mana >= u.maxMana;
     if (empowered && u.power.teleport && u.atkTimer === 0) {
@@ -1001,12 +1017,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     if (reach(u, at(target)) <= u.range) {
       // It can't attack mid-step; waiting between steps doesn't stop it.
       if (u.atkTimer > 0 || u.stepTimer > 0) return;
-      if (u.powerKind === 'darts' && dartsHome(u) && !(u.maxMana > 0 && u.mana < u.maxMana) && (!u.power.outside || units.some((e) => e.side !== u.side && visible(e) && reach(u, at(e)) > u.power.outside))) {
-        // Its Dreepy go instead of this attack (at the end of the tick). With a
-        // power counter, it also needs that many attacks since the last pair.
-        if (u.maxMana > 0) u.mana = 0;
-        dartQueue.push(u);
-      } else if (empowered) {
+      if (empowered) {
         powerStrike(u, target);
       } else {
         if (u.maxMana > 0) u.mana = Math.min(u.maxMana, u.mana + MANA_PER_ATTACK);
