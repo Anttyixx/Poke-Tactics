@@ -1,5 +1,16 @@
 [
   {
+    "id": "2026-10-14-dreepy-quick-return",
+    "version": "0.29.0",
+    "date": "2026-10-14",
+    "title": "Dreepy zip home",
+    "intro": "Knocked-out Dreepy fly straight back to Dragapult, and Dragapult winds up between pairs instead.",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "change", "text": "A knocked-out Dreepy flies back to Dragapult in 0.5 seconds (was 3)." },
+      { "pokemon": "dragapult", "kind": "change", "text": "Dragapult starts each fight ready to fire. After firing a pair, it needs 3 attacks (shown on its power bar) and both Dreepy home before it fires again." }
+    ]
+  },
+  {
     "id": "2026-10-14-dreepy-impact-stun",
     "version": "0.28.0",
     "date": "2026-10-14",

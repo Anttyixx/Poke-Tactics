@@ -79,7 +79,9 @@ test('unit catalog is well formed, and every unit has a sprite that exists', () 
     } else {
       assert.ok(Number.isInteger(u.cost) && u.cost > 0, `${id}.cost`);
       assert.ok(kinds.has(u.ability?.kind), `${id} power kind`);
-      assert.ok(counted(u.ability) ? Number.isInteger(u.energy) && u.energy > 0 : u.energy === 0, `${id}.energy`);
+      // Dragon Darts may have a counter (attacks needed between pairs) or not.
+  const optional = (a) => a?.kind === 'darts';
+  assert.ok(optional(u.ability) ? Number.isInteger(u.energy) && u.energy >= 0 : counted(u.ability) ? Number.isInteger(u.energy) && u.energy > 0 : u.energy === 0, `${id}.energy`);
       if (u.ability.form) {
         const f = u.ability.form;
         assert.ok(existsSync(new URL(`../${f.sprite}`, import.meta.url)) && Object.hasOwn(MOVE_SPEEDS, f.moveSpeed) && f.damage.length === COPIES_PER_TROOP, `${id} form`);
@@ -813,7 +815,9 @@ test('Dragon Darts (Dragapult): fires 2 Dreepy into the 2 farthest enemies, shov
   // replaces an attack.
   const attacks = evs(r, 'attack', d);
   assert.ok(attacks.length && attacks[0].t > darts[0].t, 'it attacks only after the first volley');
-  assert.ok(attacks.some((a) => a.t > darts[0].t && a.t < again.t), 'attacks normally while the Dreepy are out');
+  // With a power counter it needs that many attacks between pairs.
+  const need = catalog.dragapult.energy ?? 0;
+  assert.ok(attacks.filter((a) => a.t > darts[0].t && a.t < again.t).length >= need, `at least ${need} attacks between pairs`);
   assert.ok(!attacks.some((a) => a.t === again.t), 'no attack on the tick it fires');
   assert.ok(again.t - Math.max(...attacks.filter((a) => a.t < again.t).map((a) => a.t)) >= Math.round(catalog.dragapult.secPerHit * 10), 'the volley waits for its attack timer, like an attack');
   assert.equal(darts.filter((e) => e.t === again.t).length, p.count, 'as a pair');

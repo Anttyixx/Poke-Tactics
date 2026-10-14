@@ -994,8 +994,11 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     if (reach(u, at(target)) <= u.range) {
       // It can't attack mid-step; waiting between steps doesn't stop it.
       if (u.atkTimer > 0 || u.stepTimer > 0) return;
-      if (u.powerKind === 'darts' && dartsHome(u)) {
-        dartQueue.push(u); // its Dreepy go instead of this attack (at the end of the tick)
+      if (u.powerKind === 'darts' && dartsHome(u) && !(u.maxMana > 0 && u.mana < u.maxMana)) {
+        // Its Dreepy go instead of this attack (at the end of the tick). With a
+        // power counter, it also needs that many attacks since the last pair.
+        if (u.maxMana > 0) u.mana = 0;
+        dartQueue.push(u);
       } else if (empowered) {
         powerStrike(u, target);
       } else {
@@ -1025,7 +1028,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
             if (o && o.side === u.side) heal(o, amount, u);
           }
         }
-        if (u.powerKind && u.powerKind !== 'empower' && u.powerKind !== 'bind' && u.maxMana > 0 && u.mana >= u.maxMana) instantPower(u, target);
+        if (u.powerKind && u.powerKind !== 'empower' && u.powerKind !== 'bind' && u.powerKind !== 'darts' && u.maxMana > 0 && u.mana >= u.maxMana) instantPower(u, target);
       }
       u.atkTimer = cooldown(u);
     } else if (u.moveTimer === 0 && u.stepTimer === 0 && (u.blink || u.copyOf === null) && heldBack(u)) {
