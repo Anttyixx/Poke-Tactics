@@ -15,7 +15,15 @@ class_name = "Room"
 name = "QUEUE"
 class_name = "Queue"
 
+[[durable_objects.bindings]]
+name = "PRESENCE"
+class_name = "Presence"
+
 # The free plan only has SQLite-backed Durable Objects.
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Room", "Queue"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Presence"]

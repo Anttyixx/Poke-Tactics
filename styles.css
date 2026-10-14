@@ -1264,3 +1264,40 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .lobby-queue p { margin: 0 0 10px; }
 #overlay .lobby-queue button { width: 100%; max-width: 320px; }
 .lobby-or { margin: 14px 0 -6px; font-size: 13px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* Friends screen. */
+.friends-body h2 { font-size: 15px; margin: 18px 0 8px; display: flex; align-items: center; gap: 8px; }
+.friends-body h2 .count { font-size: 12px; color: var(--muted); background: var(--panel-2); border-radius: 99px; padding: 2px 8px; }
+.friend-code { display: flex; align-items: center; gap: 10px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.friend-code span { font-size: 12px; font-weight: 800; color: var(--muted); }
+.friend-code b { flex: 1; font: 900 22px/1 ui-monospace, Menlo, monospace; letter-spacing: 0.12em; }
+.friend-code button { min-width: 0; padding: 6px 12px; font-size: 13px; }
+.add-friend-row { display: flex; gap: 8px; margin-top: 10px; }
+.add-friend-row input { flex: 1; min-width: 0; font: 800 16px/1 ui-monospace, Menlo, monospace; letter-spacing: 0.1em; text-transform: uppercase; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line-2); background: #0b0f1c; color: inherit; }
+.add-friend-row button { min-width: 0; white-space: nowrap; }
+.friend-list .who { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.friend-list .who b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.friend-list .status { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; color: var(--muted); }
+.friend-list .status i { width: 8px; height: 8px; border-radius: 50%; background: #5d6478; }
+.friend-list .status.online i { background: #3ddc84; box-shadow: 0 0 6px #3ddc84aa; }
+.friend-list .status.battling i { background: var(--gold); }
+.friend-list li > small.muted { font-size: 12px; white-space: nowrap; }
+.small-btn { min-width: 0 !important; padding: 5px 10px !important; font-size: 13px !important; white-space: nowrap; }
+.danger-text.confirm { background: #ff4d6d22; }
+
+/* A battle request from (or to) a friend, over any screen. */
+.challenge-card {
+  position: fixed; z-index: 70; left: 50%; translate: -50% 0;
+  bottom: max(16px, env(safe-area-inset-bottom)); width: min(440px, calc(100vw - 24px));
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 12px 14px; border-radius: 16px;
+  background: linear-gradient(180deg, #24304f, #1a2033); border: 1px solid #ffc93c88;
+  box-shadow: 0 12px 32px #000a; animation: challenge-in 0.35s cubic-bezier(.2,.9,.3,1.2);
+}
+.challenge-card .avatar.big { width: 48px; height: 48px; background-color: #ffffff12; border-radius: 12px; background-size: 80%; }
+.challenge-card .text { flex: 1; min-width: 150px; display: grid; gap: 2px; }
+.challenge-card .text small { color: var(--muted); font-weight: 700; }
+.challenge-card .buttons { display: flex; gap: 8px; margin-left: auto; }
+.challenge-card .buttons button { min-width: 0; padding: 8px 14px; }
+@keyframes challenge-in { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+#overlay .friends-shortcut { width: 100%; margin: 12px 0 0; min-width: 0; }

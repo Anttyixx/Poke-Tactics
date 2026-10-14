@@ -95,7 +95,7 @@ export const powerCadence = (def) => {
   return `Power every ${def.energy} attacks`;
 };
 
-export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProfile = () => {}, onRemoveFriend = () => {}, getLastLog = () => null, getProfile = () => ({ name: '', avatar: null, saved: false }), getLog, changelog = [], version = null, build = null }) {
+export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProfile = () => {}, onFriends = () => {}, getFriends = () => null, getLastLog = () => null, getProfile = () => ({ name: '', avatar: null, saved: false }), getLog, changelog = [], version = null, build = null }) {
   const $ = (id) => document.getElementById(id);
   const arena = $('arena');
   const layer = $('units');
@@ -193,6 +193,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   // A profile picture: the front-facing frame of a sprite sheet.
   const avatar = (id, cls = '') => `<span class="avatar ${cls}" style="background-image:url('${avatarUrl(id)}')" aria-hidden="true"></span>`;
   let profileDraft = null; // the profile screen's unsaved choices
+  let menuView = null; // which menu screen is open
+  let confirmRemove = null; // friend code whose Remove was tapped once
 
   function unitEl(unitId, star, side = 'ally', facing = 'down') {
     const def = catalog[unitId];
@@ -327,6 +329,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     if (btn?.id === 'open-dex') openDex();
     if (btn?.id === 'open-menu') openMenu();
   });
+  menuEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.target.id === 'friend-code') { onFriends('add', e.target.value); e.target.value = ''; }
+  });
   menuEl.addEventListener('click', (e) => {
     if (e.target === menuEl) return closeMenu();
     const pic = e.target.closest('button[data-avatar]');
@@ -348,9 +353,15 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     else if (action === 'copy-text') copyText(btn.dataset.copy, btn);
     else if (action === 'profile-save') saveProfileForm();
     else if (action === 'profile-pick') togglePicker();
-    else if (action === 'friend-remove') {
-      const p = onRemoveFriend(btn.dataset.id);
-      menuEl.querySelector('.friend-section').outerHTML = friendsHTML(p.friends);
+    else if (action === 'friend-add') {
+      const input = menuEl.querySelector('#friend-code');
+      onFriends('add', input?.value ?? '');
+      if (input) input.value = '';
+    } else if (action === 'friend') {
+      // Removing a friend takes a second tap ("Remove?") so it's never by accident.
+      if (btn.dataset.action === 'remove' && confirmRemove !== btn.dataset.code) { confirmRemove = btn.dataset.code; return showFriends(); }
+      confirmRemove = null;
+      onFriends(btn.dataset.action, btn.dataset.code);
     }
     else if (action === 'start-battle') { closeMenu(); onLobby('open'); }
     else if (action === 'start-training') { closeMenu(); started = true; overlay.classList.remove('start-screen'); showTeamBuilder(); }
@@ -360,6 +371,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     const btn = e.target.closest('button, [data-dex-info]');
     if (btn?.id === 'battle') { started = true; overlay.classList.remove('start-screen'); return showTeamBuilder(); }
     if (btn?.id === 'friend') return onLobby('open');
+    if (btn?.dataset.lobby === 'friends') return openMenu('friends');
     if (btn?.dataset.lobby) return onLobby(btn.dataset.lobby, lobbyValues());
     if (btn?.dataset.copy) return copyText(btn.dataset.copy, btn);
     if (btn?.id === 'share-link') return navigator.share?.({ title: 'Poke Tactics', text: `Battle me in Poke Tactics! Code: ${btn.dataset.code}`, url: btn.dataset.url }).catch(() => {});
@@ -469,6 +481,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   // ---- menu ------------------------------------------------------------------
 
   function openMenu(view = 'main') {
+    menuView = view;
     const panel = menuEl.querySelector('.menu-panel');
     panel.classList.toggle('help', view === 'help');
     const close = '<button class="menu-close ghost" data-menu="close" aria-label="Close">✕</button>';
@@ -518,10 +531,15 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         </div>
         <button class="primary profile-save" data-menu="profile-save">Save</button>
         ${statsHTML(p.stats)}
-        ${friendsHTML(p.friends)}
-        <p class="muted small">Your profile, stats and friends are saved in this browser, so they're here next time you play. Clearing your browser's site data resets them.</p>`;
+        ${friendsSummaryHTML()}
+        <p class="muted small">Your profile and stats are saved in this browser, so they're here next time you play. Clearing your browser's site data resets them.</p>`;
       menuEl.hidden = false;
       panel.querySelector('#profile-name').focus();
+      return;
+    } else if (view === 'friends') {
+      confirmRemove = null;
+      panel.innerHTML = `${close}${back}<h1>Friends</h1><div class="friends-body">${friendsViewHTML()}</div>`;
+      menuEl.hidden = false;
       return;
     } else if (view === 'lastlog') {
       const text = getLastLog() ?? '';
@@ -543,7 +561,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         <div class="menu-list">
           <button data-menu="start-battle"><span>⚔</span><div>Battle<small>Play a friend online</small></div></button>
           <button data-menu="start-training"><span>▶</span><div>Training<small>Play against the bot</small></div></button>
-          <button data-menu="profile"><span>☺</span><div>Profile<small>Your name, picture, stats and friends</small></div></button>
+          <button data-menu="friends" class="${getFriends()?.incoming.length ? 'unread' : ''}"><span>♥</span><div>Friends<small>${friendsSub()}</small></div></button>
+          <button data-menu="profile"><span>☺</span><div>Profile<small>Your name, picture and stats</small></div></button>
           <button data-menu="news" class="${hasUnread() ? 'unread' : ''}"><span>★</span><div>What's new<small>${esc(changelog[0]?.title ?? 'Updates to the game')}</small></div></button>
           <button data-menu="help"><span>?</span><div>How to play<small>Rules, controls and keys</small></div></button>
           <button data-menu="dex"><span>◎</span><div>Pokédex<small>Every Pokémon's stats and power</small></div></button>
@@ -558,7 +577,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
           <button data-menu="help"><span>?</span><div>How to play<small>Rules, controls and keys</small></div></button>
           <button data-menu="dex"><span>◎</span><div>Pokédex<small>Every Pokémon's stats and power</small></div></button>
           <button data-menu="log"><span>⧉</span><div>Match log<small>Copy every move this match, with notes</small></div></button>
-          <button data-menu="profile"><span>☺</span><div>Profile<small>Your name, picture, stats and friends</small></div></button>
+          <button data-menu="friends" class="${getFriends()?.incoming.length ? 'unread' : ''}"><span>♥</span><div>Friends<small>${friendsSub()}</small></div></button>
+          <button data-menu="profile"><span>☺</span><div>Profile<small>Your name, picture and stats</small></div></button>
           ${online
             ? '<button data-menu="leave"><span>⏏</span><div>Leave match<small>Disconnect from your friend</small></div></button>'
             : '<button data-menu="new"><span>↻</span><div>New game<small>Start over with a new team</small></div></button>'}
@@ -647,15 +667,94 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       </section>`;
   }
 
-  function friendsHTML(friends) {
-    return `<section class="profile-section friend-section">
-        <h2>Friends <span class="count">${friends.length}</span></h2>
-        ${friends.length
-          ? `<ul class="friend-list">${friends.map((f) => `<li>${avatar(f.avatar)}<span>${esc(f.name)}</span>
-              <button type="button" class="ghost danger-text" data-menu="friend-remove" data-id="${esc(f.id)}" aria-label="Remove ${esc(f.name)}">Remove</button></li>`).join('')}</ul>`
-          : '<p class="muted">No friends yet.</p>'}
-        <button type="button" class="add-friend" disabled>+ Add friend <small>coming soon</small></button>
+  const onlineCount = () => (getFriends()?.friends ?? []).filter((f) => f.status !== 'offline').length;
+  const friendsSub = () => {
+    const f = getFriends();
+    if (!f?.available) return 'Add friends and battle them';
+    const n = onlineCount();
+    return f.incoming.length ? `${f.incoming.length} friend request${f.incoming.length === 1 ? '' : 's'}` : n ? `${n} online now` : 'Add friends and battle them';
+  };
+
+  function friendsSummaryHTML() {
+    const f = getFriends();
+    return `<section class="profile-section">
+        <h2>Friends <span class="count">${f?.friends.length ?? 0}</span></h2>
+        <p class="muted">${f?.available ? `${onlineCount()} online now.` : 'Friends need online play.'}</p>
+        <button type="button" data-menu="friends">Open friends</button>
       </section>`;
+  }
+
+  const STATUS_TEXT = { online: 'Online', battling: 'In a battle', offline: 'Offline' };
+  const ORDER = { online: 0, battling: 1, offline: 2 };
+
+  // The Friends screen: your code, adding friends, requests, and the friends
+  // list with who's online and a Battle button.
+  function friendsViewHTML() {
+    const f = getFriends();
+    if (!f?.available) return '<p class="muted">Friends need online play, which isn\'t available in this copy of the game.</p>';
+    const person = (p, actions) => `<li>${avatar(p.avatar)}<div class="who"><b>${esc(p.name)}</b>${p.status ? `<small class="status ${p.status}"><i></i>${STATUS_TEXT[p.status]}</small>` : ''}</div>${actions}</li>`;
+    const act = (action, p, label, cls = '') => `<button type="button" class="${cls}" data-menu="friend" data-action="${action}" data-code="${esc(p.code)}">${label}</button>`;
+    const list = [...f.friends].sort((a, b) => ORDER[a.status] - ORDER[b.status] || a.name.localeCompare(b.name));
+    return `
+      <div class="friend-code"><span>Your friend code</span><b>${esc(f.code ?? '······')}</b>
+        ${f.code ? `<button type="button" data-menu="copy-text" data-copy="${esc(f.code)}">Copy</button>` : ''}</div>
+      <div class="add-friend-row">
+        <input id="friend-code" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Friend's code" aria-label="Friend's code">
+        <button type="button" class="primary" data-menu="friend-add">Add friend</button>
+      </div>
+      ${f.incoming.length ? `<h2>Friend requests</h2><ul class="friend-list">${f.incoming.map((p) => person({ ...p, status: null },
+        `${act('accept', p, 'Accept', 'primary small-btn')}${act('decline', p, 'Decline', 'ghost small-btn')}`)).join('')}</ul>` : ''}
+      ${f.outgoing.length ? `<h2>Sent requests</h2><ul class="friend-list">${f.outgoing.map((p) => person({ ...p, status: null },
+        `<small class="muted">Waiting</small>${act('cancel', p, 'Cancel', 'ghost small-btn')}`)).join('')}</ul>` : ''}
+      <h2>Friends <span class="count">${f.friends.length}</span></h2>
+      ${list.length ? `<ul class="friend-list">${list.map((p) => person(p,
+        `${p.status === 'online'
+          ? (f.waiting?.code === p.code ? '<small class="muted">Asking…</small>' : act('challenge', p, '⚔ Battle', 'primary small-btn'))
+          : ''}${act('remove', p, confirmRemove === p.code ? 'Remove?' : '✕', `ghost small-btn danger-text${confirmRemove === p.code ? ' confirm' : ''}`)}`)).join('')}</ul>`
+        : '<p class="muted">No friends yet. Send a friend your code, or add theirs.</p>'}
+      <p class="muted small">Friends are saved on the game server and linked to this browser. Another browser or device, or clearing this site's data, starts a new friends list with a new code.</p>`;
+  }
+
+  // Battle requests, shown over whatever screen is up.
+  let challengeEl = null;
+  let challengeTimer = 0;
+  function renderChallenge() {
+    const f = getFriends();
+    const ch = f?.challenge;
+    const w = f?.waiting;
+    clearInterval(challengeTimer);
+    if (!ch && !w) { challengeEl?.remove(); challengeEl = null; return; }
+    if (!challengeEl) {
+      challengeEl = document.createElement('div');
+      challengeEl.className = 'challenge-card';
+      challengeEl.setAttribute('role', 'alertdialog');
+      challengeEl.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-challenge]');
+        if (btn) onFriends(btn.dataset.challenge);
+      });
+      document.body.append(challengeEl);
+    }
+    const p = ch ?? w;
+    const left = () => Math.max(0, Math.ceil((p.until - Date.now()) / 1000));
+    challengeEl.innerHTML = ch
+      ? `${avatar(ch.avatar, 'big')}<div class="text"><b>${esc(ch.name)} wants to battle!</b><small><span class="left">${left()}</span>s to answer</small></div>
+         <div class="buttons"><button class="primary" data-challenge="accept-battle">Accept</button><button class="ghost" data-challenge="decline-battle">Decline</button></div>`
+      : `${avatar(w.avatar, 'big')}<div class="text"><b>Asking ${esc(w.name)} to battle…</b><small><span class="left">${left()}</span>s for them to answer</small></div>
+         <div class="buttons"><button class="ghost" data-challenge="withdraw">Cancel</button></div>`;
+    challengeTimer = setInterval(() => { const el = challengeEl?.querySelector('.left'); if (el) el.textContent = left(); }, 1000);
+  }
+
+  // Friends data changed: refresh whatever shows it.
+  function showFriends() {
+    renderChallenge();
+    if (menuEl.hidden || menuView !== 'friends') return;
+    const panel = menuEl.querySelector('.menu-panel');
+    const input = panel.querySelector('#friend-code');
+    const typed = input?.value ?? '';
+    const focused = document.activeElement === input;
+    panel.querySelector('.friends-body').innerHTML = friendsViewHTML();
+    const fresh = panel.querySelector('#friend-code');
+    if (fresh) { fresh.value = typed; if (focused) fresh.focus(); }
   }
 
   function saveProfileForm() {
@@ -1450,6 +1549,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
           <button class="primary" data-lobby="queue">Find a match</button>
         </section>
         <p class="lobby-or">or play a friend</p>
+        <button class="friends-shortcut" data-lobby="friends">♥ Battle someone on your friends list</button>
         <div class="lobby-split">
           <section>
             <h2>Create a game</h2>
@@ -1682,5 +1782,5 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     netEl.textContent = text;
   }
 
-  return { render, toast, showLobby, setOnline, setDeadline, setNetStatus, netStatus: () => netEl?.textContent ?? null, playIntro, lobbyView: () => lobbyView };
+  return { render, toast, showLobby, showFriends, setOnline, setDeadline, setNetStatus, netStatus: () => netEl?.textContent ?? null, playIntro, lobbyView: () => lobbyView };
 }
