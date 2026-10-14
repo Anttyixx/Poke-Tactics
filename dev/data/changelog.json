@@ -1,5 +1,14 @@
 [
   {
+    "id": "2026-10-14-dreepy-10",
+    "version": "0.29.1",
+    "date": "2026-10-14",
+    "title": "Dreepy nibble",
+    "changes": [
+      { "pokemon": "dreepy", "kind": "nerf", "text": "Damage 15 → 10 at ★ (still an attack every 0.5s). Their landing hit (40) and stun are unchanged." }
+    ]
+  },
+  {
     "id": "2026-10-14-dreepy-quick-return",
     "version": "0.29.0",
     "date": "2026-10-14",

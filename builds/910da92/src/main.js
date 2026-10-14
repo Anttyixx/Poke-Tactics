@@ -6,19 +6,20 @@
 //            the player does and shows the state the server sends back
 //            (connection: src/online.js).
 
-import { createGame, applyIntent } from './game.js?v=fbb6cd7';
-import { botTurn } from './bot.js?v=fbb6cd7';
-import { createUI } from './ui.js?v=fbb6cd7';
-import { hashSeed } from './rng.js?v=fbb6cd7';
-import { connect, isCode, playerId, serverUrl, checkServer, netLog, note } from './online.js?v=fbb6cd7';
-import { loadProfile, saveProfile, recordBattle, recordMatch, BOT_AVATAR } from './profile.js?v=fbb6cd7';
+import { createGame, applyIntent } from './game.js?v=910da92';
+import { botTurn } from './bot.js?v=910da92';
+import { fightSummary } from './matchlog.js?v=910da92';
+import { createUI } from './ui.js?v=910da92';
+import { hashSeed } from './rng.js?v=910da92';
+import { connect, isCode, playerId, serverUrl, checkServer, netLog, note } from './online.js?v=910da92';
+import { loadProfile, saveProfile, recordBattle, recordMatch, BOT_AVATAR } from './profile.js?v=910da92';
 
 const BOT = 1;
 
-const catalogText = await (await fetch('data/units.json?v=fbb6cd7')).text();
+const catalogText = await (await fetch('data/units.json?v=910da92')).text();
 const catalog = JSON.parse(catalogText);
 // What's new: newest first. Add an entry to data/changelog.json with each update.
-const changelog = await fetch('data/changelog.json?v=fbb6cd7').then((r) => (r.ok ? r.json() : [])).catch(() => []);
+const changelog = await fetch('data/changelog.json?v=910da92').then((r) => (r.ok ? r.json() : [])).catch(() => []);
 // Which deploy this is (the deploy tags every file with ?v=<commit>). The
 // server only lets in players on its own build, so everyone runs the same rules.
 const BUILD = new URL(import.meta.url).searchParams.get('v') ?? 'local';
@@ -59,7 +60,7 @@ const ui = createUI({
 // The match log, plus this browser's connection log (what happened to the
 // online connection, for looking into drops).
 function getLog() {
-  const withNet = (log) => (log && mode !== 'bot' ? { ...log, connection: [...netLog] } : log);
+  const withNet = (log) => (log ? { ...log, fights: fightsFor(log.seed), ...(mode !== 'bot' && { connection: [...netLog] }) } : log);
   if (mode !== 'online') return Promise.resolve(withNet(matchLog));
   return new Promise((resolve) => {
     const done = (log) => resolve(withNet(log));
@@ -92,7 +93,7 @@ function clearSession() {
 const LAST_LOG_KEY = 'poke-tactics-last-log';
 function lastLogText() {
   const base = matchLog ?? { format: 'poke-tactics-match', v: 1, build: BUILD, mode: 'pvp', seed: state?.seed, names: state?.players.map((p) => p.name) };
-  return JSON.stringify({ ...base, code: roomCode, player: me, round: state?.round, connection: [...netLog], copied: new Date().toISOString() });
+  return JSON.stringify({ ...base, code: roomCode, player: me, round: state?.round, fights: fightsFor(base.seed), connection: [...netLog], copied: new Date().toISOString() });
 }
 function saveLastLog() {
   if (mode === 'bot') return;
@@ -173,6 +174,16 @@ function show() {
   ui.render(state);
 }
 
+// Each fight's seed and chance outcomes (Alcremie's flavours, Minior's hops,
+// crits), kept for the match log so a reader can see what happened by chance.
+let fightLog = { seed: null, list: [] };
+function noteFight() {
+  if (fightLog.seed !== state.seed) fightLog = { seed: state.seed, list: [] };
+  if (fightLog.list.some((f) => f.round === state.combat.round)) return;
+  fightLog.list.push(fightSummary(state.combat, catalog, state.players.map((p) => p.name)));
+}
+const fightsFor = (seed) => (fightLog.seed === seed ? fightLog.list : []);
+
 // Profile stats: each battle counts the Pokémon this player fielded; each
 // finished match counts a win, loss or draw (online and training separately).
 let trackedKey = null;
@@ -181,6 +192,7 @@ function trackStats() {
   if (key === trackedKey) return;
   trackedKey = key;
   if (state.phase === 'combat') {
+    noteFight();
     profile = recordBattle(state.combat.result.initial.filter((u) => u.side === me && !u.summoned).map((u) => u.unitId));
   } else if (state.phase === 'gameover') {
     profile = recordMatch(mode === 'bot' ? 'training' : 'online', state.winner === me ? 'win' : state.winner === null ? 'draw' : 'loss');
