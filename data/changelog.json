@@ -1,5 +1,15 @@
 [
   {
+    "id": "2026-10-14-dex-power-numbers",
+    "version": "0.16.6",
+    "date": "2026-10-14",
+    "title": "Pokédex: steadier power text",
+    "changes": [
+      { "kind": "fix", "text": "Changing the level in a Pokédex entry no longer refreshes the power description: only its numbers count to their new values." },
+      { "kind": "change", "text": "Removed the copies-on-the-board note at the bottom of Pokédex entries." }
+    ]
+  },
+  {
     "id": "2026-10-14-dex-stat-shape",
     "version": "0.16.5",
     "date": "2026-10-14",
