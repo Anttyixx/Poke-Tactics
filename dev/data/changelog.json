@@ -1,5 +1,14 @@
 [
   {
+    "id": "2026-10-14-dex-shape-headroom",
+    "version": "0.16.10",
+    "date": "2026-10-14",
+    "title": "Pokédex: stat shape headroom",
+    "changes": [
+      { "kind": "change", "text": "The stat shape leaves a little room at the edge: even the best Pokémon in a stat stops just short of the outer diamond." }
+    ]
+  },
+  {
     "id": "2026-10-14-shiny-sparkle",
     "version": "0.16.9",
     "date": "2026-10-14",

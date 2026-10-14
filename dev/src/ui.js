@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=0eb0cd2';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=faf64fb';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=0eb0cd2';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=0eb0cd2';
+} from './game.js?v=faf64fb';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=faf64fb';
 
 const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
 // Attack-effect colour when a unit doesn't set its own "fx" colour in units.json.
@@ -1812,8 +1812,10 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   }
 
   // The stat shape: four stats as a diamond. Each point is the stat divided
-  // by the highest value any Pokémon (or form) has at the same level, so the
-  // edge of the diamond is the best there is and shapes compare directly.
+  // by the highest value any Pokémon (or form) has at the same level, plus a
+  // little headroom (RADAR_HEADROOM), so even the best stops short of the edge
+  // and shapes compare directly.
+  const RADAR_HEADROOM = 1.12; // the best reaches ~89% of the way out
   const RADAR = [['hp', 'HP'], ['atk', 'Damage'], ['spd', 'Atk speed'], ['move', 'Speed']];
   const radarRaw = (def, star) => {
     const st = unitStats(def, star);
@@ -1830,7 +1832,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       radarTop[star] = Object.fromEntries(RADAR.map(([k]) => [k, Math.max(...raws.map((r) => r[k]))]));
     }
     const raw = radarRaw(def, star);
-    return RADAR.map(([k]) => Math.min(1, raw[k] / radarTop[star][k]));
+    return RADAR.map(([k]) => Math.min(1, raw[k] / (radarTop[star][k] * RADAR_HEADROOM)));
   }
   const RADAR_R = 70;
   const radarPoint = (i, v) => {
