@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=a4c8199';
+import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=caff0c0';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=a4c8199';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=a4c8199';
+} from './game.js?v=caff0c0';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=caff0c0';
 
 const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
 // Attack-effect colour when a unit doesn't set its own "fx" colour in units.json.
@@ -1885,6 +1885,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         f.hop && `Every ${f.energy} attacks it picks a different enemy and zips beside it (if there's no free square, it stays).`,
       ].filter(Boolean).join(' ');
     } else if (def.ability) power = describePower(def, star, catalog);
+    // Numbers in the text get their own spans so a level change can count them.
+    power = power.split(/(<[^>]+>)/).map((part) => (part.startsWith('<') ? part : part.replace(/\d+(?:\.\d+)?/g, '<span class="pn">$&</span>'))).join('');
     return {
       hp: String(show(st.hp)), dmg: String(show(st.atk)), crit: String(show(Math.floor((st.atk * CRIT_PCT) / 100))),
       dps: dps(st), pdmg: pd === null ? null : String(show(pd)), power,
@@ -1911,9 +1913,16 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       const next = v[el.dataset.k];
       if (next == null) continue;
       if (el.dataset.k === 'power') {
-        if (el.innerHTML === next) continue;
-        el.classList.add('swap');
-        setTimeout(() => { el.innerHTML = next; el.classList.remove('swap'); }, 120);
+        // Same sentence with different numbers (the usual case): only the
+        // numbers count to their new values. Otherwise swap the text in place.
+        const nums = [...el.querySelectorAll('.pn')];
+        const tmp = document.createElement('p');
+        tmp.innerHTML = next;
+        const nextNums = [...tmp.querySelectorAll('.pn')];
+        const shape = (root) => root.innerHTML.replace(/<span class="pn">[^<]*<\/span>/g, '#');
+        if (nums.length === nextNums.length && shape(el) === shape(tmp)) {
+          nums.forEach((n, i) => { if (n.textContent !== nextNums[i].textContent) tweenNumber(n, nextNums[i].textContent); });
+        } else el.innerHTML = next;
         continue;
       }
       const b = el.querySelector('b');
@@ -1926,14 +1935,15 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     const places = (to.split('.')[1] ?? '').length;
     const start = performance.now();
     const ms = 280;
-    el.parentElement.classList.add('changing');
+    const chip = el.closest('.dex-chip');
+    chip?.classList.add('changing');
     cancelAnimationFrame(el._tween);
     const step = (now) => {
       const k = Math.min(1, (now - start) / ms);
       const e = 1 - (1 - k) ** 3;
       el.textContent = k < 1 ? (from + (target - from) * e).toFixed(places) : to;
       if (k < 1) el._tween = requestAnimationFrame(step);
-      else el.parentElement.classList.remove('changing');
+      else chip?.classList.remove('changing');
     };
     el._tween = requestAnimationFrame(step);
   }
@@ -2026,7 +2036,6 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
           <div class="dex-chips">${chips}</div>
         </div>
         ${power}
-        <p class="muted dex-foot">${def.summon ? 'A summon comes at the level the power gives it.' : `Copies on the board: 1 = ★, 2 = ★★, 3 = ★★★, 4 = ${levelMark(3)} (shiny).`} A crit deals ${CRIT_PCT - 100}% more damage.</p>
       </section>`;
   }
 
