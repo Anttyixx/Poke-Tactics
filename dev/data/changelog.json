@@ -1,5 +1,18 @@
 [
   {
+    "id": "2026-10-14-friends",
+    "version": "0.13.0",
+    "date": "2026-10-14",
+    "title": "Friends",
+    "intro": "Add your friends, see when they're online, and challenge them to a battle with one tap.",
+    "changes": [
+      { "kind": "new", "text": "Friends (in the menu): you have a friend code to share. Enter a friend's code to send them a friend request." },
+      { "kind": "new", "text": "See which friends are online, in a battle or offline, as it happens." },
+      { "kind": "new", "text": "Tap ⚔ Battle next to an online friend to send a battle request. They get 45 seconds to accept, and the match starts straight away." },
+      { "kind": "change", "text": "The Battle screen has a shortcut to your friends list, next to Find a match and game codes." }
+    ]
+  },
+  {
     "id": "2026-10-14-game-server",
     "version": "0.12.0",
     "date": "2026-10-14",

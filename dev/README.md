@@ -42,6 +42,13 @@ play a friend: one taps **Create game** and gets a 5-character code (and an invi
   (`poke-tactics-last-log`): **Copy match log** on the "Match ended" screen, or **Menu → Last
   online match log** on the start screen.
 - **Battle → Check my connection** checks the server can be reached and is on your version.
+- **Friends** (menu → Friends, or the shortcut on the Battle screen): every player has a 6-character
+  friend code. Enter a friend's code to send a request; they accept or decline. The list shows who's
+  online, in a battle or offline, live. **⚔ Battle** on an online friend sends a battle request
+  (they have 45 seconds to accept); accepting starts a match for the two of you. A player already in
+  an online match automatically turns requests down. Friends are kept on the server (the `Presence`
+  Durable Object), tied to the browser's player id: another browser or device, or cleared site data,
+  is a new player with a new code. Friend codes are the only id players see of each other.
 
 ### The server (`server/`)
 

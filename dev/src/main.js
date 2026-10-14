@@ -6,19 +6,19 @@
 //            the player does and shows the state the server sends back
 //            (connection: src/online.js).
 
-import { createGame, applyIntent } from './game.js?v=bd99db0';
-import { botTurn } from './bot.js?v=bd99db0';
-import { createUI } from './ui.js?v=bd99db0';
-import { hashSeed } from './rng.js?v=bd99db0';
-import { connect, cleanCode, isCode, randomCode, playerId, serverUrl, checkServer, netLog, note } from './online.js?v=bd99db0';
-import { loadProfile, saveProfile, recordBattle, recordMatch, removeFriend, cleanName, BOT_AVATAR } from './profile.js?v=bd99db0';
+import { createGame, applyIntent } from './game.js?v=271d960';
+import { botTurn } from './bot.js?v=271d960';
+import { createUI } from './ui.js?v=271d960';
+import { hashSeed } from './rng.js?v=271d960';
+import { connect, cleanCode, isCode, randomCode, playerId, serverUrl, checkServer, netLog, note } from './online.js?v=271d960';
+import { loadProfile, saveProfile, recordBattle, recordMatch, cleanName, BOT_AVATAR } from './profile.js?v=271d960';
 
 const BOT = 1;
 
-const catalogText = await (await fetch('data/units.json?v=bd99db0')).text();
+const catalogText = await (await fetch('data/units.json?v=271d960')).text();
 const catalog = JSON.parse(catalogText);
 // What's new: newest first. Add an entry to data/changelog.json with each update.
-const changelog = await fetch('data/changelog.json?v=bd99db0').then((r) => (r.ok ? r.json() : [])).catch(() => []);
+const changelog = await fetch('data/changelog.json?v=271d960').then((r) => (r.ok ? r.json() : [])).catch(() => []);
 // Which deploy this is (the deploy tags every file with ?v=<commit>). The
 // server only lets in players on its own build, so everyone runs the same rules.
 const BUILD = new URL(import.meta.url).searchParams.get('v') ?? 'local';
@@ -46,7 +46,8 @@ const ui = createUI({
   onNewGame: () => (mode === 'online' ? conn?.send({ type: 'rematch' }) : newGame()),
   onLobby: lobby,
   onProfile: updateProfile,
-  onRemoveFriend: (id) => { profile = removeFriend(id); return profile; },
+  onFriends: friendAction,
+  getFriends: () => friends,
   getProfile: () => profile,
   getLastLog: () => { try { return localStorage.getItem(LAST_LOG_KEY); } catch { return null; } },
   getLog,
@@ -165,6 +166,7 @@ document.addEventListener('visibilitychange', () => keepAwake());
 document.addEventListener('pointerdown', () => { if (mode !== 'bot' && !(wakeLock && !wakeLock.released)) keepAwake(); });
 
 function show() {
+  shareStatus();
   trackStats();
   saveLastLog();
   keepAwake();
@@ -205,6 +207,7 @@ function playerName(name) {
 // shows right away; online, from the next match.
 function updateProfile(next) {
   profile = saveProfile(next);
+  presence?.send({ type: 'profile', name: profile.name || 'Player', avatar: profile.avatar });
   if (mode === 'bot') {
     names = [myName(), 'Bot'];
     avatars = [profile.avatar, BOT_AVATAR];
@@ -382,10 +385,90 @@ function goHome() {
   newGame();
 }
 
+// ---- friends ----------------------------------------------------------------
+// While the game is open it keeps a connection to the server's friends service
+// (server/worker.js, Presence): friend requests, who's online, battle requests.
+
+let presence = null;
+// What the friends screen shows: { available, code, friends, incoming, outgoing,
+// challenge (a request to us), waiting (our request to a friend) }.
+const friends = { available: false, code: null, friends: [], incoming: [], outgoing: [], challenge: null, waiting: null };
+let sharedStatus = null;
+
+function startPresence() {
+  if (!serverUrl()) return;
+  friends.available = true;
+  presence = connect('/presence', who(), {
+    onMessage: (msg) => {
+      if (msg.type === 'me') friends.code = msg.code;
+      else if (msg.type === 'friends') Object.assign(friends, { friends: msg.friends, incoming: msg.incoming, outgoing: msg.outgoing });
+      else if (msg.type === 'notice') ui.toast(msg.text);
+      else if (msg.type === 'challenge') {
+        // Already in a battle (or looking for one): say no for them.
+        if (mode === 'online' || conn) { presence.send({ type: 'answer', code: msg.from.code, accept: false }); return; }
+        friends.challenge = { ...msg.from, until: Date.now() + msg.expiresIn };
+      } else if (msg.type === 'challengeSent') {
+        friends.waiting = { ...msg.to, until: Date.now() + msg.expiresIn };
+      } else if (msg.type === 'challengeEnded') {
+        if (friends.waiting?.code === msg.code) {
+          friends.waiting = null;
+          ui.toast(msg.reason === 'declined' ? `${msg.name} can't battle right now.` : msg.reason === 'expired' ? `${msg.name} didn't answer.` : `${msg.name} is no longer available.`);
+        }
+        if (friends.challenge?.code === msg.code) {
+          friends.challenge = null;
+          if (msg.reason === 'cancelled') ui.toast(`${msg.name} cancelled the battle request.`);
+        }
+      } else if (msg.type === 'matched') {
+        friends.challenge = friends.waiting = null;
+        ui.showFriends();
+        note(`friend battle: ${msg.code}`);
+        openRoom(msg.code);
+        return;
+      }
+      ui.showFriends();
+    },
+    onStatus: (s) => { if (s === 'open') sharedStatus = null; shareStatus(); },
+  });
+  ui.showFriends();
+}
+
+// Friends see "In a battle" while we're in an online match.
+function shareStatus() {
+  const status = mode === 'online' ? 'battling' : 'online';
+  if (!presence || status === sharedStatus) return;
+  sharedStatus = status;
+  presence.send({ type: 'status', status });
+}
+
+function friendAction(action, code) {
+  if (!presence) return ui.toast('Friends need online play, which isn\'t available in this copy of the game.');
+  if (action === 'add') {
+    const clean = String(code ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (clean.length !== 6) return ui.toast('Friend codes are 6 letters and numbers.');
+    return presence.send({ type: 'add', code: clean });
+  }
+  if (action === 'accept-battle' || action === 'decline-battle') {
+    const ch = friends.challenge;
+    friends.challenge = null;
+    ui.showFriends();
+    if (ch) presence.send({ type: 'answer', code: ch.code, accept: action === 'accept-battle' });
+    return;
+  }
+  if (action === 'withdraw') {
+    const w = friends.waiting;
+    friends.waiting = null;
+    ui.showFriends();
+    if (w) presence.send({ type: 'withdraw', code: w.code });
+    return;
+  }
+  if (['accept', 'decline', 'cancel', 'remove', 'challenge'].includes(action)) presence.send({ type: action, code });
+}
+
 // Debug handle for the browser console: `game.state`
 window.game = { get state() { return state; }, get mode() { return mode; }, catalog, dispatch };
 
 newGame();
+startPresence();
 // An online match this browser was in (before a reload) can be picked back up;
 // otherwise a shared invite link (?join=CODE) goes straight to the join screen.
 const unfinished = serverUrl() ? loadSession() : null;
