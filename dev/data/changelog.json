@@ -1,5 +1,17 @@
 [
   {
+    "id": "2026-10-14-dreepy-until-faint",
+    "version": "0.24.0",
+    "date": "2026-10-14",
+    "title": "Dreepy hold attention until they faint",
+    "intro": "Dragapult's Dreepy are now all about pulling attention.",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "change", "text": "A Pokémon hit by a Dreepy must attack that Dreepy until it faints (was up to 3 seconds)." },
+      { "pokemon": "dragapult", "kind": "change", "text": "A fainted Dreepy flies back in 1.5 seconds, and Dragapult fires a new pair only once both are home (was each one 3 seconds after fainting)." },
+      { "pokemon": "dragapult", "kind": "nerf", "text": "Dreepy no longer deal damage when they land, and Dragapult's damage is 25 at ★ (was 40), to pay for the stronger distraction." }
+    ]
+  },
+  {
     "id": "2026-10-14-dreepy-distract-fast-sims",
     "version": "0.23.0",
     "date": "2026-10-14",

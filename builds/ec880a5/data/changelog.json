@@ -1,0 +1,554 @@
+[
+  {
+    "id": "2026-10-14-dreepy-until-faint",
+    "version": "0.24.0",
+    "date": "2026-10-14",
+    "title": "Dreepy hold attention until they faint",
+    "intro": "Dragapult's Dreepy are now all about pulling attention.",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "change", "text": "A Pokémon hit by a Dreepy must attack that Dreepy until it faints (was up to 3 seconds)." },
+      { "pokemon": "dragapult", "kind": "change", "text": "A fainted Dreepy flies back in 1.5 seconds, and Dragapult fires a new pair only once both are home (was each one 3 seconds after fainting)." },
+      { "pokemon": "dragapult", "kind": "nerf", "text": "Dreepy no longer deal damage when they land, and Dragapult's damage is 25 at ★ (was 40), to pay for the stronger distraction." }
+    ]
+  },
+  {
+    "id": "2026-10-14-dreepy-distract-fast-sims",
+    "version": "0.23.0",
+    "date": "2026-10-14",
+    "title": "Dragapult's Dreepy distract, and faster battles",
+    "intro": "Dreepy are now a distraction: the Pokémon they hit has to deal with them first. The battle engine also runs over twice as fast, with every fight playing out exactly the same.",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "change", "text": "Dragon Darts: the Pokémon a Dreepy hits stops attacking whoever it was and must attack that Dreepy for up to 3 seconds (or until it faints)." },
+      { "pokemon": "dragapult", "kind": "buff", "text": "Dreepy are fired again 3 seconds after they faint (was 4 seconds for every square they had to fly back), so they come out much more often." },
+      { "pokemon": "dreepy", "kind": "change", "text": "Dreepy attack every 0.5s (was 0.8s) but hit for 6 at ★ (was 12): fast, but more of a nuisance than a threat." },
+      { "pokemon": "dragapult", "kind": "nerf", "text": "Damage 75 → 40 at ★ (its darts' impact damage drops with it), to make up for the distraction." },
+      { "pokemon": "dragapult", "kind": "fix", "text": "When two Dragapult fire at the same moment, they now take turns placing their Dreepy, so neither side grabs every square." },
+      { "kind": "change", "text": "Fainted Dreepy drift back more faintly, behind everything else, so they don't distract you." },
+      { "kind": "new", "text": "The battle engine runs over twice as fast. Every fight plays out exactly the same as before." }
+    ]
+  },
+  {
+    "id": "2026-10-14-new-trio-hoopa-j",
+    "version": "0.22.0",
+    "date": "2026-10-14",
+    "title": "New Pokémon: Amoonguss, Annihilape and Dragapult",
+    "intro": "Three new Pokémon join, Hoopa binds more often and becomes Hoopa Unbound while charged, and Mawile takes a break.",
+    "changes": [
+      { "pokemon": "amoonguss", "kind": "new", "text": "Amoonguss (cost 4, tank). Rage Powder, every 2 attacks: the hardest-hitting enemy within the 5x5 around it that is attacking someone else must attack Amoonguss for 5 seconds." },
+      { "pokemon": "annihilape", "kind": "new", "text": "Annihilape (cost 4, melee). Rage Fist: each attack in a row without moving makes it attack 20% faster, up to twice as fast. Moving resets it." },
+      { "pokemon": "dragapult", "kind": "new", "text": "Dragapult (cost 4, range 3). Dragon Darts: at the start it fires 2 Dreepy at the two farthest enemies. They hit on impact, land and fight. A Dreepy that faints slowly flies back and is fired again." },
+      { "pokemon": "hoopa", "kind": "change", "text": "Binding Ring: Hoopa starts each fight charged, refills after 2 attacks (was 4), and binds for 3 seconds (was 5). It never binds the same Pokémon twice in a row. Damage 75 → 68 at ★." },
+      { "pokemon": "hoopa", "kind": "new", "text": "While charged, Hoopa shows as Hoopa Unbound, and turns back when it binds." },
+      { "pokemon": "mawile", "kind": "change", "text": "Mawile is out of the game for now while it gets a new identity." },
+      { "kind": "new", "text": "Taunted Pokémon glow pink, Annihilape glows redder as it speeds up, and fainted Dreepy drift back to Dragapult. New profile pictures for all of them." }
+    ]
+  },
+  {
+    "id": "2026-10-14-hoopa-bind",
+    "version": "0.21.0",
+    "date": "2026-10-14",
+    "title": "Hoopa rework: Binding Ring",
+    "intro": "Hoopa no longer teleports. It now holds enemies in place with its rings.",
+    "changes": [
+      { "pokemon": "hoopa", "kind": "change", "text": "New power, Binding Ring: after 4 attacks its power is full and waits. The next enemy that tries to move (walk, zip or dash) is bound in place for 5 seconds. It can still attack anything in range, but it can't move." },
+      { "pokemon": "hoopa", "kind": "change", "text": "Hyperspace Hole (the teleport and lifesteal) is gone." },
+      { "pokemon": "hoopa", "kind": "change", "text": "Range 1 → 2, so it charges from behind your front line." },
+      { "kind": "new", "text": "Bound Pokémon show glowing golden rings until the bind wears off." }
+    ]
+  },
+  {
+    "id": "2026-10-14-toxtricity-overdrive",
+    "version": "0.20.0",
+    "date": "2026-10-14",
+    "title": "Toxtricity rework: Overdrive",
+    "intro": "Toxtricity is now a supporter that charges up the Pokémon around it, instead of a melee fighter with a long-range zap.",
+    "changes": [
+      { "pokemon": "toxtricity", "kind": "change", "text": "New power, Overdrive: every 3 attacks, your Pokémon directly left, right, in front of and behind Toxtricity gain +2 toward their power. Pokémon without a power counter don't benefit." },
+      { "pokemon": "toxtricity", "kind": "change", "text": "Thunderbolt is gone." },
+      { "pokemon": "toxtricity", "kind": "change", "text": "Cost 4 → 3. Range 1 → 2. Attacks every 1.25s (was 1.42s)." },
+      { "pokemon": "toxtricity", "kind": "change", "text": "HP 1000 → 950 and damage 110 → 70 at ★, to make up for the cheaper cost and the new power." },
+      { "kind": "new", "text": "Charged Pokémon show \"+2 charge\" and their power bar fills." }
+    ]
+  },
+  {
+    "id": "2026-10-14-treat-effects-log",
+    "version": "0.19.1",
+    "date": "2026-10-14",
+    "title": "See Alcremie's treats, and save your match log",
+    "changes": [
+      { "pokemon": "alcremie", "kind": "change", "text": "Sweet Treat now flies from Alcremie to the Pokémon it treats. That Pokémon glows in the treat's colour for 3 seconds and wears a badge: a green heart for healing, pink chevrons for attack speed, a blue shield for the shield." },
+      { "kind": "new", "text": "After a match there's a Main menu button." },
+      { "kind": "new", "text": "The match log can be downloaded as a file, as well as copied." },
+      { "kind": "new", "text": "The match log lists every fight's seed and what happened by chance: which flavour Alcremie rolled and who got it, Minior's hops, and each side's crits." }
+    ]
+  },
+  {
+    "id": "2026-10-14-alcremie",
+    "version": "0.19.0",
+    "date": "2026-10-14",
+    "title": "New Pokémon: Alcremie",
+    "intro": "Alcremie joins as a support Pokémon. Every few attacks it whips up a random flavour and treats one of your Pokémon.",
+    "changes": [
+      { "pokemon": "alcremie", "kind": "new", "text": "Alcremie (cost 3, cleric, range 2). Sweet Treat, every 4 attacks: it changes into a random flavour and treats one ally for 3 seconds." },
+      { "pokemon": "alcremie", "kind": "new", "text": "Matcha Cream heals the ally with the lowest share of HP over 3 seconds." },
+      { "pokemon": "alcremie", "kind": "new", "text": "Ruby Cream makes your hardest-hitting Pokémon attack twice as fast." },
+      { "pokemon": "alcremie", "kind": "new", "text": "Mint Cream shields the Pokémon the enemy is attacking most: 40% less damage, and the first stun or knockback only breaks the shield. Shielded Pokémon show a bubble." },
+      { "kind": "new", "text": "The Pokédex shows all of Alcremie's flavours; tap one to see what it does. All four flavours are also new profile pictures." }
+    ]
+  },
+  {
+    "id": "2026-10-14-bot-layout",
+    "version": "0.18.0",
+    "date": "2026-10-14",
+    "title": "Smarter bots: they rearrange their team",
+    "intro": "Training bots now rearrange their Pokémon before every fight, following a set of rules instead of leaving each one where it was bought. In testing, the new bot beats the old one about 66% of the time.",
+    "changes": [
+      { "kind": "change", "text": "Tanks hold the middle of the front row; other melee Pokémon, Ditto, Hoopa and Tapu Koko fill the rest of the front." },
+      { "kind": "change", "text": "Ranged Pokémon stand as far back as they can while still reaching your front row, behind one of their tanks." },
+      { "kind": "change", "text": "Lilligant stands right behind the busiest part of their front line." },
+      { "kind": "change", "text": "Bots react to your last lineup: they leave Beheeyem's Psywave column empty and lean toward the side where you have the most HP." }
+    ]
+  },
+  {
+    "id": "2026-10-14-lilligant-heal",
+    "version": "0.17.0",
+    "date": "2026-10-14",
+    "title": "Lilligant buff: bigger healing splash",
+    "intro": "Lilligant's healing was too small to matter: teams with it won only 40% of games. Its heal now reaches more of your Pokémon and heals more.",
+    "changes": [
+      { "pokemon": "lilligant", "kind": "buff", "text": "Aromatherapy heals every ally in the 3x3 around its target (diagonals too), instead of only the 4 squares beside it." },
+      { "pokemon": "lilligant", "kind": "buff", "text": "Heals for 60% of its damage (was 50%)." },
+      { "pokemon": "lilligant", "kind": "buff", "text": "Damage 60 → 66 at ★ (+10% at every level)." }
+    ]
+  },
+  {
+    "id": "2026-10-14-team-cards",
+    "version": "0.16.11",
+    "date": "2026-10-14",
+    "title": "New team selection cards",
+    "changes": [
+      { "kind": "change", "text": "Team selection cards now look like the Pokédex cards: the Pokémon in a glow of its type colour, its name, cost and type." },
+      { "kind": "change", "text": "Picked Pokémon get a green border and walk on the spot, instead of showing a check mark." },
+      { "kind": "fix", "text": "Picking a Pokémon no longer makes every picked card shake." },
+      { "kind": "change", "text": "The Pokédex calls movement speed Speed, matching the stat shape." }
+    ]
+  },
+  {
+    "id": "2026-10-14-dex-shape-headroom",
+    "version": "0.16.10",
+    "date": "2026-10-14",
+    "title": "Pokédex: stat shape headroom",
+    "changes": [
+      { "kind": "change", "text": "The stat shape leaves a little room at the edge: even the best Pokémon in a stat stops just short of the outer diamond." }
+    ]
+  },
+  {
+    "id": "2026-10-14-shiny-sparkle",
+    "version": "0.16.9",
+    "date": "2026-10-14",
+    "title": "New shiny level mark",
+    "changes": [
+      { "kind": "change", "text": "The top level (4 copies) is now marked with a rainbow four-pointed sparkle instead of a star." }
+    ]
+  },
+  {
+    "id": "2026-10-14-dex-shape-scale",
+    "version": "0.16.8",
+    "date": "2026-10-14",
+    "title": "Pokédex: stat shape scaled to the best",
+    "changes": [
+      { "kind": "change", "text": "Each point of the stat shape is now measured against the highest value any Pokémon has for that stat at the same level. The edge of the diamond is the best there is, so you can compare Pokémon just by their shapes." }
+    ]
+  },
+  {
+    "id": "2026-10-14-dex-powers",
+    "version": "0.16.7",
+    "date": "2026-10-14",
+    "title": "Clearer power descriptions",
+    "changes": [
+      { "kind": "change", "text": "Every power is now described the same way: a tag for when it goes off (Every 5 attacks, Every attack, When knocked out, At battle start), then what it does. Damage, durations, healing and other key values are coloured." },
+      { "kind": "change", "text": "Pokédex entries show HP, damage, attack speed, range and movement. DPS, crit and power damage are gone from the chips, and a power's damage is in its description." },
+      { "kind": "change", "text": "The stat shape is now a diamond of HP, damage, attack speed and speed." }
+    ]
+  },
+  {
+    "id": "2026-10-14-dex-power-numbers",
+    "version": "0.16.6",
+    "date": "2026-10-14",
+    "title": "Pokédex: steadier power text",
+    "changes": [
+      { "kind": "fix", "text": "Changing the level in a Pokédex entry no longer refreshes the power description: only its numbers count to their new values." },
+      { "kind": "change", "text": "Removed the copies-on-the-board note at the bottom of Pokédex entries." }
+    ]
+  },
+  {
+    "id": "2026-10-14-dex-stat-shape",
+    "version": "0.16.5",
+    "date": "2026-10-14",
+    "title": "Pokédex: stat shape",
+    "changes": [
+      { "kind": "new", "text": "Each Pokédex entry has a stat shape: a hexagon of HP, damage, DPS, attack speed, range and speed. The further a point reaches out, the better that stat is compared to every other Pokémon. The shape grows as you step up the level." },
+      { "kind": "change", "text": "Stat chips keep the same size when the level changes." },
+      { "kind": "change", "text": "Hovering a transformation or summon makes the sprite glow in its type colour." },
+      { "kind": "change", "text": "The info pop-up glows with the Pokémon's type colour from the top corner, and closing it animates like opening it." }
+    ]
+  },
+  {
+    "id": "2026-10-14-dex-entry-popup",
+    "version": "0.16.4",
+    "date": "2026-10-14",
+    "title": "Pokédex: entries in their own pop-up",
+    "changes": [
+      { "kind": "change", "text": "Tapping a Pokémon in the Pokédex opens its info in a pop-up on top of the grid. Close it (or press Esc) to go back to the grid." },
+      { "kind": "change", "text": "The Pokémon is no longer framed in a box, and related Pokémon (a transformation, a summon) sit beside it as a small sprite with no frame." },
+      { "kind": "new", "text": "Tapping a related Pokémon swaps them: it grows into the main spot while the other shrinks into the small one." }
+    ]
+  },
+  {
+    "id": "2026-10-14-dex-chips",
+    "version": "0.16.3",
+    "date": "2026-10-14",
+    "title": "Pokédex: stat chips and smooth level changes",
+    "changes": [
+      { "kind": "change", "text": "A Pokédex entry lists its stats as chips (HP, damage, crit, DPS, attack speed, range, movement, power damage) instead of bars." },
+      { "kind": "fix", "text": "Changing the level no longer flickers: the numbers count up or down to their new values and the power text fades over." }
+    ]
+  },
+  {
+    "id": "2026-10-14-dex-level-chip",
+    "version": "0.16.2",
+    "date": "2026-10-14",
+    "title": "Pokédex: level chip and related Pokémon",
+    "changes": [
+      { "kind": "change", "text": "In a Pokédex entry, the level is now a chip under the Pokémon showing its stars. Tap it to step through ★, ★★, ★★★ and shiny." },
+      { "kind": "change", "text": "Related Pokémon (a transformation, a summon, or who summons it) show as a small sprite beside the main one. Tap it to open that Pokémon's stats." }
+    ]
+  },
+  {
+    "id": "2026-10-14-new-stars",
+    "version": "0.16.1",
+    "date": "2026-10-14",
+    "title": "A star for every level",
+    "intro": "Every level now has its own mark, so you can tell them apart at a glance. Stats and levelling up work exactly as before.",
+    "changes": [
+      { "kind": "change", "text": "1 copy = ★ (bronze), 2 copies = ★★ (silver), 3 copies = ★★★ (gold), 4 copies = a shiny rainbow star." },
+      { "kind": "change", "text": "A Pokémon with a single copy now shows its star on the board instead of nothing." }
+    ]
+  },
+  {
+    "id": "2026-10-14-new-pokedex",
+    "version": "0.16.0",
+    "date": "2026-10-14",
+    "title": "A new Pokédex",
+    "intro": "The Pokédex is now a grid of cards, one per Pokémon. Tap a card to open its entry.",
+    "changes": [
+      { "kind": "new", "text": "Each entry shows the Pokémon's HP, damage and damage per second as bars, plus attack speed, range, movement and its power." },
+      { "kind": "new", "text": "Entries start at Base level. Tap the Level button (or press ← / →) to step through ★, ★★ and ★★★ and watch the stats change." },
+      { "kind": "new", "text": "Transformations have entries of their own: open Greninja or Minior and tap their form to see its stats." },
+      { "kind": "new", "text": "Summons have cards too: Combee links to Vespiquen and back." },
+      { "kind": "change", "text": "Base-level Pokémon are called Base instead of 0★." }
+    ]
+  },
+  {
+    "id": "2026-10-14-ditto-3-cost",
+    "version": "0.15.1",
+    "date": "2026-10-14",
+    "title": "Ditto: cheaper, slower to transform",
+    "intro": "Ditto now costs 3 instead of 4. To make up for it, it's frailer before it transforms and takes a little longer to change.",
+    "changes": [
+      { "pokemon": "ditto", "kind": "buff", "text": "Cost 4 → 3." },
+      { "pokemon": "ditto", "kind": "nerf", "text": "Transform takes 1s (was 0.5s)." },
+      { "pokemon": "ditto", "kind": "nerf", "text": "Before it transforms: HP 990 → 600 and damage 60 → 40 at 0★. Once transformed it still copies the target's full stats and keeps its share of HP." }
+    ]
+  },
+  {
+    "id": "2026-10-14-frosmoth",
+    "version": "0.15.0",
+    "date": "2026-10-14",
+    "title": "New Pokémon: Frosmoth",
+    "intro": "Frosmoth joins the game: a ranged mage that slows down everything it hits.",
+    "changes": [
+      { "pokemon": "frosmoth", "kind": "new", "text": "Frosmoth (cost 3, range 2): every attack chills the target for 3 seconds, making it attack 30% slower and move 30% slower. Each hit restarts the chill." },
+      { "kind": "new", "text": "Chilled Pokémon turn icy blue and show a snowflake, so you can see who's slowed." },
+      { "kind": "new", "text": "Frosmoth is also a new profile picture." }
+    ]
+  },
+  {
+    "id": "2026-10-14-popups-on-start",
+    "version": "0.14.1",
+    "date": "2026-10-14",
+    "title": "Pop-ups over the start screen",
+    "changes": [
+      { "kind": "fix", "text": "Waiting for opponent, Battle a friend and the other online pop-ups now appear over the start screen instead of an empty battle board." },
+      { "kind": "fix", "text": "Rejoining a match after a reload no longer leaves the \"Getting back into your match\" pop-up covering the board." }
+    ]
+  },
+  {
+    "id": "2026-10-14-simpler-battle",
+    "version": "0.14.0",
+    "date": "2026-10-14",
+    "title": "Simpler Battle button",
+    "changes": [
+      { "kind": "change", "text": "Battle now goes straight into the queue and shows \"Waiting for opponent\" until another player is found." },
+      { "kind": "new", "text": "Battle a friend (on the start screen): enter anyone's friend code to send them a battle request. You don't need to be friends first." },
+      { "kind": "change", "text": "Game codes (Create game / Join) are gone; friend codes replace them." }
+    ]
+  },
+  {
+    "id": "2026-10-14-friends",
+    "version": "0.13.0",
+    "date": "2026-10-14",
+    "title": "Friends",
+    "intro": "Add your friends, see when they're online, and challenge them to a battle with one tap.",
+    "changes": [
+      { "kind": "new", "text": "Friends (in the menu): you have a friend code to share. Enter a friend's code to send them a friend request." },
+      { "kind": "new", "text": "See which friends are online, in a battle or offline, as it happens." },
+      { "kind": "new", "text": "Tap ⚔ Battle next to an online friend to send a battle request. They get 45 seconds to accept, and the match starts straight away." },
+      { "kind": "change", "text": "The Battle screen has a shortcut to your friends list, next to Find a match and game codes." }
+    ]
+  },
+  {
+    "id": "2026-10-14-game-server",
+    "version": "0.12.0",
+    "date": "2026-10-14",
+    "title": "Online play on a game server",
+    "intro": "Online matches now run on a game server instead of on the host's phone. Phones locking, apps switching and pages reloading no longer break a match: you just come straight back in.",
+    "changes": [
+      { "kind": "new", "text": "Find a match: Battle → Find a match pairs you with the next player looking for a battle." },
+      { "kind": "change", "text": "Matches run on a server, so the match keeps going even if a player's phone locks or the page reloads." },
+      { "kind": "fix", "text": "Dropped connections come back by themselves within seconds, straight into the match, including after a reload or opening the game again." },
+      { "kind": "change", "text": "Works on any network that can open a website, with no special connection setup." },
+      { "kind": "change", "text": "Battle → Check my connection now checks the game server can be reached." }
+    ]
+  },
+  {
+    "id": "2026-10-13-wake-lock",
+    "version": "0.11.5",
+    "date": "2026-10-13",
+    "title": "Screen stays on online",
+    "changes": [
+      { "kind": "fix", "text": "Your screen stays on during online matches. Phones locking themselves mid-match (often while watching a battle) was dropping the connection." },
+      { "kind": "new", "text": "\"Match ended\" has a Copy match log button, and the start-screen menu keeps your last online match's log, so a dropped match can be looked into." }
+    ]
+  },
+  {
+    "id": "2026-10-13-rejoin",
+    "version": "0.11.4",
+    "date": "2026-10-13",
+    "title": "Rejoin after a reload",
+    "intro": "Online matches now survive a reloaded or closed page.",
+    "changes": [
+      { "kind": "fix", "text": "Reloading the page (or your phone reloading it) no longer ends the match. The game offers to rejoin, and you're back in as the same player." },
+      { "kind": "fix", "text": "Typing the game code in again rejoins your match instead of saying it already has two players." },
+      { "kind": "fix", "text": "If the host reloads, they can reopen the match and their friend reconnects by themselves." },
+      { "kind": "change", "text": "Closing the page gives your friend up to 2 minutes to come back before the match ends. Leave match still ends it straight away." },
+      { "kind": "new", "text": "The match log (Menu → Match log) now includes what happened to the connection, to help track down drops." }
+    ]
+  },
+  {
+    "id": "2026-10-13-reconnect-fix",
+    "version": "0.11.3",
+    "date": "2026-10-13",
+    "title": "Reliable reconnecting",
+    "changes": [
+      { "kind": "fix", "text": "After a dropped connection, the player who rejoined could get stuck: the game said \"Reconnected\" but nothing they did reached the other player. The game now checks the connection really works and replaces it within a few seconds if it doesn't." },
+      { "kind": "fix", "text": "\"Reconnected\" only shows once you're actually back in the match." },
+      { "kind": "fix", "text": "Two drops in a row no longer confuse the game." }
+    ]
+  },
+  {
+    "id": "2026-10-13-stay-in-match",
+    "version": "0.11.2",
+    "date": "2026-10-13",
+    "title": "No more getting kicked",
+    "intro": "Looking away from an online match no longer ends it.",
+    "changes": [
+      { "kind": "fix", "text": "If you don't press Fight (for example your phone locked or you switched apps), you're no longer kicked: when the timer runs out your team is locked in as it is and the fight starts." },
+      { "kind": "new", "text": "If your connection drops mid-match, the game reconnects you to the same match by itself." },
+      { "kind": "change", "text": "When your friend's connection drops, a notice says so, and the match keeps going. It only ends if they leave, or after 2 minutes without hearing from them." }
+    ]
+  },
+  {
+    "id": "2026-10-13-online-fix",
+    "version": "0.11.1",
+    "date": "2026-10-13",
+    "title": "Online play fixed",
+    "changes": [
+      { "kind": "fix", "text": "Joining a friend's game works again. Since 0.10.0 the player who joined got stuck on \"Waiting for the game to start\" until it timed out." }
+    ]
+  },
+  {
+    "id": "2026-10-13-profile-stats",
+    "version": "0.11.0",
+    "date": "2026-10-13",
+    "title": "Profile stats and friends",
+    "intro": "Your profile now keeps track of how you play, and has a place for your friends.",
+    "changes": [
+      { "kind": "new", "text": "Stats on your profile: wins, losses and win rate, split into online and training, plus your most used Pokémon." },
+      { "kind": "new", "text": "A friends list on your profile, where you can remove friends. Adding friends is coming soon." },
+      { "kind": "change", "text": "The profile pictures stay hidden until you press Change under your picture." }
+    ]
+  },
+  {
+    "id": "2026-10-13-profile-polish",
+    "version": "0.10.1",
+    "date": "2026-10-13",
+    "title": "Profile polish",
+    "changes": [
+      { "kind": "change", "text": "The profile button on the start screen is a rounded rectangle." },
+      { "kind": "fix", "text": "Profile pictures are centred in their frame everywhere they appear." }
+    ]
+  },
+  {
+    "id": "2026-10-13-profiles",
+    "version": "0.10.0",
+    "date": "2026-10-13",
+    "title": "Player profiles",
+    "intro": "Make the game yours: pick a name and a profile picture. They're saved in your browser, so they're still there when you come back.",
+    "changes": [
+      { "kind": "new", "text": "Profile: tap the chip at the top left of the start screen (or Menu → Profile) to set your name and choose a profile picture." },
+      { "kind": "new", "text": "Your profile is saved in this browser and stays after you close it. Clearing your browser's site data resets it." },
+      { "kind": "new", "text": "Profile pictures show next to the names at the top of the screen and in the versus intro. Online, your friend sees yours." }
+    ]
+  },
+  {
+    "id": "2026-10-13-new-shop",
+    "version": "0.9.0",
+    "date": "2026-10-13",
+    "title": "New shop and coins",
+    "intro": "Buying is faster and every coin counts: the shop refreshes each time you buy, and losing Pokémon in battle pays you back.",
+    "changes": [
+      { "kind": "change", "text": "The shop refreshes for free every time you buy a Pokémon." },
+      { "kind": "change", "text": "Rerolls cost 1 coin, with no limit (they were free, 3 at most)." },
+      { "kind": "buff", "text": "You start with 10 coins (was 6)." },
+      { "kind": "change", "text": "Every round after the first you get 5 coins, plus 1 for each of your Pokémon knocked out in the last battle (was +6 for a win, +9 for a loss)." }
+    ]
+  },
+  {
+    "id": "2026-10-13-minior-second-life",
+    "version": "0.8.0",
+    "date": "2026-10-13",
+    "title": "Minior's second life",
+    "intro": "Minior now has two lives. Its Rock form soaks up damage until it's knocked out, then it breaks open into Star Form with a fresh HP bar and bounces around the enemy team.",
+    "changes": [
+      { "pokemon": "minior", "kind": "change", "text": "Shining Star now triggers when Rock form would be knocked out (was at 65% HP). Minior comes back as Star Form instead of fainting." },
+      { "pokemon": "minior", "kind": "new", "text": "Star Form has its own HP: 600 at 0★. Rock form has 1100 at 0★ (was 1634 shared by both forms)." },
+      { "pokemon": "minior", "kind": "new", "text": "Star Form's own power: every 10 attacks it picks a different enemy and zips to the square beside it, even if its target is right next to it. If there's nowhere to go, it stays." },
+      { "pokemon": "minior", "kind": "change", "text": "Unchanged: the 1s shock-wave stun when it transforms, and Star Form's 20 damage every 0.3s with very fast zipping movement." }
+    ]
+  },
+  {
+    "id": "2026-10-13-minior-rework",
+    "version": "0.7.0",
+    "date": "2026-10-13",
+    "title": "Minior reworked",
+    "intro": "Minior is now a wall that cracks open into a shooting star. Rock form soaks up hits; Star Form bursts out with a stunning shock wave and zips from target to target.",
+    "changes": [
+      { "pokemon": "minior", "kind": "buff", "text": "Rock form is much tankier: HP 1485 → 1634 at 0★ (more than Coalossal), and it moves very slow (was super slow)." },
+      { "pokemon": "minior", "kind": "nerf", "text": "Rock form hits softly: 30 damage at 0★ (was 90), every 3.0s." },
+      { "pokemon": "minior", "kind": "change", "text": "Shining Star triggers at 65% HP (was 50%), so Star Form starts with more HP and lasts about 6 seconds." },
+      { "pokemon": "minior", "kind": "new", "text": "Transforming sends out a shock wave that stuns every enemy in the 3×3 around Minior for 1s." },
+      { "pokemon": "minior", "kind": "new", "text": "Star Form doesn't walk: it zips straight to the square beside its target and starts attacking right away." },
+      { "pokemon": "minior", "kind": "change", "text": "Star Form attacks every 0.3s (was 0.5s) for 20 damage at 0★ (was 90)." }
+    ]
+  },
+  {
+    "id": "2026-10-13-minior",
+    "version": "0.6.5",
+    "date": "2026-10-13",
+    "title": "Minior's two forms",
+    "intro": "Minior now plays like two different Pokémon: a slow, sturdy rock that soaks up hits, then a frantic star that attacks six times as fast.",
+    "changes": [
+      { "pokemon": "minior", "kind": "change", "text": "Rock form attacks every 3.0s (was 2.2s) for 90 damage at 0★ (was 80)." },
+      { "pokemon": "minior", "kind": "buff", "text": "Shining Star triggers at 50% HP (was 25%), so Star Form lasts about twice as long." },
+      { "pokemon": "minior", "kind": "change", "text": "Star Form attacks every 0.5s (was 0.7s) for the same 90 damage as Rock form (was 100)." }
+    ]
+  },
+  {
+    "id": "2026-10-13-combee",
+    "version": "0.6.4",
+    "date": "2026-10-13",
+    "title": "Faster Combee",
+    "changes": [
+      { "pokemon": "combee", "kind": "buff", "text": "Movement speed fast → very fast (waits 0.35s between steps, was 0.5s)." }
+    ]
+  },
+  {
+    "id": "2026-10-12-cleaner-start",
+    "version": "0.6.3",
+    "date": "2026-10-12",
+    "title": "Cleaner start screen",
+    "changes": [
+      { "kind": "change", "text": "What's new, How to play and the Pokédex are in the menu (top right); a dot on the menu button means there's an update you haven't read." },
+      { "kind": "change", "text": "A bigger Battle button, with a smaller Training button under it." }
+    ]
+  },
+  {
+    "id": "2026-10-12-start-menu",
+    "version": "0.6.2",
+    "date": "2026-10-12",
+    "title": "Start screen menu",
+    "changes": [
+      { "kind": "new", "text": "A menu button on the start screen, with Battle, Training, What's new, How to play and the Pokédex." },
+      { "kind": "new", "text": "The game's version is shown in the corner of the start screen." }
+    ]
+  },
+  {
+    "id": "2026-10-12-mobile",
+    "version": "0.6.1",
+    "date": "2026-10-12",
+    "title": "Phone fixes",
+    "changes": [
+      { "kind": "fix", "text": "The start screen no longer scrolls sideways on phones." },
+      { "kind": "fix", "text": "The Pokédex stats table fits on the smallest phones." },
+      { "kind": "change", "text": "The Pokémon walking across the start screen are spaced out more." }
+    ]
+  },
+  {
+    "id": "2026-10-12-balance",
+    "version": "0.6.0",
+    "date": "2026-10-12",
+    "title": "Balance update",
+    "intro": "Tested over thousands of simulated games where both players reposition every round. Every Pokémon now wins between 46% and 56% of games.",
+    "changes": [
+      { "pokemon": "beheeyem", "kind": "nerf", "text": "Cost 2 → 3. Range 3 → 2." },
+      { "pokemon": "infernape", "kind": "nerf", "text": "Cost 2 → 3." },
+      { "pokemon": "ditto", "kind": "nerf", "text": "Cost 3 → 4." },
+      { "pokemon": "mawile", "kind": "buff", "text": "Cost 5 → 4. HP +80% (450 → 810 at 0★)." },
+      { "pokemon": "torterra", "kind": "buff", "text": "Earthquake every 5 attacks (was 10)." },
+      { "pokemon": "greninja", "kind": "buff", "text": "Battle Bond after 5 attacks (was 10)." },
+      { "pokemon": "hoopa", "kind": "buff", "text": "HP +40% (600 → 840 at 0★)." },
+      { "pokemon": "toxtricity", "kind": "buff", "text": "Damage +10% (100 → 110 at 0★)." }
+    ]
+  },
+  {
+    "id": "2026-10-12-online",
+    "version": "0.5.0",
+    "date": "2026-10-12",
+    "title": "Battle your friends",
+    "changes": [
+      { "kind": "new", "text": "Battle: play a friend online with a 5-letter game code or an invite link. Training plays the bot." },
+      { "kind": "new", "text": "30 seconds to plan each round online; anyone still planning is locked in when time runs out." },
+      { "kind": "new", "text": "Menu → Match log copies every move of a match, with your notes, for analysis." },
+      { "kind": "change", "text": "Walking: a Pokémon waits its movement speed, then takes 0.5s to step to the next square." },
+      { "kind": "change", "text": "Attack range is a square around the Pokémon: range 1 covers the 3×3 around it, diagonals included." },
+      { "pokemon": "tapukoko", "kind": "buff", "text": "Attacks every 1.1s, range 2, HP +15%, and immune while dashing." }
+    ]
+  },
+  {
+    "id": "2026-10-11-new-pokemon",
+    "version": "0.4.0",
+    "date": "2026-10-11",
+    "title": "New Pokémon",
+    "changes": [
+      { "pokemon": "torterra", "kind": "new", "text": "Torterra: Earthquake hits and stuns every enemy." },
+      { "pokemon": "lilligant", "kind": "new", "text": "Lilligant: each attack heals the allies around its target." },
+      { "pokemon": "golem", "kind": "new", "text": "Golem: explodes 3 seconds after it's knocked out." },
+      { "pokemon": "minior", "kind": "new", "text": "Minior: turns into its fast Star Form at low HP." },
+      { "pokemon": "tapukoko", "kind": "new", "text": "Tapu Koko: dashes to the farthest enemy, stunning everything in its path." },
+      { "pokemon": "ditto", "kind": "new", "text": "Ditto: walks up to an enemy and transforms into a copy of it." },
+      { "pokemon": "hoopa", "kind": "new", "text": "Hoopa takes over the old Greninja's teleport strike." },
+      { "pokemon": "greninja", "kind": "change", "text": "Greninja: new Battle Bond power turns it into Ash-Greninja." }
+    ]
+  }
+]

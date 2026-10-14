@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=9c0d6be';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=ec880a5';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=9c0d6be';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=9c0d6be';
+} from './game.js?v=ec880a5';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=ec880a5';
 
 const TICK_MS = 100;
 // Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
@@ -72,7 +72,7 @@ export function powerText(def, star, catalog) {
     case 'rage': return { when: 'Every attack', text: `Each attack in a row without moving makes it attack ${vNum(`${p.stackPct}%`)} faster, up to ${vNum(`${p.stackPct * p.maxStacks}%`)} after ${vNum(p.maxStacks)} attacks. Moving resets it.` };
     case 'darts': {
       const name = catalog?.[p.unit]?.name ?? p.unit;
-      return { when: 'At battle start', text: `Fires ${vNum(p.count)} ${name} at the farthest enemies: each hits for ${vDmg(`${p.impactPct}%`)} damage (${vDmg(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.impactPct) / 100)))}), then lands beside its target and fights.${p.lure ? ` The hit distracts the target: it stops attacking whoever it was and must attack the ${name} for up to ${vTime(p.lure)}.` : ''} A ${name} that faints drifts back and is fired again ${vTime(Math.round(p.returnSec * 10))} later. They come at ${esc(def.name)}'s level.` };
+      return { when: 'At battle start', text: `Fires ${vNum(p.count)} ${name} at the farthest enemies: each ${p.impactPct ? `hits for ${vDmg(`${p.impactPct}%`)} damage (${vDmg(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.impactPct) / 100)))}), then ` : ''}lands beside its target and fights.${p.lure ? ` Its target stops attacking whoever it was and must attack the ${name} until it faints.` : ''} A ${name} that faints flies back (${vTime(Math.round(p.returnSec * 10))}); once both are home, ${esc(def.name)} fires them again. They come at ${esc(def.name)}'s level.` };
     }
     case 'boost': return { when: every, text: `Charges up the allies directly left, right, in front of and behind it: each gains ${vNum(`+${p.charges}`)} toward its power (Pokémon without a power counter don't benefit).` };
     case 'snipe': return { when: every, text: `The attack also zaps the farthest enemy for ${hit}.` };

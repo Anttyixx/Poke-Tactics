@@ -620,7 +620,8 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
   function launchDarts(u) {
     const p = u.power;
     u.darts ??= Array.from({ length: p.count }, () => ({ readyAt: p.firstAt ?? 1, unit: null, aim: null }));
-    if (u.darts.some((slot) => !slot.unit && t >= slot.readyAt)) dartQueue.push(u);
+    // Both Dreepy go out together: a new volley only once every one is home.
+    if (u.darts.every((slot) => !slot.unit && t >= slot.readyAt)) dartQueue.push(u);
   }
   // Every Dragapult's first ready Dreepy goes, then every second one, ... so
   // when both sides' darts want the same squares, neither side gets them all.
@@ -654,18 +655,18 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     slot.unit = pal;
     slot.aim = target.id;
     record && emit('summon', { id: u.id, unit: snapshot(pal), dart: true, target: target.id });
-    damage(target, Math.floor((u.atk * p.impactPct) / 100), u);
+    if (p.impactPct) damage(target, Math.floor((u.atk * p.impactPct) / 100), u);
     // The hit distracts it: it drops whoever it was attacking and must go
-    // after the Dreepy for `lure` ticks, or until the Dreepy faints.
+    // after the Dreepy until the Dreepy faints.
     if (p.lure && standing(target) && !immune(target)) {
       target.tauntBy = pal.id;
-      target.tauntUntil = t + p.lure;
+      target.tauntUntil = MAX_TICKS;
       target.target = pal.id;
-      record && emit('taunt', { id: target.id, by: pal.id, duration: p.lure, dart: true });
+      record && emit('taunt', { id: target.id, by: pal.id, duration: MAX_TICKS - t, dart: true });
     }
   }
-  // A Dreepy fainted: it drifts back to Dragapult, which can fire it again
-  // `returnSec` later (however far it has to come).
+  // A Dreepy fainted: it flies back to Dragapult, home `returnSec` later
+  // (however far it has to come). Dragapult fires again once both are home.
   function dartHome(d) {
     const u = units[d.dartOf];
     const slot = u?.darts?.find((s) => s.unit === d);

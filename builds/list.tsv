@@ -1,3 +1,4 @@
+ec880a5	dev	2026-10-14 15:13 UTC	Dragapult: Dreepy hold their target until they faint; fly back in 1.5s; new pair only once both are home; no impact damage, Dragapult damage 40 -&gt; 25 (0.24.0)
 9c0d6be	dev	2026-10-14 08:39 UTC	Smart placement: 4 random layouts + 6 climb steps (wins 51.7% vs the previous version at the same cost; keeps 10,000 smart games under 5 minutes)
 eea073b	dev	2026-10-14 08:37 UTC	Engine: build heal log details only when recording; cache Lilligant's heal square; cheaper end-of-fight check (fights unchanged)
 626b087	dev	2026-10-14 08:32 UTC	Engine 2.4x faster with identical fights; smarter, faster smart placement; Dreepy distract (0.23.0)
@@ -27,4 +28,3 @@ e26c195	dev	2026-10-14 02:34 UTC	New Pokédex: card grid, entries with a level c
 1f3efcd	dev	2026-10-14 01:33 UTC	New Pokemon: Frosmoth (Frostbite chills on every hit)
 00ece56	dev	2026-10-14 01:22 UTC	Online pop-ups over the start screen, not the battle board
 9604ecf	dev	2026-10-14 01:07 UTC	README: rejoining is from the Rejoin screen only
-dde5c5a	dev	2026-10-14 01:07 UTC	Battle goes straight to the queue; Battle a friend by friend code
