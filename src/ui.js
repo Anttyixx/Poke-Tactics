@@ -1732,7 +1732,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   dexEl.addEventListener('click', (e) => {
     if (e.target === dexEl || e.target.closest('#dex-close')) return closeDex();
     if (e.target.closest('#dex-back')) { dexStar = 0; return showDexEntry(null); }
-    if (e.target.closest('#dex-level')) { dexStar = (dexStar + 1) % 4; return renderDex(); }
+    if (e.target.closest('#dex-level')) return setDexLevel((dexStar + 1) % 4);
     const form = e.target.closest('[data-dex-form]');
     if (form) return showDexEntry(form.dataset.dexForm, true);
     const pick = e.target.closest('[data-dex]');
@@ -1762,8 +1762,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   // the grid (or closes it from the grid).
   function dexKey(key) {
     if (dexPick && (key === 'arrowright' || key === 'arrowleft')) {
-      dexStar = (dexStar + (key === 'arrowright' ? 1 : 3)) % 4;
-      return renderDex();
+      return setDexLevel((dexStar + (key === 'arrowright' ? 1 : 3)) % 4);
     }
     if (key === 'escape' && dexPick) {
       if (dexForm) return showDexEntry(dexPick);
@@ -1783,17 +1782,6 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   // Who summons this Pokémon.
   const summonersOf = (id) => troopIds(catalog).filter((t) => catalog[t].ability?.kind === 'summon' && catalog[t].ability.unit === id);
 
-  // Biggest HP / damage / DPS any Pokémon has at this level, for the stat bars.
-  function dexMax(star) {
-    const defs = Object.values(catalog).flatMap((d) => (d.ability?.form ? [d, formDef(d)] : [d]));
-    const st = defs.map((d) => unitStats(d, star));
-    return {
-      hp: Math.max(...st.map((x) => x.hp)),
-      atk: Math.max(...st.map((x) => x.atk)),
-      dps: Math.max(...st.map((x) => +dps(x))),
-    };
-  }
-
   function dexCard(id) {
     const def = catalog[id];
     return `<button class="dex-card" data-dex="${id}" data-type="${def.type}">
@@ -1801,6 +1789,71 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       <b>${esc(def.name)}</b>
       <small>${def.summon ? 'Summon' : `${def.cost} 🪙`} · ${typeName(def.type)}</small>
     </button>`;
+  }
+
+  // The parts of an entry that change with the level.
+  function dexLevelValues(def, star, formOf) {
+    const st = unitStats(def, star);
+    const pd = !formOf && def.ability ? powerDamage(def, star) : null;
+    let power = '';
+    if (formOf) {
+      const f = formOf.ability.form;
+      power = [
+        `${esc(formOf.name)} becomes ${esc(f.name)} for the rest of the fight.`,
+        !f.hp && `Keeps ${esc(formOf.name)}'s HP when it transforms.`,
+        f.shockwave && `As it changes, a shock wave stuns every enemy in the ${2 * f.shockwave.radius + 1}x${2 * f.shockwave.radius + 1} around it for ${secs(f.shockwave.stun)}s.`,
+        f.blink && 'It doesn\'t walk: it zips straight to the square beside its target.',
+        f.hop && `Every ${f.energy} attacks it picks a different enemy and zips beside it (if there's no free square, it stays).`,
+      ].filter(Boolean).join(' ');
+    } else if (def.ability) power = describePower(def, star, catalog);
+    return {
+      hp: String(show(st.hp)), dmg: String(show(st.atk)), crit: String(show(Math.floor((st.atk * CRIT_PCT) / 100))),
+      dps: dps(st), pdmg: pd === null ? null : String(show(pd)), power,
+    };
+  }
+
+  // Change the level in an open entry without redrawing it: numbers count to
+  // their new values and the power text cross-fades.
+  function setDexLevel(star) {
+    dexStar = star;
+    const detail = dexEl.querySelector('.dex-detail');
+    if (!detail) return renderDex();
+    const base = catalog[dexPick];
+    const isForm = dexForm && base.ability?.form;
+    const v = dexLevelValues(isForm ? formDef(base) : base, star, isForm ? base : null);
+    const lvl = detail.querySelector('#dex-level');
+    lvl.innerHTML = `<span class="stars s${star}">${levelMark(star)}</span>`;
+    lvl.setAttribute('aria-label', `Level: ${LEVEL_NAMES[star]}. Tap for the next level.`);
+    lvl.classList.remove('bump'); void lvl.offsetWidth; lvl.classList.add('bump');
+    for (const el of detail.querySelectorAll('[data-k]')) {
+      const next = v[el.dataset.k];
+      if (next == null) continue;
+      if (el.dataset.k === 'power') {
+        if (el.innerHTML === next) continue;
+        el.classList.add('swap');
+        setTimeout(() => { el.innerHTML = next; el.classList.remove('swap'); }, 120);
+        continue;
+      }
+      const b = el.querySelector('b');
+      if (b.textContent !== next) tweenNumber(b, next);
+    }
+  }
+  function tweenNumber(el, to) {
+    const from = parseFloat(el.textContent) || 0;
+    const target = parseFloat(to);
+    const places = (to.split('.')[1] ?? '').length;
+    const start = performance.now();
+    const ms = 280;
+    el.parentElement.classList.add('changing');
+    cancelAnimationFrame(el._tween);
+    const step = (now) => {
+      const k = Math.min(1, (now - start) / ms);
+      const e = 1 - (1 - k) ** 3;
+      el.textContent = k < 1 ? (from + (target - from) * e).toFixed(places) : to;
+      if (k < 1) el._tween = requestAnimationFrame(step);
+      else el.parentElement.classList.remove('changing');
+    };
+    el._tween = requestAnimationFrame(step);
   }
 
   function renderDex() {
@@ -1819,31 +1872,23 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     const isForm = dexForm && base.ability?.form;
     const def = isForm ? formDef(base) : base;
     const star = dexStar;
-    const st = unitStats(def, star);
-    const max = dexMax(star);
     const copycat = isCopycat(def);
-    const bar = (label, value, shown, top, note = '') => `<div class="dex-stat">
-        <span>${label}</span><b>${shown}</b>
-        <div class="dex-bar"><i style="width:${Math.max(4, Math.round((100 * value) / top))}%"></i></div>${note}</div>`;
-    const fact = (label, value) => `<div class="dex-fact"><span>${label}</span><b>${value}</b></div>`;
-    const critDmg = show(Math.floor((st.atk * CRIT_PCT) / 100));
-    const powerDmg = def.ability && powerDamage(def, star);
-
-    let power = '';
-    if (isForm) {
-      const f = base.ability.form;
-      const traits = [
-        !f.hp && `Keeps ${esc(base.name)}'s HP when it transforms.`,
-        f.shockwave && `As it changes, a shock wave stuns every enemy in the ${2 * f.shockwave.radius + 1}x${2 * f.shockwave.radius + 1} around it for ${secs(f.shockwave.stun)}s.`,
-        f.blink && 'It doesn\'t walk: it zips straight to the square beside its target.',
-        f.hop && `Every ${f.energy} attacks it picks a different enemy and zips beside it (if there's no free square, it stays).`,
-      ].filter(Boolean);
-      power = `<div class="dex-power"><h3>${esc(base.ability.name)} form</h3>
-        <p>${esc(base.name)} becomes ${esc(f.name)} for the rest of the fight. ${traits.join(' ')}</p></div>`;
-    } else if (def.ability) {
-      power = `<div class="dex-power"><h3>${esc(def.ability.name)} <small>${powerCadence(def)}</small></h3>
-        <p>${describePower(def, star, catalog)}</p></div>`;
-    }
+    const v = dexLevelValues(def, star, isForm ? base : null);
+    const chip = (k, label, value) => `<span class="dex-chip"${k ? ` data-k="${k}"` : ''}><small>${label}</small><b>${value}</b></span>`;
+    const st = unitStats(def, star);
+    const chips = [
+      chip('hp', 'HP', v.hp),
+      !copycat && chip('dmg', 'Damage', v.dmg),
+      !copycat && chip('crit', `Crit (${st.crit}%)`, v.crit),
+      !copycat && chip('dps', 'DPS', v.dps),
+      !copycat && chip('', 'Attacks every', `${attackTime(st)}s`),
+      !copycat && chip('', 'Range', def.range > 1 ? `${def.range} tiles` : 'Melee'),
+      chip('', 'Movement', SPEED_NAME[def.moveSpeed]),
+      v.pdmg !== null && chip('pdmg', `${esc(def.ability.name)}`, v.pdmg),
+    ].filter(Boolean).join('');
+    const power = isForm
+      ? `<div class="dex-power"><h3>${esc(base.ability.name)} form</h3><p data-k="power">${v.power}</p></div>`
+      : def.ability ? `<div class="dex-power"><h3>${esc(def.ability.name)} <small>${powerCadence(def)}</small></h3><p data-k="power">${v.power}</p></div>` : '';
 
     // Related Pokémon (its form, what it summons, who summons it) as small
     // sprites beside the big one; tapping one opens that entry.
@@ -1866,7 +1911,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
               <span class="portrait dex-portrait" data-facing="down"><span class="sprite" ${spriteStyle(def)}></span></span>
               ${relatedHtml ? `<div class="dex-rels">${relatedHtml}</div>` : ''}
             </div>
-            <button id="dex-level" class="dex-level" title="${LEVEL_NAMES[star]}: tap for the next level (→)" aria-label="Level: ${LEVEL_NAMES[star]}. Tap for the next level."><span class="stars s${star}">${levelMark(star)}</span></button>
+            <button id="dex-level" class="dex-level" title="Tap for the next level (→)" aria-label="Level: ${LEVEL_NAMES[star]}. Tap for the next level."><span class="stars s${star}">${levelMark(star)}</span></button>
           </div>
           <div class="dex-title">
             <h2>${esc(def.name)}</h2>
@@ -1874,18 +1919,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
             ${related.length ? `<p class="dex-rel-names">${related.map(([d, attrs, label]) => `<button class="linkish" ${attrs}>${esc(label)}</button>`).join('')}</p>` : ''}
           </div>
         </div>
-        <div class="dex-stats">
-          ${bar('HP', st.hp, show(st.hp), max.hp)}
-          ${copycat ? `<p class="dex-note">Once it transforms, Ditto fights with the copied Pokémon's HP, damage, attack speed, range and crit.</p>` : `
-          ${bar('Damage per hit', st.atk, show(st.atk), max.atk, `<small>Crit ${critDmg} · ${st.crit}% chance</small>`)}
-          ${bar('Damage per second', +dps(st), dps(st), max.dps)}`}
-        </div>
-        <div class="dex-facts">
-          ${copycat ? '' : fact('Attacks every', `${attackTime(st)}s`)}
-          ${copycat ? '' : fact('Range', def.range > 1 ? `${def.range} tiles` : 'Melee')}
-          ${fact('Movement', SPEED_NAME[def.moveSpeed])}
-          ${powerDmg ? fact(`${esc(def.ability.name)} damage`, show(powerDmg)) : ''}
-        </div>
+        <div class="dex-chips">${chips}</div>
         ${power}
         <p class="muted dex-foot">${def.summon ? 'A summon comes at the level the power gives it.' : `Copies on the board: 1 = ★, 2 = ★★, 3 = ★★★, 4 = ${levelMark(3)} (shiny).`} A crit deals ${CRIT_PCT - 100}% more damage.</p>
       </section>`;

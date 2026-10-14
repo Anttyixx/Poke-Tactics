@@ -860,18 +860,20 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .linkish { padding: 0; border: 0; background: none; color: var(--mana); font-size: 13px; font-weight: 700; min-width: 0; }
 .linkish:hover { text-decoration: underline; background: none; }
 
-.dex-stats { display: grid; gap: 10px; margin-bottom: 12px; }
-.dex-stat { display: grid; grid-template-columns: 1fr auto; align-items: baseline; row-gap: 4px; }
-.dex-stat > span { color: var(--muted); font-weight: 700; font-size: 14px; }
-.dex-stat > b { font-size: 18px; font-variant-numeric: tabular-nums; }
-.dex-stat small { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
-.dex-bar { grid-column: 1 / -1; height: 8px; border-radius: 99px; background: var(--panel-3); overflow: hidden; }
-.dex-bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, color-mix(in srgb, var(--type) 70%, #fff0), var(--type)); transition: width 0.35s var(--glide); }
-.dex-note { margin: 0; padding: 8px 12px; border-radius: 10px; background: var(--panel-2); color: #d4d8e8; }
-.dex-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-bottom: 14px; }
-.dex-fact { padding: 8px 12px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--line); }
-.dex-fact span { display: block; color: var(--muted); font-size: 12px; }
-.dex-fact b { font-size: 16px; font-variant-numeric: tabular-nums; }
+.dex-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.dex-chip {
+  display: inline-flex; align-items: baseline; gap: 8px; padding: 6px 14px; border-radius: 99px;
+  background: var(--panel-2); border: 1px solid color-mix(in srgb, var(--type) 30%, var(--line));
+  transition: border-color 0.3s, background-color 0.3s;
+}
+.dex-chip small { color: var(--muted); font-size: 12px; font-weight: 700; }
+.dex-chip b { font-size: 16px; font-variant-numeric: tabular-nums; }
+.dex-chip.changing { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 10%, var(--panel-2)); }
+.dex-power p { transition: opacity 0.12s; }
+.dex-power p.swap { opacity: 0; }
+.dex-level.bump .stars { animation: level-bump 0.3s var(--spring); }
+@keyframes level-bump { from { transform: scale(0.6); opacity: 0.3; } }
+@media (prefers-reduced-motion: reduce) { .dex-level.bump .stars { animation: none; } }
 .dex-power { padding: 12px 14px; border-radius: 14px; background: var(--panel-2); border-left: 4px solid var(--type); margin-bottom: 12px; }
 .dex-power h3 { margin: 0 0 4px; font-size: 16px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
 .dex-power h3 small { color: var(--mana); font-size: 12px; font-weight: 700; }

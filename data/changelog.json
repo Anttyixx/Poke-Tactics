@@ -1,5 +1,15 @@
 [
   {
+    "id": "2026-10-14-dex-chips",
+    "version": "0.16.3",
+    "date": "2026-10-14",
+    "title": "Pokédex: stat chips and smooth level changes",
+    "changes": [
+      { "kind": "change", "text": "A Pokédex entry lists its stats as chips (HP, damage, crit, DPS, attack speed, range, movement, power damage) instead of bars." },
+      { "kind": "fix", "text": "Changing the level no longer flickers: the numbers count up or down to their new values and the power text fades over." }
+    ]
+  },
+  {
     "id": "2026-10-14-dex-level-chip",
     "version": "0.16.2",
     "date": "2026-10-14",
