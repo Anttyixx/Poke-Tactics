@@ -215,8 +215,8 @@ test a set of changes together. Team styles to pit against each other live in `A
   - Greninja, **Battle Bond**: after 5 attacks, becomes Ash-Greninja for the rest of the fight: fast
     movement, attacks every 0.8s, more damage, range 3 (same HP).
   - Torterra, **Earthquake**: with every 5th attack, every enemy on the board takes 30% and is stunned 1s.
-  - Lilligant, **Aromatherapy**: every attack heals your Pokémon directly left, right, above and below the
-    square it hits, for 50% of its damage.
+  - Lilligant, **Aromatherapy**: every attack heals your Pokémon in the 3x3 around the square it hits
+    (diagonals too), for 60% of its damage.
   - Golem, **Self-Destruct**: when knocked out it stays on its square for 3s (it can't be hit), then
     explodes for 300% on enemies in the 3x3 square around it. The fight waits for it.
   - Frosmoth (cost 3, mage, range 2, attacks every 1.25s), **Frostbite**: no charged power. Every

@@ -737,11 +737,14 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
         damage(target, Math.max(1, Math.floor((hit * 100) / (100 + target.armor))), u, crit);
         // Frosmoth: every hit chills its target.
         if (u.power?.kind === 'chill' && !u.copyOf) chill(target, u.power);
-        // Lilligant: each attack also heals its allies next to the square it hit.
+        // Lilligant: each attack also heals its allies around the square it hit:
+        // the (2r+1)x(2r+1) square for `radius` r, else the 4 squares beside it.
         if (u.power?.kind === 'splashHeal') {
           const p = at(target);
           const amount = Math.floor((u.atk * u.power.healPct) / 100);
-          for (const [dx, dy] of NEIGHBORS) {
+          const r = u.power.radius ?? 0;
+          const cells = r ? Array.from({ length: (2 * r + 1) ** 2 }, (_, k) => [(k % (2 * r + 1)) - r, Math.floor(k / (2 * r + 1)) - r]) : NEIGHBORS;
+          for (const [dx, dy] of cells) {
             const o = unitAt(p.x + dx, p.y + dy);
             if (o && o.side === u.side) heal(o, amount, u);
           }

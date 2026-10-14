@@ -1,5 +1,17 @@
 [
   {
+    "id": "2026-10-14-lilligant-heal",
+    "version": "0.17.0",
+    "date": "2026-10-14",
+    "title": "Lilligant buff: bigger healing splash",
+    "intro": "Lilligant's healing was too small to matter: teams with it won only 40% of games. Its heal now reaches more of your Pokémon and heals more.",
+    "changes": [
+      { "pokemon": "lilligant", "kind": "buff", "text": "Aromatherapy heals every ally in the 3x3 around its target (diagonals too), instead of only the 4 squares beside it." },
+      { "pokemon": "lilligant", "kind": "buff", "text": "Heals for 60% of its damage (was 50%)." },
+      { "pokemon": "lilligant", "kind": "buff", "text": "Damage 60 → 66 at ★ (+10% at every level)." }
+    ]
+  },
+  {
     "id": "2026-10-14-team-cards",
     "version": "0.16.11",
     "date": "2026-10-14",
