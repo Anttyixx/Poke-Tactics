@@ -1,5 +1,18 @@
 [
   {
+    "id": "2026-10-14-dreepy-grow",
+    "version": "0.32.0",
+    "date": "2026-10-14",
+    "title": "Dreepy grow with Dragapult",
+    "intro": "Dragapult was too strong early and fell off later, because its Dreepy never got stronger. Now they grow slowly with its level.",
+    "changes": [
+      { "pokemon": "dreepy", "kind": "change", "text": "HP 150 / 180 / 215 / 260 by level (was 150 at every level). Damage 20 / 25 / 31 / 38 (was 25 at every level), so less early-game dominance." },
+      { "pokemon": "dragapult", "kind": "buff", "text": "Landing hit 50 / 60 / 72 / 86 by level (was 50 at every level)." },
+      { "pokemon": "dragapult", "kind": "change", "text": "Attacks every 1.5s (was 1.8s) for 55 damage at ★ (was 65)." },
+      { "pokemon": "dragapult", "kind": "fix", "text": "A Dragapult shoved by an enemy Dreepy at the same moment it fires now still aims from where it stood, so mirrored fights stay fair." }
+    ]
+  },
+  {
     "id": "2026-10-14-dreepy-outside",
     "version": "0.31.0",
     "date": "2026-10-14",
