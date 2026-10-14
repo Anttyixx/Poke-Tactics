@@ -1,5 +1,16 @@
 [
   {
+    "id": "2026-10-14-dreepy-20",
+    "version": "0.26.0",
+    "date": "2026-10-14",
+    "title": "Dreepy bite harder",
+    "intro": "Dragapult's Dreepy do more damage; Dragapult itself hits a little softer.",
+    "changes": [
+      { "pokemon": "dreepy", "kind": "buff", "text": "Damage 6 → 20 at ★ (still an attack every 0.5s)." },
+      { "pokemon": "dragapult", "kind": "nerf", "text": "Damage 65 → 55 at ★." }
+    ]
+  },
+  {
     "id": "2026-10-14-dreepy-instead-of-attack",
     "version": "0.25.0",
     "date": "2026-10-14",
