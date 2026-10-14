@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=692f749';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=c7663b9';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=692f749';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=692f749';
+} from './game.js?v=c7663b9';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=c7663b9';
 
 const TICK_MS = 100;
 // Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
@@ -1326,17 +1326,40 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         } else { play(pal.el, 'spawned', 400); fx(p.x, p.y, 'ring', fxColor(pal.unitId), 1.3); }
         break;
       }
-      case 'dartReturn': { // a fainted Dreepy drifts slowly back to Dragapult
+      case 'dartReturn': { // a fainted Dreepy is knocked away by the hit, then arcs back to Dragapult
         if (!animate) break;
-        const ghost = document.createElement('div');
-        ghost.className = 'unit sprite-unit dart-ghost';
-        ghost.dataset.facing = 'down';
-        ghost.innerHTML = `<div class="body"><div class="sprite" style="background-image:url('${catalog[ev.unitId]?.sprite ?? ''}')"></div></div>`;
+        const dreepy = actors.get(ev.dreepy);
+        const hitter = dreepy?.lastHitBy;
         const from = viewPos(ev.fromX, ev.fromY);
-        const to = at();
-        place(ghost, from.x, from.y);
-        layer.append(ghost);
-        ghost.animate([{ translate: '0 0' }, { translate: `${(to.x - from.x) * 100}% ${(to.y - from.y) * 100}%` }], { duration: (ev.duration * TICK_MS) / speed, easing: 'linear' }).onfinish = () => ghost.remove();
+        const home = at(); // Dragapult, in squares
+        const ms = Math.max(ev.duration * TICK_MS, 500) / speed;
+        later(ctx.hitDelay.get(ev.dreepy) ?? 0, () => {
+          const ghost = document.createElement('div');
+          ghost.className = 'unit sprite-unit dart-ghost';
+          ghost.dataset.facing = 'down';
+          ghost.innerHTML = `<div class="body"><div class="sprite" style="background-image:url('${catalog[ev.unitId]?.sprite ?? ''}')"></div></div>`;
+          place(ghost, from.x, from.y);
+          layer.append(ghost);
+          // Knocked a square away from whoever hit it (straight up if unknown)...
+          const by = hitter ? viewPos(hitter.x, hitter.y) : { x: from.x, y: from.y + 1 };
+          let dx = from.x - by.x;
+          let dy = from.y - by.y;
+          const len = Math.hypot(dx, dy) || 1;
+          dx = (dx / len) * 0.9;
+          dy = (dy / len) * 0.9;
+          // ...then a curve up and over back home (a quadratic arc).
+          const end = { x: home.x - from.x, y: home.y - from.y };
+          const peak = { x: (dx + end.x) / 2, y: Math.min(dy, end.y) - 1.2 - Math.hypot(end.x - dx, end.y - dy) * 0.25 };
+          const frames = [{ offset: 0, translate: '0 0', rotate: '0deg', opacity: 0.6 }];
+          frames.push({ offset: 0.3, translate: `${dx * 100}% ${dy * 100}%`, rotate: `${dx >= 0 ? 200 : -200}deg`, opacity: 0.45, easing: 'ease-in-out' });
+          for (let k = 1; k <= 8; k++) {
+            const q = k / 8;
+            const x = (1 - q) ** 2 * dx + 2 * (1 - q) * q * peak.x + q ** 2 * end.x;
+            const y = (1 - q) ** 2 * dy + 2 * (1 - q) * q * peak.y + q ** 2 * end.y;
+            frames.push({ offset: 0.3 + 0.7 * q, translate: `${x * 100}% ${y * 100}%`, rotate: `${(dx >= 0 ? 200 : -200) + (dx >= 0 ? 160 : -160) * q}deg`, opacity: 0.45 - 0.25 * q });
+          }
+          ghost.animate(frames, { duration: ms, easing: 'linear' }).onfinish = () => ghost.remove();
+        });
         break;
       }
       case 'taunt': { // Amoonguss: this Pokémon must attack it for a while
@@ -1510,6 +1533,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         const delay = animate ? ctx.srcDelay.get(ev.src) ?? 0 : 0;
         if (delay) ctx.hitDelay.set(a.id, delay);
         const src = actors.get(ev.src);
+        if (src) a.lastHitBy = src; // which way it flies if this knocks it out (Dreepy)
         later(delay, () => {
           if (newest()) {
             a.hp = ev.hp;

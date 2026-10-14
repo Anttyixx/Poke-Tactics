@@ -1,5 +1,14 @@
 [
   {
+    "id": "2026-10-14-dreepy-knockout-arc",
+    "version": "0.32.1",
+    "date": "2026-10-14",
+    "title": "Dreepy get knocked home",
+    "changes": [
+      { "pokemon": "dreepy", "kind": "new", "text": "A knocked-out Dreepy now gets knocked back in the direction it was hit, spinning, then arcs back to Dragapult." }
+    ]
+  },
+  {
     "id": "2026-10-14-dreepy-grow",
     "version": "0.32.0",
     "date": "2026-10-14",
