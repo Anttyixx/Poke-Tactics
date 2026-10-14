@@ -30,7 +30,7 @@ player a battle request) and **Training** (the bot).
   made while reconnecting are sent when it's back. The other player sees a notice while
   someone's away; the match carries on (the absent player is locked in each round).
 - **Reloads:** the match's code is saved (`poke-tactics-session`, 15 minutes); after a
-  reload the game offers **Rejoin the match**. Typing the code again also rejoins.
+  reload the game offers **Rejoin the match**.
 - **Leaving:** **Leave match** ends it for both at once. A room nobody is connected to is
   deleted after 15 minutes.
 - **Versions:** the server only lets in players on the same build as itself (the deploy
