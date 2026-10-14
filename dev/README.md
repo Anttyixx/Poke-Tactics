@@ -231,11 +231,11 @@ test a set of changes together. Team styles to pit against each other live in `A
   - Annihilape (cost 4, warrior), **Rage Fist**: each attack in a row without moving makes it attack
     20% faster, up to +100% after 5 attacks. Moving (or being moved) resets it.
   - Dragapult (cost 4, ranger, range 3), **Dragon Darts**: when it attacks with both its Dreepy at
-    home and its counter full (full at the start, then after 3 attacks), it fires them instead, at the
-    two farthest enemies. Each crashes into its target for 40
+    home, it fires them instead of that attack: at enemies in the 3x3 around it first (closest
+    first), otherwise at the two farthest enemies. It attacks slowly (every 2.5s) but hits hard. Each crashes into its target for 40
     damage and a 0.5s stun, taking its square and shoving it aside (a shield breaks instead), and the
     target must attack that Dreepy until it faints. Dreepy are fragile and hit fast for little;
-    they're a distraction. A fainted Dreepy flies back (0.5s); until it can fire again, Dragapult attacks
+    they're a distraction. A fainted Dreepy flies back (0.5s); until both are home, Dragapult attacks
     as usual. Darts fire at the end of the tick, at enemies already on the board, every Dragapult's
     first Dreepy before any second one, so neither side gets an edge.
   - Greninja, **Battle Bond**: after 5 attacks, becomes Ash-Greninja for the rest of the fight: fast

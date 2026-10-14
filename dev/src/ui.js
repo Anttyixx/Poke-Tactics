@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=910da92';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=795ba6e';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=910da92';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=910da92';
+} from './game.js?v=795ba6e';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=795ba6e';
 
 const TICK_MS = 100;
 // Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
@@ -72,7 +72,7 @@ export function powerText(def, star, catalog) {
     case 'rage': return { when: 'Every attack', text: `Each attack in a row without moving makes it attack ${vNum(`${p.stackPct}%`)} faster, up to ${vNum(`${p.stackPct * p.maxStacks}%`)} after ${vNum(p.maxStacks)} attacks. Moving resets it.` };
     case 'darts': {
       const name = catalog?.[p.unit]?.name ?? p.unit;
-      return { when: def.energy ? 'Both home + charged' : 'Both home', text: `When it attacks with both ${name} at home${def.energy ? ` and its counter full (it starts full, then fills with ${vNum(def.energy)} attacks)` : ''}, it fires them instead: one at each of the ${vNum(p.count)} farthest enemies${p.impactDamage ? `, each hitting for ${vDmg(show(Math.round(p.impactDamage[lvl] * STAT_SCALE)))}` : p.impactPct ? `, each hitting for ${vDmg(`${p.impactPct}%`)} damage (${vDmg(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.impactPct) / 100)))})` : ''}${p.impactStun ? ` and stunning it for ${vTime(p.impactStun)}` : ''}. Each ${p.displace ? 'crashes into its target, shoving it aside onto a square next to it, then stays' : 'lands beside its target'} and fights.${p.lure ? ` Its target stops attacking whoever it was and must attack the ${name} until it faints.` : ''} A ${name} that faints flies back (${vTime(Math.round(p.returnSec * 10))}). Until both are home, ${esc(def.name)} attacks normally. They come at ${esc(def.name)}'s level.` };
+      return { when: def.energy ? 'Both home + charged' : 'Both home', text: `When it attacks with both ${name} at home${def.energy ? ` and its counter full (it starts full, then fills with ${vNum(def.energy)} attacks)` : ''}, it fires them instead: one at each of the ${vNum(p.count)} ${p.near ? `enemies closest to it in the ${area(p.near)} around it${p.nearOnly ? '' : ' (if none, the farthest enemies)'}` : 'farthest enemies'}${p.impactDamage ? `, each hitting for ${vDmg(show(Math.round(p.impactDamage[lvl] * STAT_SCALE)))}` : p.impactPct ? `, each hitting for ${vDmg(`${p.impactPct}%`)} damage (${vDmg(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.impactPct) / 100)))})` : ''}${p.impactStun ? ` and stunning it for ${vTime(p.impactStun)}` : ''}. Each ${p.displace ? 'crashes into its target, shoving it aside onto a square next to it, then stays' : 'lands beside its target'} and fights.${p.lure ? ` Its target stops attacking whoever it was and must attack the ${name} until it faints.` : ''} A ${name} that faints flies back (${vTime(Math.round(p.returnSec * 10))}). Until both are home, ${esc(def.name)} attacks normally. They come at ${esc(def.name)}'s level.` };
     }
     case 'boost': return { when: every, text: `Charges up the allies directly left, right, in front of and behind it: each gains ${vNum(`+${p.charges}`)} toward its power (Pokémon without a power counter don't benefit).` };
     case 'snipe': return { when: every, text: `The attack also zaps the farthest enemy for ${hit}.` };
