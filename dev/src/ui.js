@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=faf64fb';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=8c7fc48';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=faf64fb';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=faf64fb';
+} from './game.js?v=8c7fc48';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=8c7fc48';
 
 const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
 // Attack-effect colour when a unit doesn't set its own "fx" colour in units.json.
@@ -1492,17 +1492,16 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     overlay.querySelector('#continue')?.focus();
   }
 
-  // Team cards look like the shop's: portrait, name, type and the cost in the
-  // corner. Stats live behind the ⓘ button (the Pokédex entry).
+  // Team cards look like the Pokédex's: sprite in a glow, name, cost and type.
+  // A picked card gets a green border and its Pokémon walks. Stats live
+  // behind the ⓘ button (the Pokédex entry).
   function teamCard(id, picked, i) {
     const def = catalog[id];
-    return `<button class="team-card${picked ? ' chosen' : ''}" style="--i:${i}" data-pick-troop="${id}" data-type="${def.type}" ${me().ready ? 'disabled' : ''} aria-pressed="${picked}">
-      <span class="cost c${def.cost}" title="${def.cost} coins">${def.cost}</span>
+    return `<button class="dex-card team-card${picked ? ' chosen' : ''}" style="--i:${i}" data-pick-troop="${id}" data-type="${def.type}" ${me().ready ? 'disabled' : ''} aria-pressed="${picked}">
       <span class="info-btn" data-dex-info="${id}" role="button" aria-label="${esc(def.name)} info">i</span>
-      ${portrait(def)}
-      <span class="check" aria-hidden="true">✓</span>
-      <span class="name">${esc(def.name)}</span>
-      <span class="type">${def.type}</span>
+      <span class="dex-card-art">${portrait(def)}</span>
+      <b>${esc(def.name)}</b>
+      <small>${def.cost} 🪙 · ${def.type[0].toUpperCase() + def.type.slice(1)}</small>
     </button>`;
   }
 
@@ -1536,15 +1535,31 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     const need = teamSize(catalog);
     const waiting = me().ready;
     const ready = draft.troops.length === need;
-    const fresh = !overlay.querySelector('.team-grid');
+    const count = `${Array.from({ length: need }, (_, k) => `<i class="${k < draft.troops.length ? 'on' : ''}"></i>`).join('')}<span>${draft.troops.length}/${need}</span>`;
+    const actions = waiting
+      ? '<p class="muted">Waiting for opponent…</p>'
+      : `<button id="start-team" class="primary" ${ready ? '' : 'disabled'}>${ready ? 'Start battle' : `Pick ${need - draft.troops.length} more`}</button>`;
+    const grid = overlay.hidden ? null : overlay.querySelector('.team-grid');
+    if (grid) {
+      // Already on screen: update in place, so only the card that changed
+      // animates (redrawing would replay every picked card's animation).
+      for (const card of grid.querySelectorAll('[data-pick-troop]')) {
+        const picked = draft.troops.includes(card.dataset.pickTroop);
+        card.classList.toggle('chosen', picked);
+        card.setAttribute('aria-pressed', picked);
+        card.disabled = Boolean(waiting);
+      }
+      overlay.querySelector('.team-count').innerHTML = count;
+      const box = overlay.querySelector('.team-actions');
+      if (box.innerHTML !== actions) box.innerHTML = actions;
+      return;
+    }
     showOverlay(`
       <h1>Choose your team</h1>
       <p class="muted">Pick ${need} Pokémon. Each puts ${COPIES_PER_TROOP} copies in your pool for the shop. Tap <span class="info-btn inline">i</span> for a Pokémon's stats.</p>
-      <div class="team-count">${Array.from({ length: need }, (_, k) => `<i class="${k < draft.troops.length ? 'on' : ''}"></i>`).join('')}<span>${draft.troops.length}/${need}</span></div>
-      <div class="team-grid${fresh ? ' fresh' : ''}">${troopIds(catalog).map((id, i) => teamCard(id, draft.troops.includes(id), i)).join('')}</div>
-      ${waiting
-        ? '<p class="muted">Waiting for opponent…</p>'
-        : `<button id="start-team" class="primary" ${ready ? '' : 'disabled'}>${ready ? 'Start battle' : `Pick ${need - draft.troops.length} more`}</button>`}`);
+      <div class="team-count">${count}</div>
+      <div class="team-grid fresh">${troopIds(catalog).map((id, i) => teamCard(id, draft.troops.includes(id), i)).join('')}</div>
+      <div class="team-actions">${actions}</div>`);
   }
 
   function showGameOver() {

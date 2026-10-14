@@ -2,35 +2,68 @@
 
 A browser-based 1v1 auto-battler. Buy units, place them on your half of the grid,
 then watch the fight play out by itself. Plain HTML/CSS/JS with ES modules. There is
-no build step, and it deploys to GitHub Pages as static files. The only third-party
-code is PeerJS (MIT, copied into `vendor/`) for online play.
+no build step, and it deploys to GitHub Pages as static files. Online play runs on a small
+Cloudflare Worker (`server/`), deployed by the same workflow.
 
-**Status:** play against the bot, or a friend online with a game code.
+**Status:** play against the bot, a random opponent online, or a friend by their friend code.
 
 ## Online play
 
-**Battle** on the start screen. One player taps **Create game** and gets a
-5-character code (and an invite link, `?join=CODE`); the other enters it under **Join**.
+The start screen has **Battle** (straight into the matchmaking queue: "Waiting for opponent"
+until the next player looking is found), **Battle a friend** (enter a friend code to send that
+player a battle request) and **Training** (the bot).
 
-- When the two connect, a battle-style screen wipe shows both trainers' names.
-- Each planning phase lasts 30 seconds (the Fight button counts down, red for the last 10).
-  When time runs out, anyone still planning is locked in as they are. The host's clock decides.
-- Browsers connect directly over WebRTC (`src/net.js`); PeerJS's free public server only
-  introduces them. Strict networks (some school/work Wi-Fi, some mobile data) can block
-  direct connections; then the join fails with a message suggesting another network.
-- The host's browser runs the match (`src/main.js`): the guest sends intents, the host
-  validates them with `applyIntent()` like anyone's and sends the new state back after
-  every change. Both players must run the same build; otherwise the join is refused.
-- A heartbeat notices a friend who leaves or loses connection; the other player is told
-  the match ended. **Leave match** in the menu disconnects. After a match: **Rematch**.
-- Players on different networks often can't connect directly; then a TURN relay from
-  Metered.ca carries the messages (`src/net-config.js`). Its username and password (from
-  "New credential" in Metered's TURN dashboard) live in the `METERED_TURN_USERNAME` and
-  `METERED_TURN_PASSWORD` repository secrets; the deploy workflow writes them into the site.
-- **Battle → Check my connection** shows whether the relay login is set and whether
-  direct and relayed routes work on that device.
-- `?peer=host:port` uses your own PeerJS server instead of the public one, e.g.
-  `npx peerjs --port 9000` for testing two tabs locally.
+- **The match runs on a server**, not in either player's browser: a Cloudflare Worker
+  (`server/worker.js`) with one Durable Object per match, found by its code. It runs the
+  same rules code as the game (`src/game.js`, `data/units.json`), checks every move with
+  `applyIntent()`, and sends both players the new state after every change. A phone locking
+  or a page reloading never stops the match. Another Durable Object is the matchmaking queue.
+- Browsers talk to it over a WebSocket (`src/online.js`, protocol at the top of the file):
+  plain HTTPS, so it works on any network that can open a website (no relay needed).
+- **Each planning phase lasts 30 seconds** on the server's clock (both screens count down);
+  then anyone still planning is locked in as they are. After a battle has played out, anyone
+  who hasn't pressed Continue within 20 seconds is moved on.
+- **Dropping out and coming back:** each browser keeps a random player id
+  (`poke-tactics-pid` in localStorage), which is how the server knows a returning player. The
+  connection pings every 5 seconds; silence for 15 seconds, the page coming back on screen,
+  or the network coming back makes it reconnect at once, straight back into the match. Moves
+  made while reconnecting are sent when it's back. The other player sees a notice while
+  someone's away; the match carries on (the absent player is locked in each round).
+- **Reloads:** the match's code is saved (`poke-tactics-session`, 15 minutes); after a
+  reload the game offers **Rejoin the match**.
+- **Leaving:** **Leave match** ends it for both at once. A room nobody is connected to is
+  deleted after 15 minutes.
+- **Versions:** the server only lets in players on the same build as itself (the deploy
+  tags both with the commit), so everyone runs the same rules. An old tab is told to refresh.
+- **Screen stays on** during online matches (Screen Wake Lock API, where the browser allows
+  it): a phone locking itself pauses the page.
+- **Connection log:** each browser notes what its connection did; it's included in the
+  copied match log under `connection`. The last online match's log is kept in localStorage
+  (`poke-tactics-last-log`): **Copy match log** on the "Match ended" screen, or **Menu → Last
+  online match log** on the start screen.
+- **Battle → Check my connection** checks the server can be reached and is on your version.
+- **Friends** (menu → Friends): every player has a 6-character
+  friend code. Enter a friend's code to send a request; they accept or decline. The list shows who's
+  online, in a battle or offline, live. **⚔ Battle** on an online friend, or **Battle a friend** on
+  the start screen with any player's friend code (no need to be friends first), sends a battle
+  request (they have 45 seconds to accept); accepting starts a match for the two of you. A player already in
+  an online match automatically turns requests down. Friends are kept on the server (the `Presence`
+  Durable Object), tied to the browser's player id: another browser or device, or cleared site data,
+  is a new player with a new code. Friend codes are the only id players see of each other.
+
+### The server (`server/`)
+
+- Deployed by `.github/workflows/pages.yml` on every push: `dev` → Worker `poke-tactics-dev`,
+  `main` → `poke-tactics`, each with its own matches. The workflow writes the Worker's address
+  into `src/server-config.js` in the published site. It needs two repository secrets:
+  `CLOUDFLARE_API_TOKEN` (an API token from the "Edit Cloudflare Workers" template) and
+  `CLOUDFLARE_ACCOUNT_ID`. Without them, or if the server deploy fails, the site still deploys
+  with online play off (the run shows a warning or error).
+- Free plan: Workers plus SQLite-backed Durable Objects, with WebSocket hibernation so idle
+  connections cost nothing.
+- **Run it locally:** `cd server && npm install && npm run dev` (Wrangler, port 8787), then
+  open the game with `?server=http://localhost:8787`. Locally both sides use the build
+  `local`.
 
 ## Run locally
 
@@ -121,18 +154,31 @@ test a set of changes together. Team styles to pit against each other live in `A
 
 - **Start:** the game opens on a start screen; **Battle** plays a friend online (above); **Training** plays the bot. Pokémon are shown as
   cards (cost in the corner); tap one to pick it, or its **i** for its stats and power.
+- **Profile:** the chip at the top left of the start screen (or Menu → Profile) sets your name and
+  a profile picture from a fixed list (the Pokémon sprites' front frame, cropped and centred into
+  `assets/avatars/`; to change the list, edit `AVATARS` in `src/profile.js` and run
+  `python3 tools/make-avatars.py`, which needs Pillow). It's saved in the browser's localStorage under
+  `poke-tactics-profile`, so it's still there after closing the browser; clearing site data or a
+  private window starts fresh. Your name and picture show in the HUD and the versus intro; online,
+  your opponent sees them too (the host only accepts pictures from the list). The name typed on the
+  online lobby screen is saved to the profile as well.
+  The profile screen also shows **stats** (wins, losses and draws for online and training matches,
+  win rate, and the most used Pokémon: the one fielded in the most battles; matches left before the
+  end aren't counted) and a **friends** list where friends can be removed. Adding friends isn't built
+  yet; `addFriend()` in `src/profile.js` is ready for it. Stats and friends are saved with the profile.
 - **Team:** before round 1, each player picks 6 Pokémon. Each one puts 4 copies into that player's own
   pool. The board starts empty: everything you field, you buy.
-- **Coins:** you start with 6. After each battle the winner gets 6 coins and the loser 9 (a draw pays
-  both 9). Coins carry over between rounds with no cap. Troops cost 2–5 coins per copy.
-- **Shop:** 3 slots, drawn from your pool (never more copies than the pool holds). The shop refreshes
-  by itself after every battle.
-- **Rerolls:** free, but limited. You start with 3 and get 1 more each round, up to a maximum of 3.
-  When you're out, you can't reroll until the next round.
+- **Coins:** you start with 10. Every round after that you get 5 coins, plus 1 for each of your own
+  Pokémon knocked out in the battle just fought (summons like Combee don't count; the loser of a
+  battle lost its whole board). Coins carry over between rounds with no cap. Troops cost 2–5 coins
+  per copy.
+- **Shop:** 3 slots, drawn from your pool (never more copies than the pool holds). It refreshes for
+  free every time you buy a Pokémon, and by itself after every battle.
+- **Rerolls:** 1 coin each, as many as you can pay for.
 - **Buying:** click a shop troop, then a square on your half (or drag the card onto the board). A copy
   you buy leaves your pool. There is no bench.
 - **Stars:** each troop can be on the board only once. Buying a copy of a troop you already field levels
-  that troop up instead (click anywhere on your side): 1 copy = 0★, 2 = ★, 3 = ★★, 4 = ★★★. Each
+  that troop up instead (click anywhere on your side): 1 copy = ★, 2 = ★★, 3 = ★★★, 4 = a shiny star. Each
   Pokémon lists its own HP and damage for every star level. Moving a troop onto another unit swaps them.
 - **Selling:** drag a troop onto the shop (or press Sell) for its cost in coins per copy; all its copies go back
   to your pool.
@@ -173,16 +219,26 @@ test a set of changes together. Team styles to pit against each other live in `A
     square it hits, for 50% of its damage.
   - Golem, **Self-Destruct**: when knocked out it stays on its square for 3s (it can't be hit), then
     explodes for 300% on enemies in the 3x3 square around it. The fight waits for it.
-  - Minior, **Shining Star**: two play styles. Rock form is slow and sturdy (super slow, attacks every
-    3.0s). At 50% HP or less it spends 0.5s transforming, immune to everything (damage, stuns,
-    knockbacks, sudden death), then becomes its Star Form for the rest of the fight: very fast movement
-    and an attack every 0.5s, for the same damage per hit.
+  - Frosmoth (cost 3, mage, range 2, attacks every 1.25s), **Frostbite**: no charged power. Every
+    hit chills the target for 3s: it attacks 30% slower and waits 30% longer between steps; another
+    hit restarts the timer. Chills land at the end of the tick, like stuns. Chilled Pokémon are
+    tinted blue with a snowflake badge.
+  - Minior, **Shining Star**: two lives. Rock form is a slow, soft-hitting wall (very slow, 30 damage
+    every 3.0s, 1100 HP). When it would be knocked out it doesn't faint: at the end of that tick it gets
+    Star Form's own HP (600), spends 0.5s transforming, immune to everything (damage, stuns, knockbacks,
+    sudden death), then becomes Star Form for the rest of the fight. Changing sends out a shock wave
+    that stuns every enemy in the 3x3 around it for 1s. Star Form attacks every 0.3s for 20 and doesn't
+    walk: it zips straight to the open square beside its target (if all are taken, it walks). Its own
+    power, every 10 attacks: it picks a different enemy (a seeded pick among those with a free square
+    beside them) and zips there; with no other enemy to reach it moves to another square beside its
+    target, and with none free it stays. The purple bar counts toward the next hop. A form with a
+    faster attack speed doesn't wait out the old form's attack timer.
   - Tapu Koko (range 2, attacks every 1.1s), **Wild Charge**: after 4 attacks, the next dashes in a straight line to the open square
     next to the farthest enemy (closest to Tapu Koko). The dash takes 0.1s per square (at least 0.2s),
     and Tapu Koko is immune to everything on the way. When it arrives it hits for 150%; the target and
     every enemy it passed through are stunned for 1s.
   - Ditto, **Transform**: walks (medium speed) toward the nearest enemy until it's within that enemy's
-    range, then takes 0.5s to transform into it, copying its max HP, damage, attack speed, range and crit
+    range, then takes 1s to transform into it, copying its max HP, damage, attack speed, range and crit
     (not its power or movement). It keeps its share of HP across the change, shows the copied sprite in
     Ditto's colours, and doesn't move while transformed. When the copied Pokémon faints or no enemy is in
     range, it turns back into Ditto and walks to the next nearest.
@@ -217,12 +273,15 @@ src/combat.js       simulate(catalog, boards). Pure and deterministic, returns a
 src/game.js         rules: createGame(), applyIntent(). The only thing that changes state
 src/bot.js          dummy opponent. Uses the same intents as a human
 src/ui.js           DOM rendering, input -> intents, replays combat from the event log
-src/main.js         wires game + bot + UI together (single player)
+src/main.js         wires game + bot + UI together; online matches through src/online.js
+src/online.js       WebSocket connection to the game server, reconnecting by itself
+src/server-config.js  the server's address (written by the deploy)
+server/             the online game server (Cloudflare Worker + Durable Objects)
+src/profile.js      the player's profile (name + picture), saved in localStorage
 tests/run.js        Node test runner
 .github/workflows/pages.yml   deploys main -> / and dev -> /dev/
 ```
 
-`src/network.js` will arrive in Phase 2.
 
 ## Hosting and branches
 
@@ -253,19 +312,19 @@ Branch to `gh-pages`, and folder to `/ (root)`.
 
 All asset paths are relative, so the game works at both the site root and `/dev/`.
 
-## Architecture notes for Phase 3 (host-authoritative)
+## Architecture notes (server-authoritative)
 
-The Phase 1 code is built to make the multiplayer phase easy:
+The same rules code runs the bot game in the browser and every online match on the server:
 
 - **One state object, one way to change it.** All match state is in a plain JSON object.
   The UI never mutates it. Clicks become intents (`buy`, `sell`, `reroll`, `move`, `ready`,
   `continue`) and go through `applyIntent(state, catalog, player, intent)`, which validates them.
-  The bot already plays through this API, so in Phase 3 the guest's intents just replace the bot's.
+  The bot plays through this API; online, both players' intents reach it on the server.
 - **Deterministic, pure combat.** `simulate()` uses integer math and fixed tie-breaking. It never
   calls `Math.random`. It returns an event log (`move`, `attack`, `damage`, `cast`, …). Clients
   only replay that log, which is the "render from received state" model in the brief.
 - **Seeded, per-player RNG.** Shop rolls use an RNG whose state is stored in each player's
-  state. The host owns it, and one player's rerolls can't change the other player's shops.
+  state. The server owns it, and one player's rerolls can't change the other player's shops.
 - **Symmetric seats.** Both players place units in "own" coordinates (front line = row 0) and the
   simulation mirrors side 1. The UI flips the view so each player sees their own side at the bottom.
 - **Phases advance on "everyone ready."** Combat starts when every player sends `ready`. The next
