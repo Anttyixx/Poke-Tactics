@@ -1,5 +1,17 @@
 [
   {
+    "id": "2026-10-14-frosmoth",
+    "version": "0.15.0",
+    "date": "2026-10-14",
+    "title": "New Pokémon: Frosmoth",
+    "intro": "Frosmoth joins the game: a ranged mage that slows down everything it hits.",
+    "changes": [
+      { "pokemon": "frosmoth", "kind": "new", "text": "Frosmoth (cost 3, range 2): every attack chills the target for 3 seconds, making it attack 30% slower and move 30% slower. Each hit restarts the chill." },
+      { "kind": "new", "text": "Chilled Pokémon turn icy blue and show a snowflake, so you can see who's slowed." },
+      { "kind": "new", "text": "Frosmoth is also a new profile picture." }
+    ]
+  },
+  {
     "id": "2026-10-14-popups-on-start",
     "version": "0.14.1",
     "date": "2026-10-14",

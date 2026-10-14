@@ -126,8 +126,8 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .bump { animation: bump 0.45s var(--spring); }
 @keyframes bump { 0% { transform: scale(1); } 35% { transform: scale(1.25); } 100% { transform: scale(1); } }
 .duel { flex: 1; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; min-width: 0; margin: 0 6px; }
-.hpbox { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; min-width: 0; }
-.hpbox.enemy { grid-template-columns: auto 1fr auto; }
+.hpbox { display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 8px; min-width: 0; }
+.hpbox.enemy { grid-template-columns: auto 1fr auto auto; }
 .hpbox .name { font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hpbox .hpbar { height: 10px; background: #0b0f1c; border-radius: 99px; overflow: hidden; box-shadow: inset 0 1px 2px #000a; min-width: 40px; }
 .hpbox .hpbar i { display: block; height: 100%; border-radius: inherit; transition: width 0.8s var(--glide); }
@@ -225,7 +225,7 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   height: calc(100% / var(--rows));
   /* A step takes the unit's whole move time (0.5s fast to 1.3s very slow). It
      eases out of one square and into the next, like a hop. */
-  --hop: calc(var(--tick, 100ms) * 5 * var(--step, 1) / var(--speed, 1));
+  --hop: calc(var(--tick, 100ms) * 5 / var(--speed, 1)); /* every step takes 0.5s */
   transition: left var(--hop) var(--glide), top var(--hop) var(--glide);
 }
 #units .unit.dragging { opacity: 0.5; }
@@ -709,7 +709,7 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 @keyframes ready-glow { 50% { box-shadow: 0 4px 22px #4d8dffaa, inset 0 1px 0 #ffffff40; } }
 
 /* ---- Modals: overlay (team, results), Pokédex, Menu ---- */
-#overlay, .modal {
+:is(#overlay, #lobby), .modal {
   position: fixed; inset: 0; z-index: 50;
   display: flex; overflow-y: auto;
   padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
@@ -718,9 +718,9 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   animation: fade-in 0.2s ease-out;
 }
 .modal { z-index: 60; }
-#overlay[hidden], .modal[hidden] { display: none; }
+:is(#overlay, #lobby)[hidden], .modal[hidden] { display: none; }
 @keyframes fade-in { from { opacity: 0; } }
-#overlay .card, .dex-panel, .menu-panel {
+:is(#overlay, #lobby) .card, .dex-panel, .menu-panel {
   position: relative;
   margin: auto; /* centred, but scrolls instead of clipping when taller than the screen */
   width: 100%;
@@ -731,18 +731,18 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   animation: pop-in 0.35s var(--spring);
 }
 @keyframes pop-in { from { transform: translateY(14px) scale(0.94); opacity: 0; } }
-#overlay .card { max-width: 440px; padding: 26px 28px; text-align: center; }
-#overlay h1 { font-size: 34px; margin-bottom: 8px; }
-#overlay h1.win { color: var(--good); text-shadow: 0 0 24px #3ddc8466; animation: title-pop 0.6s var(--spring); }
-#overlay h1.loss { color: var(--enemy); animation: title-pop 0.6s var(--spring); }
+:is(#overlay, #lobby) .card { max-width: 440px; padding: 26px 28px; text-align: center; }
+:is(#overlay, #lobby) h1 { font-size: 34px; margin-bottom: 8px; }
+:is(#overlay, #lobby) h1.win { color: var(--good); text-shadow: 0 0 24px #3ddc8466; animation: title-pop 0.6s var(--spring); }
+:is(#overlay, #lobby) h1.loss { color: var(--enemy); animation: title-pop 0.6s var(--spring); }
 @keyframes title-pop { 0% { transform: scale(0.4); opacity: 0; } 100% { transform: scale(1); } }
-#overlay button { margin-top: 10px; min-width: 170px; }
+:is(#overlay, #lobby) button { margin-top: 10px; min-width: 170px; }
 
 /* Team picker */
-#overlay .card:has(.pick-grid) { max-width: 880px; }
+:is(#overlay, #lobby) .card:has(.pick-grid) { max-width: 880px; }
 .pick-title { margin: 16px 0 10px; text-align: left; }
 .pick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
-#overlay .leader-card {
+:is(#overlay, #lobby) .leader-card {
   margin: 0;
   min-width: 0;
   display: flex; flex-direction: column; align-items: center; gap: 4px;
@@ -754,14 +754,14 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   border: 2px solid var(--line);
   text-align: center;
 }
-#overlay .leader-card:hover:not(:disabled) { transform: translateY(-3px); }
+:is(#overlay, #lobby) .leader-card:hover:not(:disabled) { transform: translateY(-3px); }
 .leader-card .portrait { width: 92px; height: 92px; }
 .leader-card b { font-size: 16px; }
 .leader-card .muted { font-size: 12px; }
 .leader-card small { color: #c7cbe0; line-height: 1.35; font-weight: 700; }
-#overlay .leader-card.chosen { border-color: var(--good); box-shadow: 0 0 0 1px var(--good), 0 6px 20px #3ddc8433; }
-#overlay .leader-card.chosen::after { content: "✓"; position: absolute; top: 8px; right: 10px; color: var(--good); font-weight: 900; }
-#overlay .leader-card { position: relative; }
+:is(#overlay, #lobby) .leader-card.chosen { border-color: var(--good); box-shadow: 0 0 0 1px var(--good), 0 6px 20px #3ddc8433; }
+:is(#overlay, #lobby) .leader-card.chosen::after { content: "✓"; position: absolute; top: 8px; right: 10px; color: var(--good); font-weight: 900; }
+:is(#overlay, #lobby) .leader-card { position: relative; }
 #start-team { margin-top: 18px; }
 
 /* Menu */
@@ -873,8 +873,8 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   #shop-actions { flex-direction: row; width: 100%; }
   #shop-actions button { padding: 10px; }
   .pick-grid { grid-template-columns: 1fr; }
-  #overlay .card { padding: 20px 16px; }
-  #overlay .leader-card { display: grid; grid-template-columns: 72px 1fr; text-align: left; align-items: center; column-gap: 12px; }
+  :is(#overlay, #lobby) .card { padding: 20px 16px; }
+  :is(#overlay, #lobby) .leader-card { display: grid; grid-template-columns: 72px 1fr; text-align: left; align-items: center; column-gap: 12px; }
   .leader-card .portrait { width: 72px; height: 72px; grid-row: span 3; }
   .dex-body { grid-template-columns: 1fr; }
   .dex-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -923,7 +923,7 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   backdrop-filter: none;
 }
 #overlay.start-screen .card { background: none; border: 0; box-shadow: none; max-width: 640px; }
-.start { display: grid; justify-items: center; gap: 18px; padding: 8px 0 24px; }
+.start { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 18px; padding: 8px 0 24px; }
 .logo { display: grid; line-height: 0.9; font-weight: 900; text-transform: uppercase; letter-spacing: 0.02em; animation: logo-in 0.8s var(--spring); }
 .logo span:first-child { font-size: clamp(44px, 12vw, 84px); color: #fff; text-shadow: 0 4px 0 #2f62e0, 0 8px 24px #000a; }
 .logo span:last-child { font-size: clamp(30px, 8vw, 56px); color: var(--gold); text-shadow: 0 3px 0 #b5650c, 0 8px 24px #000a; letter-spacing: 0.12em; }
@@ -932,17 +932,19 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .parade { position: relative; width: 100%; height: 76px; overflow: hidden; -webkit-mask: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); mask: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); }
 .walker {
   position: absolute; bottom: 0; left: 0; width: 64px; height: 64px;
-  /* Evenly spaced however many Pokémon there are: one every 1.6s. */
-  animation: parade calc(var(--n, 8) * 1.6s) linear infinite; animation-delay: calc(var(--i) * -1.6s);
+  /* One Pokémon every 88px, walking ~30px/s: each lane is 88px wide and
+     takes 2.9s, so the loop is n lanes long however many Pokémon there are.
+     Only the ones inside the strip are visible. */
+  animation: parade calc(var(--n, 8) * 2.9s) linear infinite; animation-delay: calc(var(--i) * -2.9s);
 }
 .walker .sprite { width: 100%; left: 0; bottom: 0; animation: walk 0.5s steps(4) infinite; }
-@keyframes parade { from { transform: translateX(-80px); } to { transform: translateX(min(640px, 100vw)); } }
+@keyframes parade { from { transform: translateX(-80px); } to { transform: translateX(calc(var(--n, 8) * 88px - 80px)); } }
 .battle-btn {
   font-size: 26px; padding: 16px 64px; border-radius: 18px; letter-spacing: 0.06em; text-transform: uppercase;
   animation: battle-pulse 2s ease-in-out infinite;
 }
 @keyframes battle-pulse { 50% { transform: scale(1.04); box-shadow: 0 6px 30px #4d8dffaa, inset 0 1px 0 #ffffff40; } }
-.start-links { display: flex; gap: 10px; }
+.start-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; max-width: 100%; }
 
 /* ---- Team selection: cards like the shop's, 4 across ---- */
 .team-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 6px 0 4px; }
@@ -957,7 +959,7 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   border: 2px solid var(--line);
   overflow: hidden;
 }
-#overlay .team-card { min-width: 0; margin: 0; }
+:is(#overlay, #lobby) .team-card { min-width: 0; margin: 0; }
 .team-card::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--type, var(--line)); }
 .team-card:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 8px 18px #0007; }
 .team-card .portrait { width: 64px; height: 64px; margin: -6px 0 -4px; }
@@ -970,8 +972,8 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 }
 .team-card .info-btn { display: grid; left: auto; right: 8px; top: 8px; }
 .team-card .info-btn:hover { background: var(--ally); border-color: #fff; }
-#overlay .card:has(.team-grid) { max-width: 720px; }
-#overlay .team-card.chosen, #overlay .team-card.chosen:hover:not(:disabled) {
+:is(#overlay, #lobby) .card:has(.team-grid) { max-width: 720px; }
+:is(#overlay, #lobby) .team-card.chosen, :is(#overlay, #lobby) .team-card.chosen:hover:not(:disabled) {
   border-color: var(--good);
   background:
     radial-gradient(120% 80% at 50% 0%, #3ddc8433, transparent 70%),
@@ -999,7 +1001,7 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   .team-card { padding: 24px 2px 8px; border-radius: 12px; }
   .team-card .portrait { width: 50px; height: 50px; }
   .team-card .name { font-size: 11px; letter-spacing: -0.02em; }
-  #overlay .card:has(.team-grid) { padding: 18px 10px; }
+  :is(#overlay, #lobby) .card:has(.team-grid) { padding: 18px 10px; }
   .team-card .check { width: 18px; height: 18px; font-size: 11px; margin-left: 8px; }
   .team-card .type { display: none; }
   .team-card .cost { top: 5px; left: 5px; font-size: 11px; padding: 0 6px; }
@@ -1047,13 +1049,13 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .unit.immune .shadow { box-shadow: 0 0 0 3px #fff, 0 0 18px var(--fx); }
 
 /* ---- Online play ---- */
-.start-modes { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
-#overlay .start-modes .battle-btn { margin-top: 0; }
+.start-modes { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+:is(#overlay, #lobby) .start-modes .battle-btn { margin-top: 0; }
 .training-btn { background: var(--panel-2); border: 2px solid var(--line-2); }
 .training-btn:hover:not(:disabled) { border-color: var(--ally); }
-#overlay.lobby .card { max-width: 560px; }
-#overlay.lobby h2 { font-size: 17px; margin: 0 0 4px; }
-#overlay.lobby p { margin: 6px 0; }
+:is(#overlay, #lobby).lobby .card { max-width: 560px; }
+:is(#overlay, #lobby).lobby h2 { font-size: 17px; margin: 0 0 4px; }
+:is(#overlay, #lobby).lobby p { margin: 6px 0; }
 .field { display: grid; gap: 6px; text-align: left; font-weight: 800; font-size: 13px; color: var(--muted); margin: 14px auto 4px; max-width: 320px; }
 .field input, .code-input {
   font: inherit; font-size: 16px; color: var(--text); background: var(--bg); border: 1px solid var(--line-2);
@@ -1064,23 +1066,24 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .code-input::placeholder { color: var(--line-2); }
 .lobby-split { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0 6px; }
 .lobby-split section { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; align-content: start; }
-#overlay .lobby-split button { min-width: 0; width: 100%; }
+:is(#overlay, #lobby) .lobby-split button { min-width: 0; width: 100%; }
 .code-box {
   font-size: clamp(34px, 11vw, 52px); font-weight: 900; letter-spacing: 0.22em; padding: 12px 0 12px 0.22em; margin: 14px 0 6px;
   background: var(--bg); border: 2px dashed var(--line-2); border-radius: 14px; color: var(--gold); user-select: all;
 }
 .lobby-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
-#overlay .lobby-actions button { min-width: 0; }
+:is(#overlay, #lobby) .lobby-actions button { min-width: 0; }
 .waiting { display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--muted); margin-top: 14px !important; }
 .spinner { width: 34px; height: 34px; margin: 14px auto 6px; border-radius: 50%; border: 4px solid var(--line-2); border-top-color: var(--ally); animation: spin 0.8s linear infinite; }
 .spinner.small { width: 16px; height: 16px; margin: 0; border-width: 3px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 520px) {
   .lobby-split { grid-template-columns: 1fr; }
-  .start-modes { flex-direction: column; align-items: stretch; }
+  .start-modes { flex-direction: column; align-items: center; }
 }
 @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
-.start-modes .battle-btn { font-size: 20px; padding: 14px 30px; }
+.start-modes .battle-btn { font-size: 26px; padding: 18px 56px; }
+.start-modes .training-btn { font-size: 15px; padding: 9px 26px; letter-spacing: 0.08em; }
 .start-modes .training-btn { animation: none; }
 
 /* Online: the Fight button counts down the last 10 seconds of planning. */
@@ -1133,3 +1136,186 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .check-list span { font-weight: 900; }
 .check-list .ok span { color: var(--good); }
 .check-list .bad span { color: var(--enemy); }
+
+/* Match log (menu) */
+.log-notes { max-width: none; margin: 12px 0 10px; }
+.log-notes textarea, .log-text {
+  font: inherit; font-size: 15px; color: var(--text); background: var(--bg); border: 1px solid var(--line-2);
+  border-radius: 10px; padding: 10px 12px; width: 100%; resize: vertical;
+}
+.log-text { font: 12px/1.4 ui-monospace, Menlo, monospace; margin-top: 8px; }
+
+/* What's new */
+.unread { position: relative; }
+.unread::after { content: ""; position: absolute; top: 6px; right: 6px; width: 9px; height: 9px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 0 2px var(--panel); }
+.news { display: grid; gap: 22px; margin-top: 8px; text-align: left; }
+.news-entry { display: grid; gap: 8px; }
+.news-entry + .news-entry { border-top: 1px solid var(--line); padding-top: 18px; }
+.news-date { font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold); }
+.news-entry h2 { margin: 0; font-size: 20px; }
+.news-entry ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.news-entry li { display: grid; grid-template-columns: 40px 1fr; gap: 10px; align-items: center; line-height: 1.35; }
+.news-entry li .portrait { width: 40px; height: 40px; }
+.news-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line-2); justify-self: center; }
+.tag { display: inline-block; font-size: 11px; font-weight: 900; letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 7px; border-radius: 99px; margin-right: 6px; vertical-align: 1px; background: var(--panel-3); color: var(--text); }
+.tag.buff { background: #1f4a33; color: #8ff0b5; }
+.tag.nerf { background: #4a1f2b; color: #ffb3c0; }
+.tag.new { background: #1d3561; color: #a9c9ff; }
+.tag.fix { background: #4a3b16; color: #ffd98a; }
+:is(#overlay, #lobby) .start-links button { min-width: 0; }
+/* Smallest phones: the Pokédex stat table tightens up instead of overflowing. */
+@media (max-width: 360px) {
+  .dex-table { font-size: 13px; }
+  .dex-table th, .dex-table td { padding: 6px 4px; }
+}
+@media (max-width: 520px) {
+  :is(#overlay, #lobby) .start-links { gap: 8px; }
+  :is(#overlay, #lobby) .start-links button { padding: 8px 11px; font-size: 14px; }
+}
+
+/* Start screen: menu button (top right) and version (bottom left). */
+:is(#overlay, #lobby) .start-menu {
+  position: fixed; z-index: 2; margin: 0; min-width: 0;
+  top: max(14px, env(safe-area-inset-top)); right: max(14px, env(safe-area-inset-right));
+}
+#overlay:not(.start-screen) .start-menu, #overlay:not(.start-screen) .start-version { display: none; }
+.start-version {
+  position: fixed; z-index: 2;
+  left: max(14px, env(safe-area-inset-left)); bottom: max(12px, env(safe-area-inset-bottom));
+  font: 700 12px/1 ui-monospace, Menlo, monospace; color: var(--muted); letter-spacing: 0.04em;
+}
+.menu-version { margin: 14px 0 0; text-align: center; font: 700 12px/1 ui-monospace, Menlo, monospace; color: var(--muted); }
+
+/* Profile pictures: pre-cropped and centred (tools/make-avatars.py), so they
+   just fit the box. */
+.avatar {
+  display: inline-block; flex: none; width: 32px; height: 32px;
+  background-size: contain; background-position: center; background-repeat: no-repeat;
+  image-rendering: pixelated; vertical-align: middle;
+}
+.hpbox .hud-avatar { width: 30px; height: 30px; margin: -6px -4px; }
+@media (max-width: 520px) { .hpbox .hud-avatar { display: none; } .hpbox, .hpbox.enemy { grid-template-columns: auto 1fr auto; } }
+#wipe .intro-avatar { width: 1.6em; height: 1.6em; margin: 0 0.15em; vertical-align: -0.35em; }
+
+/* Start screen: profile chip (top left). */
+:is(#overlay, #lobby) .profile-chip {
+  position: fixed; z-index: 2; margin: 0; min-width: 0; max-width: calc(100vw - 100px);
+  top: max(14px, env(safe-area-inset-top)); left: max(14px, env(safe-area-inset-left));
+  display: flex; align-items: center; gap: 10px; padding: 6px 14px 6px 6px; border-radius: 12px; font-size: 14px;
+}
+:is(#overlay, #lobby) .profile-chip span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+:is(#overlay, #lobby) .profile-chip .avatar { width: 36px; height: 36px; background-color: #ffffff14; border-radius: 8px; background-size: 80%; }
+#overlay:not(.start-screen) .profile-chip { display: none; }
+
+/* Profile screen. */
+/* Profile screen: picture + name, then stats and friends. */
+.profile-head { display: flex; align-items: center; gap: 16px; }
+.profile-head .field { flex: 1; margin: 0; max-width: none; }
+.profile-preview { display: grid; justify-items: center; gap: 6px; flex: none; }
+.profile-preview .change-pic { min-width: 0; padding: 4px 12px; font-size: 13px; }
+.avatar-picker { margin-top: 4px; }
+.profile-save { margin-top: 14px; width: 100%; }
+.profile-section { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.profile-section h2 { font-size: 16px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+.profile-section h2 .count { font-size: 12px; color: var(--muted); background: var(--panel-2); border-radius: 99px; padding: 2px 8px; }
+.stat-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.stat-tiles div { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 6px; text-align: center; display: grid; gap: 2px; }
+.stat-tiles b { font-size: 22px; font-variant-numeric: tabular-nums; }
+.stat-tiles span { font-size: 12px; font-weight: 800; color: var(--muted); }
+.record { width: 100%; margin-top: 10px; border-collapse: collapse; font-size: 14px; }
+.record th, .record td { padding: 5px 6px; text-align: center; font-variant-numeric: tabular-nums; }
+.record thead th { font-size: 12px; color: var(--muted); font-weight: 800; }
+.record tbody th { text-align: left; font-weight: 800; }
+.record tbody tr + tr { border-top: 1px solid var(--line); }
+.favourite { display: flex; align-items: center; gap: 12px; margin-top: 10px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.favourite .avatar { width: 44px; height: 44px; }
+.favourite div { display: grid; gap: 1px; }
+.favourite small { font-size: 12px; font-weight: 800; color: var(--muted); }
+.favourite span { font-size: 13px; color: var(--muted); }
+.friend-list { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; }
+.friend-list li { display: flex; align-items: center; gap: 10px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 6px 8px 6px 6px; }
+.friend-list li > span:not(.avatar) { flex: 1; text-align: left; font-weight: 800; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.friend-list li .avatar { width: 34px; height: 34px; }
+.friend-list .danger-text { color: var(--enemy); min-width: 0; padding: 4px 10px; font-size: 13px; }
+.add-friend { width: 100%; min-width: 0; }
+.add-friend small { font-weight: 700; color: var(--muted); margin-left: 4px; }
+.profile-preview .avatar.big { width: 96px; height: 96px; background-color: #ffffff10; border-radius: 50%; box-shadow: 0 0 0 3px #ffffff22; background-size: 70%; }
+.field-label { margin: 14px 0 6px; font-weight: 800; font-size: 13px; color: var(--muted); }
+.avatar-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 6px; margin-bottom: 14px; }
+.avatar-grid button { padding: 4px; min-width: 0; display: grid; place-items: center; border-radius: 12px; }
+.avatar-grid button .avatar { width: 36px; height: 36px; }
+.avatar-grid button[aria-pressed="true"] { outline: 3px solid var(--gold); outline-offset: -3px; background: #ffd85a22; }
+.muted.small { font-size: 12px; margin-top: 10px; }
+
+/* Online: the friend's connection dropped (or ours), shown until it's back. */
+.net-status {
+  position: fixed; z-index: 60; left: 50%; translate: -50% 0;
+  top: max(76px, calc(env(safe-area-inset-top) + 70px));
+  width: max-content; max-width: calc(100vw - 32px);
+  padding: 8px 14px; border-radius: 12px; text-align: center;
+  background: #3a2a08f2; border: 1px solid #ffc93c88; color: #ffe7a8;
+  font-size: 13px; font-weight: 800; box-shadow: 0 8px 24px #0008;
+  pointer-events: none;
+}
+
+/* Battle lobby: random match first, then the friend options. */
+.lobby-queue { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-top: 14px; display: grid; justify-items: center; }
+.lobby-queue h2 { margin: 0 0 4px; }
+.lobby-queue p { margin: 0 0 10px; }
+:is(#overlay, #lobby) .lobby-queue button { width: 100%; max-width: 320px; }
+.lobby-or { margin: 14px 0 -6px; font-size: 13px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* Friends screen. */
+.friends-body h2 { font-size: 15px; margin: 18px 0 8px; display: flex; align-items: center; gap: 8px; }
+.friends-body h2 .count { font-size: 12px; color: var(--muted); background: var(--panel-2); border-radius: 99px; padding: 2px 8px; }
+.friend-code { display: flex; align-items: center; gap: 10px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.friend-code span { font-size: 12px; font-weight: 800; color: var(--muted); }
+.friend-code b { flex: 1; font: 900 22px/1 ui-monospace, Menlo, monospace; letter-spacing: 0.12em; }
+.friend-code button { min-width: 0; padding: 6px 12px; font-size: 13px; }
+.add-friend-row { display: flex; gap: 8px; margin-top: 10px; }
+.add-friend-row input { flex: 1; min-width: 0; font: 800 16px/1 ui-monospace, Menlo, monospace; letter-spacing: 0.1em; text-transform: uppercase; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line-2); background: #0b0f1c; color: inherit; }
+.add-friend-row button { min-width: 0; white-space: nowrap; }
+.friend-list .who { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.friend-list .who b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.friend-list .status { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; color: var(--muted); }
+.friend-list .status i { width: 8px; height: 8px; border-radius: 50%; background: #5d6478; }
+.friend-list .status.online i { background: #3ddc84; box-shadow: 0 0 6px #3ddc84aa; }
+.friend-list .status.battling i { background: var(--gold); }
+.friend-list li > small.muted { font-size: 12px; white-space: nowrap; }
+.small-btn { min-width: 0 !important; padding: 5px 10px !important; font-size: 13px !important; white-space: nowrap; }
+.danger-text.confirm { background: #ff4d6d22; }
+
+/* A battle request from (or to) a friend, over any screen. */
+.challenge-card {
+  position: fixed; z-index: 70; left: 50%; translate: -50% 0;
+  bottom: max(16px, env(safe-area-inset-bottom)); width: min(440px, calc(100vw - 24px));
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 12px 14px; border-radius: 16px;
+  background: linear-gradient(180deg, #24304f, #1a2033); border: 1px solid #ffc93c88;
+  box-shadow: 0 12px 32px #000a; animation: challenge-in 0.35s cubic-bezier(.2,.9,.3,1.2);
+}
+.challenge-card .avatar.big { width: 48px; height: 48px; background-color: #ffffff12; border-radius: 12px; background-size: 80%; }
+.challenge-card .text { flex: 1; min-width: 150px; display: grid; gap: 2px; }
+.challenge-card .text small { color: var(--muted); font-weight: 700; }
+.challenge-card .buttons { display: flex; gap: 8px; margin-left: auto; }
+.challenge-card .buttons button { min-width: 0; padding: 8px 14px; }
+@keyframes challenge-in { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+:is(#overlay, #lobby) .friends-shortcut { width: 100%; margin: 12px 0 0; min-width: 0; }
+.my-code { margin-top: 16px; display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--muted); font-size: 14px; font-weight: 700; }
+.my-code b { font: 900 18px/1 ui-monospace, Menlo, monospace; letter-spacing: 0.1em; color: var(--text, #fff); }
+
+/* Online pop-ups (waiting for an opponent, battle a friend, match ended…)
+   sit over the start screen, not over an empty board. */
+#lobby { z-index: 56; }
+
+/* Chilled by Frosmoth: a blue tint, a snowflake badge, and slower idle bobbing. */
+.unit.sprite-unit.chilled .sprite { filter: var(--tint) sepia(1) hue-rotate(170deg) saturate(2.6) brightness(0.95) drop-shadow(0 0 3px #6fd8ff); }
+.unit.sprite-unit.chilled .body { animation-duration: 3.2s; }
+.unit.chilled .body::after {
+  content: ""; position: absolute; right: 2%; top: 0; width: 34%; aspect-ratio: 1;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-12 -12 24 24'%3E%3Cg stroke='%23e6f9ff' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M0-10V10M-8.7-5 8.7 5M-8.7 5 8.7-5'/%3E%3Cpath d='M-3-8 0-5 3-8M-3 8 0 5 3 8M-8.4-1.3-5.2-3-6.1-6.4M8.4 1.3 5.2 3 6.1 6.4M-8.4 1.3-5.2 3-6.1 6.4M8.4-1.3 5.2-3 6.1-6.4' fill='none'/%3E%3C/g%3E%3C/svg%3E") center / contain no-repeat;
+  filter: drop-shadow(0 0 2px #2ab4ff) drop-shadow(0 0 1px #003a55);
+  pointer-events: none; animation: chill-spin 4s linear infinite;
+}
+@keyframes chill-spin { to { rotate: 360deg; } }
+.float.chill { color: #a8ecff; }

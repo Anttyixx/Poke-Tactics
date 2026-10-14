@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=00ece56';
+import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=1f3efcd';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=00ece56';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=00ece56';
+} from './game.js?v=1f3efcd';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=1f3efcd';
 
 const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
 // Attack-effect colour when a unit doesn't set its own "fx" colour in units.json.
@@ -60,6 +60,7 @@ export function describePower(def, star, catalog) {
     case 'stealth': return `${every}, it turns invisible for ${secs(p.duration)}s${p.hastePct ? ` and attacks ${p.hastePct}% faster` : ''}. Enemies can't target or follow it while it's invisible.`;
     case 'haste': return `${every}, it's enraged: ${p.hastePct}% faster attacks for ${secs(p.duration)}s.`;
     case 'quake': return `With every ${def.energy}th attack, it shakes the whole board: every enemy takes ${p.damagePct}% damage (${show(dmg)})${p.stun ? ` and is stunned for ${secs(p.stun)}s` : ''}.`;
+    case 'chill': return `Every attack chills the target for ${secs(p.duration)}s: it attacks ${p.slowPct}% slower and waits ${p.slowPct}% longer between steps. Another hit restarts the timer. Chilled Pokémon turn icy blue.`;
     case 'splashHeal': return `Every attack also heals your Pokémon directly left, right, above and below the square it hits, for ${p.healPct}% of its damage (${show(Math.floor((def.damage[star ?? 0] * STAT_SCALE * p.healPct) / 100))}).`;
     case 'selfdestruct': return `When it's knocked out, it stays on its square for ${secs(p.delay)}s, then explodes: enemies in the ${2 * p.radius + 1}x${2 * p.radius + 1} square around it take ${p.damagePct}% damage (${show(dmg)}).`;
     case 'copy': return `It walks toward the nearest enemy until it's within that enemy's range, then takes ${secs(p.morph)}s to transform into it: it copies its max HP, damage, attack speed, range and crit (not its power or movement) and keeps the same share of HP it had. Transformed, it doesn't move. When that Pokémon faints or nothing is in range, it turns back and walks to the next nearest.`;
@@ -88,6 +89,7 @@ export const powerCadence = (def) => {
   if (!p) return 'No power';
   if (p.kind === 'opening') return 'Power at battle start';
   if (p.kind === 'splashHeal') return 'Heals with every attack';
+  if (p.kind === 'chill') return 'Slows with every attack';
   if (p.kind === 'selfdestruct') return 'Power when knocked out';
   if (p.kind === 'copy') return 'Copies the nearest enemy';
   if (p.trigger === 'lowHp') return `Power at ${p.hpPct}% HP`;
@@ -1005,6 +1007,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       while (next < events.length && events[next].t <= tick) { applyEvent(ctx, events[next], next, animate); next++; }
       for (const a of actors.values()) {
         if (a.stunUntil && tick >= a.stunUntil) { a.stunUntil = 0; a.el.classList.remove('stunned'); }
+        if (a.chillUntil && tick >= a.chillUntil) { a.chillUntil = 0; a.el.classList.remove('chilled'); }
         if (a.stealthUntil && tick >= a.stealthUntil) { a.stealthUntil = 0; a.el.classList.remove('stealthed'); }
         if (a.hasteUntil && tick >= a.hasteUntil) { a.hasteUntil = 0; a.el.classList.remove('hasted'); }
       }
@@ -1440,6 +1443,15 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         bars(a);
         if (animate) { floatText(a, `+${show(ev.amount)}`, 'shield'); fx(at().x, at().y, 'shield', '#ffffff', 1.3); }
         break;
+      case 'chill': { // Frosmoth: slower for a while (each hit restarts it)
+        const fresh = !(a.chillUntil && ev.t < a.chillUntil);
+        a.chillUntil = ev.t + ev.duration + 1;
+        later(ctx.hitDelay.get(a.id) ?? 0, () => {
+          a.el.classList.add('chilled');
+          if (animate && fresh) floatText(a, 'Chilled', 'chill');
+        });
+        break;
+      }
       case 'stun':
         a.stunUntil = ev.t + ev.duration;
         later(ctx.hitDelay.get(a.id) ?? 0, () => {

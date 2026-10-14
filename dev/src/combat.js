@@ -99,6 +99,8 @@ function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, in
     moveTimer: stats.moveCd, // waiting before the next step (it waits before its first one too)
     stepTimer: 0, // mid-step: ticks until it reaches the square it's walking to
     hasteUntil: 0, hastePct: 0, stealthFrom: 0, stealthUntil: 0,
+    chillFrom: 0, chillUntil: 0, chillPct: 0, // Frosmoth's chill: slower attacks and steps through chillUntil
+    pendingChill: null, // { duration, pct }: a chill that lands at the end of the tick
     hold: 0, // ticks it can't move or attack (riding a Psywave); cooldowns still run
     landStun: 0, // stun applied when the hold ends (it has landed)
     pendingHeal: 0, // healing lands at the end of the tick, like stuns
@@ -515,7 +517,17 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
     if (shoved) shoved.hold = travel;
   }
 
-  const cooldown = (u) => (u.hasteUntil > t ? Math.max(1, Math.round((u.attackCd * 100) / (100 + u.hastePct))) : u.attackCd);
+  // Chilled (Frosmoth): attacks and steps take chillPct% longer. Like stuns, a
+  // chill lands at the end of the tick and counts from the next one.
+  const chilled = (u) => t >= u.chillFrom && t <= u.chillUntil;
+  const slowed = (ticks, u) => (chilled(u) ? Math.round((ticks * (100 + u.chillPct)) / 100) : ticks);
+  const cooldown = (u) => slowed(u.hasteUntil > t ? Math.max(1, Math.round((u.attackCd * 100) / (100 + u.hastePct))) : u.attackCd, u);
+  // A hit from Frosmoth chills the target (a new hit restarts the timer).
+  function chill(target, p) {
+    if (!standing(target) || immune(target)) return;
+    target.pendingChill = { duration: p.duration, pct: p.slowPct };
+    emit('chill', { id: target.id, duration: p.duration, pct: p.slowPct });
+  }
 
   // Minior's Star Form, every `energy` attacks: it picks a new target (a
   // seeded pick among the other enemies it can land beside) and zips to the
@@ -586,7 +598,7 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
   // A step: STEP_TICKS crossing to the new square, then the movement-speed wait.
   function startStep(u) {
     u.stepTimer = STEP_TICKS;
-    u.moveTimer = STEP_TICKS + u.moveCd;
+    u.moveTimer = STEP_TICKS + slowed(u.moveCd, u);
   }
 
   function moveTo(u, cell) {
@@ -720,6 +732,8 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
         const crit = critRoll(seed, t, u.slot) < u.crit;
         const hit = crit ? Math.floor((u.atk * CRIT_PCT) / 100) : u.atk;
         damage(target, Math.max(1, Math.floor((hit * 100) / (100 + target.armor))), u, crit);
+        // Frosmoth: every hit chills its target.
+        if (u.power?.kind === 'chill' && !u.copyOf) chill(target, u.power);
         // Lilligant: each attack also heals its allies next to the square it hit.
         if (u.power?.kind === 'splashHeal') {
           const p = at(target);
@@ -850,6 +864,12 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
       if (u.hp === 0 && !(u.fuse > 0)) u.alive = false; // knocked out this tick (a lit Golem stays)
       u.mana = shownMana(u);
       u.stun = Math.max(u.stun, u.pendingStun);
+      if (u.pendingChill && u.hp > 0) {
+        u.chillFrom = t + 1;
+        u.chillUntil = t + u.pendingChill.duration;
+        u.chillPct = u.pendingChill.pct;
+      }
+      u.pendingChill = null;
       u.pendingMana = 0;
       u.pendingStun = 0;
     }
