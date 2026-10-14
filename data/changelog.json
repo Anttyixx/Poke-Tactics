@@ -1,5 +1,16 @@
 [
   {
+    "id": "2026-10-14-dreepy-instead-of-attack",
+    "version": "0.25.0",
+    "date": "2026-10-14",
+    "title": "Dragapult fires its Dreepy instead of attacking",
+    "intro": "Dragapult now fires its Dreepy as its attack, whenever both are home.",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "change", "text": "Dragon Darts: when Dragapult attacks with both Dreepy at home, it fires them instead of attacking. Until both are back, it attacks normally. It no longer fires them on its own at the start of the fight." },
+      { "pokemon": "dragapult", "kind": "buff", "text": "Damage 25 → 65 at ★, since firing its Dreepy now costs it an attack." }
+    ]
+  },
+  {
     "id": "2026-10-14-dreepy-until-faint",
     "version": "0.24.0",
     "date": "2026-10-14",

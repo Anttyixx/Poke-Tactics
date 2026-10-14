@@ -765,12 +765,12 @@ test('Rage Fist (Annihilape): each attack in a row without moving makes the next
   assert.equal(Math.max(...evs(r, 'rage', a).map((e) => e.stacks)), p.maxStacks);
 });
 
-test('Dragon Darts (Dragapult): fires 2 Dreepy at the 2 farthest enemies, who must attack them; fainted ones fly back, and a new pair is fired once both are home', () => {
+test('Dragon Darts (Dragapult): fires 2 Dreepy at the 2 farthest enemies, who must attack them; fainted ones fly back, and a new pair replaces its next attack once both are home', () => {
   const cat = powerCat();
   cat.biter = { ...cat.wall, range: 1, secPerHit: 1, damage: [500, 500, 500, 500] }; // knocks out a Dreepy fast
   const r = simulate(cat, [
     [{ uid: 1, unitId: 'dragapult', star: 0, x: 2, y: 2 }], // combat (2,6)
-    [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'biter', star: 0, x: 0, y: 3 }, { uid: 4, unitId: 'wall', star: 0, x: 4, y: 3 }], // (2,3), (4,0), (0,0)
+    [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'biter', star: 0, x: 0, y: 3 }, { uid: 4, unitId: 'biter', star: 0, x: 4, y: 3 }], // (2,3), (4,0), (0,0)
   ], 1);
   const d = unitOf(r, 1).id;
   const p = catalog.dragapult.ability;
@@ -794,7 +794,16 @@ test('Dragon Darts (Dragapult): fires 2 Dreepy at the 2 farthest enemies, who mu
   const homes = evs(r, 'dartReturn', d).slice(0, p.count);
   const again = darts.find((e) => e.t > back.t);
   assert.equal(homes.length, p.count, 'both fly back');
-  assert.ok(again && again.t === Math.max(...homes.map((h) => h.t + h.duration)), 'fired again once both are home');
+  const bothHome = Math.max(...homes.map((h) => h.t + h.duration));
+  assert.ok(again && again.t >= bothHome, `fired again only once both are home (${again?.t} vs ${bothHome})`);
+  // The darts take the place of an attack: its first move is the volley, then
+  // it attacks normally while the Dreepy are out, and the next volley again
+  // replaces an attack.
+  const attacks = evs(r, 'attack', d);
+  assert.ok(attacks.length && attacks[0].t > darts[0].t, 'it attacks only after the first volley');
+  assert.ok(attacks.some((a) => a.t > darts[0].t && a.t < again.t), 'attacks normally while the Dreepy are out');
+  assert.ok(!attacks.some((a) => a.t === again.t), 'no attack on the tick it fires');
+  assert.ok(again.t - Math.max(...attacks.filter((a) => a.t < again.t).map((a) => a.t)) >= Math.round(catalog.dragapult.secPerHit * 10), 'the volley waits for its attack timer, like an attack');
   assert.equal(darts.filter((e) => e.t === again.t).length, p.count, 'as a pair');
 });
 
