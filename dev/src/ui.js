@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=dab82bd';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=08b2011';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=dab82bd';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=dab82bd';
+} from './game.js?v=08b2011';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=08b2011';
 
 const TICK_MS = 100;
 // Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
@@ -64,7 +64,16 @@ export function powerText(def, star, catalog) {
       ].filter(Boolean);
       return { when: every, text: `Its next attack hits for ${hit}${extra.length ? `${extra.length === 1 ? ' and ' : ', '}${extra.join(' and ')}` : ''}.` };
     }
-    case 'bind': return { when: `After ${def.energy} attacks`, text: `Its power stays full until an enemy tries to move. Hoopa binds that Pokémon in place for ${vTime(p.duration)}: it can't walk, zip or dash, but it still attacks anything in range.` };
+    case 'bind': {
+      const start = p.startCharged ? 'It starts the fight charged and refills' : 'Its power fills';
+      return { when: `After ${def.energy} attacks`, text: `${start} after ${vNum(def.energy)} attacks, then waits until an enemy tries to move. Hoopa binds that Pokémon in place for ${vTime(p.duration)}: it can't walk, zip or dash, but it still attacks anything in range.${p.noRepeat ? ' It never binds the same Pokémon twice in a row.' : ''}${p.chargedForm ? ` While charged it becomes ${esc(p.chargedForm.name)}.` : ''}` };
+    }
+    case 'taunt': return { when: every, text: `Spreads its spores: the hardest-hitting enemy within the ${area(p.radius)} around it that is attacking someone else must attack ${esc(def.name)} for ${vTime(p.duration)}.` };
+    case 'rage': return { when: 'Every attack', text: `Each attack in a row without moving makes it attack ${vNum(`${p.stackPct}%`)} faster, up to ${vNum(`${p.stackPct * p.maxStacks}%`)} after ${vNum(p.maxStacks)} attacks. Moving resets it.` };
+    case 'darts': {
+      const name = catalog?.[p.unit]?.name ?? p.unit;
+      return { when: 'At battle start', text: `Fires ${vNum(p.count)} ${name} at the farthest enemies: each hits for ${vDmg(`${p.impactPct}%`)} damage (${vDmg(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.impactPct) / 100)))}), then lands beside its target and fights. A ${name} that faints flies back (${vTime(Math.round(p.returnSec * 10))} a square) and is fired again once it's home. They come at ${esc(def.name)}'s level.` };
+    }
     case 'boost': return { when: every, text: `Charges up the allies directly left, right, in front of and behind it: each gains ${vNum(`+${p.charges}`)} toward its power (Pokémon without a power counter don't benefit).` };
     case 'snipe': return { when: every, text: `The attack also zaps the farthest enemy for ${hit}.` };
     case 'summon': {
@@ -1057,6 +1066,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         if (a.stealthUntil && tick >= a.stealthUntil) { a.stealthUntil = 0; a.el.classList.remove('stealthed'); }
         if (a.hasteUntil && tick >= a.hasteUntil) { a.hasteUntil = 0; a.el.classList.remove('hasted'); }
         if (a.guardUntil && tick > a.guardUntil) { a.guardUntil = 0; a.el.classList.remove('guarded'); }
+        if (a.tauntUntil && tick > a.tauntUntil) { a.tauntUntil = 0; a.el.classList.remove('taunted'); }
         if (a.boundUntil && tick > a.boundUntil) { a.boundUntil = 0; a.el.classList.remove('bound'); }
         if (a.treatUntil && tick > a.treatUntil) { a.treatUntil = 0; a.el.classList.remove('treated'); delete a.el.dataset.treat; }
       }
@@ -1304,9 +1314,46 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       }
       case 'summon': {
         const pal = ctx.addActor(ev.unit);
-        if (animate) { play(pal.el, 'spawned', 400); const p = viewPos(pal.x, pal.y); fx(p.x, p.y, 'ring', fxColor(pal.unitId), 1.3); }
+        if (!animate) break;
+        const p = viewPos(pal.x, pal.y);
+        if (ev.dart) {
+          // Dragapult's Dreepy: flies from Dragapult to its target, then lands.
+          pal.el.style.visibility = 'hidden';
+          const to = actors.get(ev.target);
+          const ms = projectile(at(), to ? viewPos(to.x, to.y) : p, fxColor(pal.unitId), true);
+          later(ms, () => { pal.el.style.visibility = ''; play(pal.el, 'spawned', 300); fx(p.x, p.y, 'burst', fxColor(pal.unitId), 1.2); });
+        } else { play(pal.el, 'spawned', 400); fx(p.x, p.y, 'ring', fxColor(pal.unitId), 1.3); }
         break;
       }
+      case 'dartReturn': { // a fainted Dreepy drifts slowly back to Dragapult
+        if (!animate) break;
+        const ghost = document.createElement('div');
+        ghost.className = 'unit sprite-unit dart-ghost';
+        ghost.dataset.facing = 'down';
+        ghost.innerHTML = `<div class="body"><div class="sprite" style="background-image:url('${catalog[ev.unitId]?.sprite ?? ''}')"></div></div>`;
+        const from = viewPos(ev.fromX, ev.fromY);
+        const to = at();
+        place(ghost, from.x, from.y);
+        layer.append(ghost);
+        ghost.animate([{ translate: '0 0' }, { translate: `${(to.x - from.x) * 100}% ${(to.y - from.y) * 100}%` }], { duration: (ev.duration * TICK_MS) / speed, easing: 'linear' }).onfinish = () => ghost.remove();
+        break;
+      }
+      case 'taunt': { // Amoonguss: this Pokémon must attack it for a while
+        a.tauntUntil = ev.t + ev.duration;
+        a.el.classList.add('taunted');
+        if (animate) {
+          const from = actors.get(ev.by);
+          const ms = from ? projectile(viewPos(from.x, from.y), at(), '#ff6fa8', false) : 0;
+          later(ms, () => { floatText(a, 'Taunted', 'taunt'); fx(at().x, at().y, 'burst', '#ff6fa8', 1.2); });
+        }
+        break;
+      }
+      case 'rage': // Annihilape: faster with every attack in a row
+        a.el.dataset.rage = ev.stacks;
+        a.el.classList.toggle('raging', ev.stacks > 0);
+        a.el.style.setProperty('--rage', ev.stacks);
+        if (animate && ev.stacks) floatText(a, `+${ev.pct}% speed`, 'rage');
+        break;
       case 'knock': {
         a.x = ev.x;
         a.y = ev.y;
@@ -1896,14 +1943,14 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   const summonIds = () => Object.keys(catalog).filter((id) => catalog[id].summon).sort();
   // A transformed form as a Pokémon of its own (HP carries over when the form has none).
   // A Pokémon's forms: Greninja's or Minior's one transformation, Alcremie's flavours.
-  const formsOf = (def) => (def.ability?.form ? [def.ability.form] : def.ability?.flavors ?? []);
+  const formsOf = (def) => (def.ability?.form ? [def.ability.form] : def.ability?.chargedForm ? [def.ability.chargedForm] : def.ability?.flavors ?? []);
   const formDef = (def, i = 0) => {
     const f = formsOf(def)[i];
     return { ...def, ...f, hp: f.hp ?? def.hp, energy: f.energy ?? 0, ability: null, form: true };
   };
   const formKey = (id, i) => `form:${id}:${i}`;
   // Who summons this Pokémon.
-  const summonersOf = (id) => troopIds(catalog).filter((t) => catalog[t].ability?.kind === 'summon' && catalog[t].ability.unit === id);
+  const summonersOf = (id) => troopIds(catalog).filter((t) => ['summon', 'darts'].includes(catalog[t].ability?.kind) && catalog[t].ability.unit === id);
 
   function dexCard(id) {
     const def = catalog[id];
@@ -1984,7 +2031,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     const st = unitStats(def, star);
     let power = '';
     const f = formOf && formsOf(formOf)[formIndex];
-    if (f?.flavor) {
+    if (f && f === formOf.ability.chargedForm) {
+      power = `${esc(formOf.name)} takes this form while its power is charged, and turns back when it binds a Pokémon. Same stats as ${esc(formOf.name)}.`;
+    } else if (f?.flavor) {
       // An Alcremie flavour: what its treat does.
       const p = formOf.ability;
       const amount = (pct) => show(Math.floor((formOf.damage[star] * STAT_SCALE * pct) / 100));
@@ -2124,7 +2173,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       if (isForm && i === dexForm) return;
       related.push([formDef(base, i), `data-dex-form="${dexPick}:${i}"`, `${isForm ? 'Also becomes' : forms.length > 1 ? 'Can become' : 'Transforms into'} ${f.name}`, formKey(dexPick, i)]);
     });
-    if (!isForm && def.ability?.kind === 'summon' && catalog[def.ability.unit]) related.push([catalog[def.ability.unit], `data-dex="${def.ability.unit}"`, `Summons ${catalog[def.ability.unit].name}`, def.ability.unit]);
+    if (!isForm && ['summon', 'darts'].includes(def.ability?.kind) && catalog[def.ability.unit]) related.push([catalog[def.ability.unit], `data-dex="${def.ability.unit}"`, `Summons ${catalog[def.ability.unit].name}`, def.ability.unit]);
     if (def.summon) for (const t of summonersOf(dexPick)) related.push([catalog[t], `data-dex="${t}"`, `Summoned by ${catalog[t].name}`, t]);
     const sprite = (d, cls, key) => `<span class="portrait ${cls}" data-facing="down" data-key="${key}"><span class="sprite" ${spriteStyle(d)}></span></span>`;
     const relatedHtml = related.map(([d, attrs, label, key]) => `<button class="dex-rel" ${attrs} title="${esc(label)}" aria-label="${esc(label)}">${sprite(d, 'dex-rel-sprite', key)}</button>`).join('');

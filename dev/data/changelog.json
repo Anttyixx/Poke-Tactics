@@ -1,5 +1,21 @@
 [
   {
+    "id": "2026-10-14-new-trio-hoopa-j",
+    "version": "0.22.0",
+    "date": "2026-10-14",
+    "title": "New Pokémon: Amoonguss, Annihilape and Dragapult",
+    "intro": "Three new Pokémon join, Hoopa binds more often and becomes Hoopa Unbound while charged, and Mawile takes a break.",
+    "changes": [
+      { "pokemon": "amoonguss", "kind": "new", "text": "Amoonguss (cost 4, tank). Rage Powder, every 2 attacks: the hardest-hitting enemy within the 5x5 around it that is attacking someone else must attack Amoonguss for 5 seconds." },
+      { "pokemon": "annihilape", "kind": "new", "text": "Annihilape (cost 4, melee). Rage Fist: each attack in a row without moving makes it attack 20% faster, up to twice as fast. Moving resets it." },
+      { "pokemon": "dragapult", "kind": "new", "text": "Dragapult (cost 4, range 3). Dragon Darts: at the start it fires 2 Dreepy at the two farthest enemies. They hit on impact, land and fight. A Dreepy that faints slowly flies back and is fired again." },
+      { "pokemon": "hoopa", "kind": "change", "text": "Binding Ring: Hoopa starts each fight charged, refills after 2 attacks (was 4), and binds for 3 seconds (was 5). It never binds the same Pokémon twice in a row. Damage 75 → 68 at ★." },
+      { "pokemon": "hoopa", "kind": "new", "text": "While charged, Hoopa shows as Hoopa Unbound, and turns back when it binds." },
+      { "pokemon": "mawile", "kind": "change", "text": "Mawile is out of the game for now while it gets a new identity." },
+      { "kind": "new", "text": "Taunted Pokémon glow pink, Annihilape glows redder as it speeds up, and fainted Dreepy drift back to Dragapult. New profile pictures for all of them." }
+    ]
+  },
+  {
     "id": "2026-10-14-hoopa-bind",
     "version": "0.21.0",
     "date": "2026-10-14",

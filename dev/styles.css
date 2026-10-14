@@ -1404,6 +1404,14 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .float.guard { color: #9fd8ff; }
 .float.boost { color: #ffe14d; }
 .float.bind { color: #ff9be2; }
+.float.taunt { color: #ff8fbc; }
+.float.rage { color: #ff7a5c; }
+/* Pulled by Amoonguss: a pink spore haze. */
+.unit.sprite-unit.taunted .sprite { filter: var(--tint) drop-shadow(0 0 3px #ff6fa8) drop-shadow(0 0 7px #ff6fa877); }
+/* Annihilape's rage: a red glow that grows with each attack in a row. */
+.unit.sprite-unit.raging .sprite { filter: var(--tint) drop-shadow(0 0 calc(var(--rage, 1) * 1.6px) #ff4a2e) saturate(calc(1 + var(--rage, 1) * 0.12)); }
+/* A fainted Dreepy drifting back to Dragapult. */
+.dart-ghost { opacity: 0.45; pointer-events: none; z-index: 14; filter: grayscale(0.4); }
 /* Bound by Hoopa: golden rings around it, turning slowly, until the bind wears off. */
 .unit.bound .body::before {
   content: ""; position: absolute; left: 6%; right: 6%; top: 34%; height: 34%; z-index: 3; pointer-events: none;
