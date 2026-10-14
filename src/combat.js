@@ -639,10 +639,15 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
       .sort((a, b) => Math.max(Math.abs(b.x - u.x), Math.abs(b.y - u.y)) - Math.max(Math.abs(a.x - u.x), Math.abs(a.y - u.y)) || dist(u, b) - dist(u, a) || a.slot - b.slot);
     const target = foes.find((e) => !busy.has(e.id)) ?? foes[0];
     if (!target) return;
-    const cell = dashSpot(u, target) ?? closestFree(at(target), u, null, u.side);
+    // `displace`: it crashes into its target, landing on its square and
+    // pushing it aside (like any knock: a shield breaks instead, and with no
+    // room, or a target nothing can affect, it lands beside it).
+    const kin = units.length;
+    const shove = p.displace && !immune(target) ? (blocks(target) ? null : displaceSpot(target)) : null;
+    const cell = shove ? { x: target.x, y: target.y } : dashSpot(u, target) ?? closestFree(at(target), u, null, u.side);
     if (!cell) return;
     record && emit('cast', { id: u.id, target: target.id });
-    const kin = units.length;
+    if (p.displace && !immune(target) && blocks(target)) breakGuard(target);
     const pal = spawn(catalog, { uid: -kin, unitId: p.unit, star: u.star, summoned: true }, u.side, kin, bySide[u.side].length, cell);
     pal.sp = { x: pal.x, y: pal.y };
     pal.dartOf = u.id;
@@ -653,6 +658,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     slot.unit = pal;
     slot.aim = target.id;
     record && emit('summon', { id: u.id, unit: snapshot(pal), dart: true, target: target.id });
+    if (shove) relocate(target, shove, 'knock', { by: pal.id }); // right after it lands on that square
     if (p.impactPct) damage(target, Math.floor((u.atk * p.impactPct) / 100), u);
     // The hit distracts it: it drops whoever it was attacking and must go
     // after the Dreepy until the Dreepy faints.
