@@ -235,9 +235,23 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 [data-type="rogue"] { --type: var(--rogue); }
 [data-type="cleric"] { --type: var(--cleric); }
 
-.stars { position: absolute; top: -1px; font-size: 16cqi; color: var(--gold); text-shadow: 0 1px 2px #000, 0 0 6px #0008; letter-spacing: -1px; line-height: 1; }
-.stars.s1 { color: #d6dbea; }
-.stars.s3 { color: #ff9cf0; text-shadow: 0 1px 2px #000, 0 0 8px #ff6be5aa; }
+.stars { color: var(--gold); text-shadow: 0 1px 2px #000, 0 0 6px #0008; letter-spacing: -1px; line-height: 1; white-space: nowrap; }
+.unit .stars { position: absolute; top: -1px; font-size: 16cqi; }
+/* ★ bronze, ★★ silver, ★★★ gold, then one big shiny star. */
+.stars.s0 { color: #e3a46a; }
+.stars.s1 { color: #dfe4f2; }
+.star-max {
+  display: inline-block; font-size: 1.3em; line-height: 0.8; vertical-align: -0.05em;
+  background: linear-gradient(120deg, #ff7ae0, #ffd76a 35%, #7af5ff 65%, #c49bff);
+  background-size: 250% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none;
+  filter: drop-shadow(0 1px 1px #000) drop-shadow(0 0 4px #ff9cf0aa);
+  animation: shiny 3s linear infinite;
+}
+/* On the board the shiny star stands alone, so it gets bigger and glows more. */
+.unit .star-max { font-size: 1.7em; filter: drop-shadow(0 1px 1px #000) drop-shadow(0 0 6px #ff7ae0); }
+@keyframes shiny { to { background-position: 250% 0; } }
+@media (prefers-reduced-motion: reduce) { .star-max { animation: none; } }
 
 .bars { position: absolute; left: 12%; right: 12%; bottom: 2%; display: none; }
 #arena.in-combat .bars { display: block; }

@@ -1,5 +1,16 @@
 [
   {
+    "id": "2026-10-14-new-stars",
+    "version": "0.16.1",
+    "date": "2026-10-14",
+    "title": "A star for every level",
+    "intro": "Every level now has its own mark, so you can tell them apart at a glance. Stats and levelling up work exactly as before.",
+    "changes": [
+      { "kind": "change", "text": "1 copy = ★ (bronze), 2 copies = ★★ (silver), 3 copies = ★★★ (gold), 4 copies = a shiny rainbow star." },
+      { "kind": "change", "text": "A Pokémon with a single copy now shows its star on the board instead of nothing." }
+    ]
+  },
+  {
     "id": "2026-10-14-new-pokedex",
     "version": "0.16.0",
     "date": "2026-10-14",
