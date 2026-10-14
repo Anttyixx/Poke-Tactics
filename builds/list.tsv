@@ -1,3 +1,4 @@
+b70b646	dev	2026-10-14 22:22 UTC	Dragapult fires both Dreepy on its next action (attack or step); Dreepy shot out of Dragapult in a growing arc; attacks every 1.7s (0.33.0)
 3115900	dev	2026-10-14 20:17 UTC	Fix Dreepy sprite sheet row order (down, left, right, up) so it faces the right way (0.32.2)
 c7663b9	dev	2026-10-14 18:54 UTC	Knocked-out Dreepy fly back from the hit, spinning, then arc home to Dragapult (0.32.1)
 692f749	dev	2026-10-14 18:45 UTC	Dreepy grow slowly with level (HP 150-260, dmg 20-38, landing 50-86); Dragapult attacks every 1.5s for 55 (0.32.0)
@@ -27,4 +28,3 @@ b8bc31b	dev	2026-10-14 04:10 UTC	Pokédex: label the movement chip Speed
 faf64fb	dev	2026-10-14 04:06 UTC	Stat shape: headroom so the best stat stops short of the edge
 0eb0cd2	dev	2026-10-14 04:06 UTC	Shiny level mark: rainbow four-pointed sparkle
 b43e1f1	dev	2026-10-14 04:05 UTC	Stat shape: each stat scaled linearly to the highest value at that level
-7ccbc60	dev	2026-10-14 04:01 UTC	Standard power descriptions with coloured values; trim Pokédex chips; 4-stat shape
