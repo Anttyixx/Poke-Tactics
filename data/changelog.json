@@ -1,5 +1,14 @@
 [
   {
+    "id": "2026-10-14-dreepy-facing",
+    "version": "0.32.2",
+    "date": "2026-10-14",
+    "title": "Dreepy face the right way",
+    "changes": [
+      { "pokemon": "dreepy", "kind": "fix", "text": "Dreepy now face the Pokémon they attack and walk toward (their sprite showed the wrong side when moving left, right or up)." }
+    ]
+  },
+  {
     "id": "2026-10-14-dreepy-knockout-arc",
     "version": "0.32.1",
     "date": "2026-10-14",
