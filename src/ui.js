@@ -1733,8 +1733,6 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     if (e.target === dexEl || e.target.closest('#dex-close')) return closeDex();
     if (e.target.closest('#dex-back')) { dexStar = 0; return showDexEntry(null); }
     if (e.target.closest('#dex-level')) { dexStar = (dexStar + 1) % 4; return renderDex(); }
-    const lvl = e.target.closest('[data-dex-star]');
-    if (lvl) { dexStar = +lvl.dataset.dexStar; return renderDex(); }
     const form = e.target.closest('[data-dex-form]');
     if (form) return showDexEntry(form.dataset.dexForm, true);
     const pick = e.target.closest('[data-dex]');
@@ -1805,10 +1803,6 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     </button>`;
   }
 
-  // A small clickable chip linking to another entry.
-  const dexLink = (def, attrs, label) => `<button class="dex-link" ${attrs} data-type="${def.type}">
-    ${portrait(def)}<span><small>${label}</small><b>${esc(def.name)}</b></span><i aria-hidden="true">›</i></button>`;
-
   function renderDex() {
     const panel = dexEl.querySelector('.dex-panel');
     if (!dexPick || !catalog[dexPick]) {
@@ -1851,11 +1845,15 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         <p>${describePower(def, star, catalog)}</p></div>`;
     }
 
-    const links = [];
-    if (isForm) links.push(dexLink(base, `data-dex="${dexPick}"`, 'Transforms from'));
-    else if (def.ability?.form) links.push(dexLink(formDef(def), `data-dex-form="${dexPick}"`, 'Transforms into'));
-    if (!isForm && def.ability?.kind === 'summon' && catalog[def.ability.unit]) links.push(dexLink(catalog[def.ability.unit], `data-dex="${def.ability.unit}"`, 'Summons'));
-    if (def.summon) for (const t of summonersOf(dexPick)) links.push(dexLink(catalog[t], `data-dex="${t}"`, 'Summoned by'));
+    // Related Pokémon (its form, what it summons, who summons it) as small
+    // sprites beside the big one; tapping one opens that entry.
+    const related = [];
+    if (isForm) related.push([base, `data-dex="${dexPick}"`, `Transforms from ${base.name}`]);
+    else if (def.ability?.form) related.push([formDef(def), `data-dex-form="${dexPick}"`, `Transforms into ${def.ability.form.name}`]);
+    if (!isForm && def.ability?.kind === 'summon' && catalog[def.ability.unit]) related.push([catalog[def.ability.unit], `data-dex="${def.ability.unit}"`, `Summons ${catalog[def.ability.unit].name}`]);
+    if (def.summon) for (const t of summonersOf(dexPick)) related.push([catalog[t], `data-dex="${t}"`, `Summoned by ${catalog[t].name}`]);
+    const relatedHtml = related.map(([d, attrs, label]) => `<button class="dex-rel" ${attrs} data-type="${d.type}" title="${esc(label)}" aria-label="${esc(label)}">
+      <span class="portrait" data-facing="down"><span class="sprite" ${spriteStyle(d)}></span></span></button>`).join('');
 
     const tag = isForm ? 'Transformed form' : def.summon ? 'Summoned in battle' : `${def.cost} coins`;
     panel.innerHTML = `
@@ -1863,14 +1861,17 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       <button id="dex-back" class="ghost">‹ All Pokémon</button>
       <section class="dex-detail" data-type="${def.type}">
         <div class="dex-hero">
-          <span class="portrait dex-portrait" data-facing="down"><span class="sprite" ${spriteStyle(def)}></span></span>
+          <div class="dex-figure">
+            <div class="dex-art">
+              <span class="portrait dex-portrait" data-facing="down"><span class="sprite" ${spriteStyle(def)}></span></span>
+              ${relatedHtml ? `<div class="dex-rels">${relatedHtml}</div>` : ''}
+            </div>
+            <button id="dex-level" class="dex-level" title="${LEVEL_NAMES[star]}: tap for the next level (→)" aria-label="Level: ${LEVEL_NAMES[star]}. Tap for the next level."><span class="stars s${star}">${levelMark(star)}</span></button>
+          </div>
           <div class="dex-title">
             <h2>${esc(def.name)}</h2>
             <p class="dex-tags"><span class="dex-type">${typeName(def.type)}</span><span>${tag}</span></p>
-            <div class="dex-levels">
-              <button id="dex-level" class="dex-level" title="Next level (→)"><small>Level</small><b class="stars s${star}">${levelMark(star)}</b><i aria-hidden="true">▸</i></button>
-              <span class="dex-pips">${[0, 1, 2, 3].map((s) => `<button data-dex-star="${s}" class="${s === star ? 'on' : ''}" aria-label="${LEVEL_NAMES[s]}" title="${LEVEL_NAMES[s]}"></button>`).join('')}</span>
-            </div>
+            ${related.length ? `<p class="dex-rel-names">${related.map(([d, attrs, label]) => `<button class="linkish" ${attrs}>${esc(label)}</button>`).join('')}</p>` : ''}
           </div>
         </div>
         <div class="dex-stats">
@@ -1886,7 +1887,6 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
           ${powerDmg ? fact(`${esc(def.ability.name)} damage`, show(powerDmg)) : ''}
         </div>
         ${power}
-        ${links.length ? `<div class="dex-links">${links.join('')}</div>` : ''}
         <p class="muted dex-foot">${def.summon ? 'A summon comes at the level the power gives it.' : `Copies on the board: 1 = ★, 2 = ★★, 3 = ★★★, 4 = ${levelMark(3)} (shiny).`} A crit deals ${CRIT_PCT - 100}% more damage.</p>
       </section>`;
   }

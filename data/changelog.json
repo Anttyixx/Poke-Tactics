@@ -1,5 +1,15 @@
 [
   {
+    "id": "2026-10-14-dex-level-chip",
+    "version": "0.16.2",
+    "date": "2026-10-14",
+    "title": "Pokédex: level chip and related Pokémon",
+    "changes": [
+      { "kind": "change", "text": "In a Pokédex entry, the level is now a chip under the Pokémon showing its stars. Tap it to step through ★, ★★, ★★★ and shiny." },
+      { "kind": "change", "text": "Related Pokémon (a transformation, a summon, or who summons it) show as a small sprite beside the main one. Tap it to open that Pokémon's stats." }
+    ]
+  },
+  {
     "id": "2026-10-14-new-stars",
     "version": "0.16.1",
     "date": "2026-10-14",
