@@ -2,4 +2,4 @@
 // fills this in with the Worker's address for each channel (dev / stable).
 // Empty means online play isn't available in this copy of the game; for local
 // testing, ?server=http://localhost:8787 points the game at `wrangler dev`.
-export const SERVER_URL = ''; // set at deploy time
+export const SERVER_URL = 'https://poke-tactics-dev.ab-saguiped.workers.dev'; // set at deploy time
