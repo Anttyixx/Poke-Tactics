@@ -145,7 +145,14 @@ node tools/replay.mjs match.json [--patch=patch.json]
 It rebuilds the match exactly with the stats of the build it was played on (read from git
 history) and, for every fight, checks how much was luck (the same boards with other seeds),
 whether the loser could have won with a different arrangement of the same Pokémon, and, with
-`--patch`, whether changed stats would have changed the result.
+`--patch`, whether changed stats would have changed the result. It also writes an easy-to-read
+page, `tools/out/replay-<seed>.html` (`--summary=notes.html` adds written takeaways at the top).
+
+The bot (`src/bot.js`) rearranges its board before every fight by a fixed set of rules (tanks in
+the middle of the front, ranged at the edge of their range, healers behind the front line, divers
+up front, Beheeyem's Psywave column left empty, leaning toward the enemy's stronger side), each
+placement with its reason. `node tools/bot-rules.mjs` measures them: full games of the rule-based
+bot against the old bot, which left units where it bought them.
 
 `balance.mjs` also takes a patch file (`node tools/balance.mjs 20000 out.json patch.json`) to
 test a set of changes together. Team styles to pit against each other live in `ARCHETYPES`.

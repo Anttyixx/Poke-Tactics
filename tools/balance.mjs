@@ -52,7 +52,8 @@ export const ARCHETYPES = {
 
 // ---- one game ----------------------------------------------------------------
 
-// placement[p]: 'default' = the game's bot layout (melee front, ranged back);
+// placement[p]: 'default' = the game's bot layout (rule-based, src/bot.js);
+// 'basic' = the old bot: units stay where they were bought (melee front, ranged back);
 // 'smart' = rearrange before each fight to counter the opponent's last lineup.
 // opts.explore = { player, unitId }: before every fight, put that player's
 // `unitId` on a random square of its half (to map where it does best).
@@ -69,7 +70,7 @@ export function playGame(seed, teams, placement = ['default', 'default'], opts =
         if (state.players[p].ready) continue;
         const send = (i) => applyIntent(state, catalog, p, i);
         // Shop like the bot, then (smart) reposition before locking in.
-        botTurn(state, catalog, p, (i) => (i.type === 'ready' ? { ok: true } : send(i)));
+        botTurn(state, catalog, p, (i) => (i.type === 'ready' ? { ok: true } : send(i)), { arrange: placement[p] !== 'basic' });
         if (placement[p] === 'smart') {
           const layout = bestLayout(catalog, state, p);
           if (layout) applyLayout(layout, send);

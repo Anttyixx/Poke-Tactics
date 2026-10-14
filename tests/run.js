@@ -11,7 +11,7 @@ import {
 import {
   simulate, MAX_TICKS, COLS, HALF, SUDDEN_DEATH_TICK, SUDDEN_DEATH_HP_PER_SECOND, MOVE_SPEEDS, STEP_TICKS, CRIT_PCT, STAT_SCALE, TICK_SECONDS,
 } from '../src/combat.js';
-import { botTurn } from '../src/bot.js';
+import { botTurn, planLayout } from '../src/bot.js';
 import { loadProfile, saveProfile, recordMatch, recordBattle, favouriteTroop, addFriend, removeFriend, AVATARS, DEFAULT_AVATAR, NAME_MAX } from '../src/profile.js';
 
 const catalog = JSON.parse(readFileSync(new URL('../data/units.json', import.meta.url), 'utf8'));
@@ -603,6 +603,34 @@ test('Earthquake (Torterra): after 5 attacks, hits every enemy on the board for 
     assert.ok(r.events.some((e) => e.type === 'damage' && e.id === id && e.t === cast.t && e.amount === Math.floor((catalog.torterra.damage[0] * 30) / 100)), `hits ${uid}`);
     assert.ok(evs(r, 'stun', id).some((e) => e.t === cast.t && e.duration === 10), `stuns ${uid}`);
   }
+});
+
+test('bot layout rules: tanks in front, ranged at the edge of their range, healer behind, out of Psywave, every move explained', () => {
+  const s = startedGame(11);
+  const me = s.players[0];
+  // A deliberately bad board: the tank at the back, the ranged and healer in front.
+  me.board = [
+    { uid: 901, unitId: 'coalossal', star: 0, x: 0, y: 3 },
+    { uid: 902, unitId: 'vespiquen', star: 0, x: 2, y: 0 },
+    { uid: 903, unitId: 'lilligant', star: 0, x: 3, y: 0 },
+    { uid: 904, unitId: 'hoopa', star: 0, x: 4, y: 3 },
+  ];
+  // Last round the enemy had a Beheeyem at their x = 2, so its Psywave runs
+  // down our column 2 (the middle).
+  s.players[1].lastBoard = [{ unitId: 'beheeyem', star: 0, x: 2, y: 2 }];
+  const plan = planLayout(s, catalog, 0);
+  assert.equal(new Set(plan.map((m) => `${m.x},${m.y}`)).size, plan.length, 'one square each');
+  assert.ok(plan.every((m) => m.reason && m.reason.length > 10), 'every placement says why');
+  const at = (uid) => plan.find((m) => m.uid === uid);
+  assert.equal(at(901).y, 0, 'the tank holds the front row');
+  assert.equal(at(904).y, 0, 'Hoopa (a diver) starts in front');
+  assert.equal(at(902).y, catalog.vespiquen.range - 1, 'Vespiquen stands as far back as its range still reaches');
+  assert.equal(at(903).y, 1, 'Lilligant right behind the front line');
+  assert.ok(plan.every((m) => m.x !== 2), "nobody stands in Psywave's column");
+  // Same inputs, same plan; and the moves really produce it.
+  assert.deepEqual(planLayout(s, catalog, 0), plan);
+  for (const m of plan) assert.ok(applyIntent(s, catalog, 0, { type: 'move', uid: m.uid, x: m.x, y: m.y }).ok);
+  for (const m of plan) assert.deepEqual([me.board.find((u) => u.uid === m.uid).x, me.board.find((u) => u.uid === m.uid).y], [m.x, m.y]);
 });
 
 test('Aromatherapy (Lilligant): each attack heals allies in the 3x3 around the square it hits', () => {
