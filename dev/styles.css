@@ -779,34 +779,84 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .confirm-row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
 .back { margin-bottom: 12px; }
 
-/* Pokédex */
-.dex-panel { max-width: 880px; border-top: 6px solid var(--accent); padding: 20px 22px; }
-.dex-panel h1 { font-size: 24px; margin-bottom: 12px; }
+/* Pokédex: a grid of cards, then one Pokémon's entry. */
+.dex-panel { max-width: 860px; border-top: 6px solid var(--accent); padding: 20px 22px; }
+.dex-panel h1 { font-size: 24px; margin-bottom: 2px; }
+.dex-sub { margin: 0 0 14px; }
 #dex-close { position: absolute; top: 12px; right: 12px; padding: 4px 10px; }
-.dex-body { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 18px; }
-.dex-nav h3 { margin: 4px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
-.dex-list { display: grid; gap: 4px; margin-bottom: 12px; }
-.dex-entry {
-  display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 8px;
-  padding: 4px 8px; text-align: left; border-left: 4px solid var(--type);
+#dex-back { padding: 4px 10px 4px 6px; margin: -6px 0 6px -6px; color: var(--muted); border-color: transparent; }
+#dex-back:hover { color: var(--text); }
+.dex-section { margin: 18px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.dex-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; }
+.dex-card {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 10px 6px 9px; border-radius: 14px; text-align: center;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--type) 16%, var(--panel-2)), var(--panel-2) 70%);
+  border: 1px solid color-mix(in srgb, var(--type) 35%, var(--line));
+  transition: transform 0.15s var(--spring), border-color 0.15s, box-shadow 0.15s;
 }
-.dex-entry .portrait { width: 34px; height: 34px; }
-.dex-entry small { color: var(--gold); white-space: nowrap; }
-.dex-entry span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dex-entry.active { background: #263255; border-color: #4a6ab0; border-left-color: var(--type); }
+.dex-card:hover { transform: translateY(-3px); border-color: var(--type); box-shadow: 0 8px 20px #0007, 0 0 0 1px var(--type); }
+.dex-card-art {
+  width: 76px; height: 76px; display: grid; place-items: center; border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--type) 35%, transparent), transparent 70%);
+}
+.dex-card .portrait { width: 64px; height: 64px; }
+.dex-card:hover .sprite { animation: walk 0.7s steps(4) infinite; }
+.dex-card b { font-size: 15px; color: var(--text); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dex-card small { color: var(--muted); font-size: 12px; }
+
 .dex-detail { min-width: 0; animation: fade-in 0.25s ease-out; }
-.dex-hero { display: flex; gap: 14px; align-items: center; margin-bottom: 12px; }
-.dex-portrait { width: 112px; height: 112px; background: radial-gradient(circle, color-mix(in srgb, var(--type) 35%, transparent), transparent 70%); border-radius: 14px; }
-.dex-hero h2 { color: var(--text); font-size: 26px; text-transform: none; letter-spacing: 0; margin-bottom: 6px; }
-.dex-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
-.dex-tags span { background: var(--panel-2); border: 1px solid var(--line); border-radius: 99px; padding: 2px 10px; font-size: 13px; }
-.dex-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; margin-bottom: 8px; }
-.dex-table th, .dex-table td { padding: 7px 8px; border-bottom: 1px solid var(--line); text-align: right; }
-.dex-table th:first-child { text-align: left; color: var(--muted); font-weight: 700; }
-.dex-table thead th { color: var(--gold); }
-.dex-table tbody tr:hover { background: #ffffff06; }
-.dex-detail h3 { margin: 14px 0 4px; font-size: 15px; }
-.dex-detail p { margin: 4px 0; }
+.dex-hero {
+  display: flex; gap: 16px; align-items: center; margin-bottom: 14px; padding: 12px;
+  border-radius: 16px; background: linear-gradient(120deg, color-mix(in srgb, var(--type) 22%, var(--panel-2)), var(--panel-2) 65%);
+  border: 1px solid color-mix(in srgb, var(--type) 30%, var(--line));
+}
+.dex-portrait { width: 120px; height: 120px; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--type) 45%, transparent), transparent 70%); }
+.dex-portrait .sprite { animation: walk 0.9s steps(4) infinite; }
+.dex-title { min-width: 0; }
+.dex-hero h2 { color: var(--text); font-size: 28px; text-transform: none; letter-spacing: 0; margin: 0 0 6px; }
+.dex-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+.dex-tags span { background: var(--panel-3); border: 1px solid var(--line); border-radius: 99px; padding: 2px 10px; font-size: 13px; }
+.dex-tags .dex-type { background: color-mix(in srgb, var(--type) 30%, var(--panel-3)); border-color: var(--type); font-weight: 800; }
+.dex-levels { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.dex-level {
+  display: inline-flex; align-items: baseline; gap: 8px; padding: 6px 12px; border-radius: 12px;
+  background: #2a2410; border-color: #6b5a1c; color: var(--gold);
+}
+.dex-level:hover { border-color: var(--gold); }
+.dex-level small { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
+.dex-level b { min-width: 3.2em; text-align: left; font-size: 17px; }
+.dex-pips { display: inline-flex; gap: 6px; }
+.dex-pips button { width: 12px; height: 12px; padding: 0; border-radius: 50%; background: var(--line-2); border: 0; min-width: 0; }
+.dex-pips button.on { background: var(--gold); box-shadow: 0 0 6px #ffc93c99; }
+
+.dex-stats { display: grid; gap: 10px; margin-bottom: 12px; }
+.dex-stat { display: grid; grid-template-columns: 1fr auto; align-items: baseline; row-gap: 4px; }
+.dex-stat > span { color: var(--muted); font-weight: 700; font-size: 14px; }
+.dex-stat > b { font-size: 18px; font-variant-numeric: tabular-nums; }
+.dex-stat small { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
+.dex-bar { grid-column: 1 / -1; height: 8px; border-radius: 99px; background: var(--panel-3); overflow: hidden; }
+.dex-bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, color-mix(in srgb, var(--type) 70%, #fff0), var(--type)); transition: width 0.35s var(--glide); }
+.dex-note { margin: 0; padding: 8px 12px; border-radius: 10px; background: var(--panel-2); color: #d4d8e8; }
+.dex-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.dex-fact { padding: 8px 12px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--line); }
+.dex-fact span { display: block; color: var(--muted); font-size: 12px; }
+.dex-fact b { font-size: 16px; font-variant-numeric: tabular-nums; }
+.dex-power { padding: 12px 14px; border-radius: 14px; background: var(--panel-2); border-left: 4px solid var(--type); margin-bottom: 12px; }
+.dex-power h3 { margin: 0 0 4px; font-size: 16px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.dex-power h3 small { color: var(--mana); font-size: 12px; font-weight: 700; }
+.dex-power p { margin: 0; color: #d4d8e8; line-height: 1.45; }
+.dex-links { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.dex-link {
+  display: inline-flex; align-items: center; gap: 10px; padding: 6px 12px 6px 6px; border-radius: 14px; text-align: left;
+  background: color-mix(in srgb, var(--type) 14%, var(--panel-2)); border-color: color-mix(in srgb, var(--type) 45%, var(--line));
+}
+.dex-link:hover { border-color: var(--type); }
+.dex-link .portrait { width: 44px; height: 44px; }
+.dex-link span { display: grid; }
+.dex-link small { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+.dex-link i { font-style: normal; font-size: 22px; color: var(--muted); }
+.dex-foot { font-size: 13px; margin: 4px 0 0; }
 
 /* ---- Toast ---- */
 #toast {
@@ -876,11 +926,13 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   :is(#overlay, #lobby) .card { padding: 20px 16px; }
   :is(#overlay, #lobby) .leader-card { display: grid; grid-template-columns: 72px 1fr; text-align: left; align-items: center; column-gap: 12px; }
   .leader-card .portrait { width: 72px; height: 72px; grid-row: span 3; }
-  .dex-body { grid-template-columns: 1fr; }
-  .dex-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .dex-entry { grid-template-columns: 26px 1fr auto; gap: 6px; padding: 3px 6px; font-size: 13px; }
-  .dex-entry .portrait { width: 26px; height: 26px; }
-  .dex-portrait { width: 80px; height: 80px; }
+  .dex-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+  .dex-card-art { width: 60px; height: 60px; }
+  .dex-card .portrait { width: 52px; height: 52px; }
+  .dex-card b { font-size: 13px; }
+  .dex-hero { gap: 10px; padding: 10px; }
+  .dex-portrait { width: 84px; height: 84px; }
+  .dex-hero h2 { font-size: 22px; }
   .dex-panel { padding: 16px; }
 }
 /* Short, wide windows (landscape phones): the board runs the full height on the
@@ -1163,10 +1215,10 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .tag.new { background: #1d3561; color: #a9c9ff; }
 .tag.fix { background: #4a3b16; color: #ffd98a; }
 :is(#overlay, #lobby) .start-links button { min-width: 0; }
-/* Smallest phones: the Pokédex stat table tightens up instead of overflowing. */
+/* Smallest phones: the Pokédex entry stacks its picture above the title. */
 @media (max-width: 360px) {
-  .dex-table { font-size: 13px; }
-  .dex-table th, .dex-table td { padding: 6px 4px; }
+  .dex-hero { flex-direction: column; text-align: center; }
+  .dex-tags, .dex-levels { justify-content: center; }
 }
 @media (max-width: 520px) {
   :is(#overlay, #lobby) .start-links { gap: 8px; }

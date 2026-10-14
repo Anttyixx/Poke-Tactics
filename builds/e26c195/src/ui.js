@@ -2,11 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=b12b2de';
+import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=e26c195';
 import {
-  COPIES_PER_TROOP, LOSS_COINS, MAX_REROLLS, WIN_COINS,
+  COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=b12b2de';
+} from './game.js?v=e26c195';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=e26c195';
 
 const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
 // Attack-effect colour when a unit doesn't set its own "fx" colour in units.json.
@@ -32,7 +33,7 @@ export function describePower(def, star, catalog) {
   const p = def.ability;
   if (!p) return '';
   const every = `After every ${def.energy} attacks`;
-  const dmg = powerDamage(def, star ?? 0); // no star given (the Pokédex): quote 0★
+  const dmg = powerDamage(def, star ?? 0); // no star given: quote the base level
   switch (p.kind) {
     case 'empower': {
       const extras = [
@@ -52,21 +53,27 @@ export function describePower(def, star, catalog) {
       const counts = p.countByStar ?? [1, 1, 1, 1];
       const n = star === null ? (counts.every((c) => c === counts[0]) ? counts[0] : null) : counts[star];
       const what = n === null
-        ? `${counts.join(' / ')} ${name} (0★ / ★ / ★★ / ★★★)`
+        ? `${counts.join(' / ')} ${name} (Base / ★ / ★★ / ★★★)`
         : n === 1 ? `a ${name}` : `${n} ${name}`;
-      return `${every}, it summons ${what} beside it (sides first, then behind, in front, and the diagonals).${p.summonStar !== undefined ? ` ${name} ${n === 1 ? 'is' : 'are'} always ${p.summonStar ? '★'.repeat(p.summonStar) : '0★'}.` : ` ${n === 1 ? 'It comes' : 'They come'} at ${def.name}'s star level.`}`;
+      return `${every}, it summons ${what} beside it (sides first, then behind, in front, and the diagonals).${p.summonStar !== undefined ? ` ${name} ${n === 1 ? 'is' : 'are'} always ${p.summonStar ? '★'.repeat(p.summonStar) : 'base level'}.` : ` ${n === 1 ? 'It comes' : 'They come'} at ${def.name}'s star level.`}`;
     }
     case 'stealth': return `${every}, it turns invisible for ${secs(p.duration)}s${p.hastePct ? ` and attacks ${p.hastePct}% faster` : ''}. Enemies can't target or follow it while it's invisible.`;
     case 'haste': return `${every}, it's enraged: ${p.hastePct}% faster attacks for ${secs(p.duration)}s.`;
     case 'quake': return `With every ${def.energy}th attack, it shakes the whole board: every enemy takes ${p.damagePct}% damage (${show(dmg)})${p.stun ? ` and is stunned for ${secs(p.stun)}s` : ''}.`;
+    case 'chill': return `Every attack chills the target for ${secs(p.duration)}s: it attacks ${p.slowPct}% slower and waits ${p.slowPct}% longer between steps. Another hit restarts the timer. Chilled Pokémon turn icy blue.`;
     case 'splashHeal': return `Every attack also heals your Pokémon directly left, right, above and below the square it hits, for ${p.healPct}% of its damage (${show(Math.floor((def.damage[star ?? 0] * STAT_SCALE * p.healPct) / 100))}).`;
     case 'selfdestruct': return `When it's knocked out, it stays on its square for ${secs(p.delay)}s, then explodes: enemies in the ${2 * p.radius + 1}x${2 * p.radius + 1} square around it take ${p.damagePct}% damage (${show(dmg)}).`;
     case 'copy': return `It walks toward the nearest enemy until it's within that enemy's range, then takes ${secs(p.morph)}s to transform into it: it copies its max HP, damage, attack speed, range and crit (not its power or movement) and keeps the same share of HP it had. Transformed, it doesn't move. When that Pokémon faints or nothing is in range, it turns back and walks to the next nearest.`;
     case 'transform': {
       const f = p.form;
-      const fs = `${SPEED_NAME[f.moveSpeed].toLowerCase()} movement, attacks every ${f.secPerHit}s for ${show(Math.round(f.damage[star ?? 0] * STAT_SCALE))} damage, range ${f.range}`;
+      const fs = `${f.hp ? `${show(Math.round(f.hp[star ?? 0] * STAT_SCALE))} HP, ` : ''}${SPEED_NAME[f.moveSpeed].toLowerCase()} movement, attacks every ${f.secPerHit}s for ${show(Math.round(f.damage[star ?? 0] * STAT_SCALE))} damage, range ${f.range}`;
       const morph = p.morph ? ` It takes ${secs(p.morph)}s to transform and can't be hurt, stunned or moved while it does.` : '';
-      return `${p.trigger === 'lowHp' ? `When its HP drops to ${p.hpPct}% or less` : every}, it transforms into ${f.name} for the rest of the fight (${fs}; HP stays the same).${morph}`;
+      const wave = f.shockwave ? ` As it changes, a shock wave stuns every enemy in the ${2 * f.shockwave.radius + 1}x${2 * f.shockwave.radius + 1} around it for ${secs(f.shockwave.stun)}s.` : '';
+      const zip = f.blink ? ' In Star Form it doesn\'t walk: it zips straight to the square beside its target.' : '';
+      const hop = f.hop ? ` Every ${f.energy} attacks it picks a different enemy and zips beside it (if there's no free square, it stays).` : '';
+      const when = p.trigger === 'knockedOut' ? 'When it would be knocked out' : p.trigger === 'lowHp' ? `When its HP drops to ${p.hpPct}% or less` : every;
+      const hpNote = f.hp ? 'with its own HP' : 'HP stays the same';
+      return `${when}, it transforms into ${f.name} for the rest of the fight (${fs}; ${hpNote}).${morph}${wave}${zip}${hop}`;
     }
     case 'opening': return `When the battle starts, it fires a wave down its column. The first enemy hit takes ${p.damagePct}% damage (${show(dmg)}) and is carried all the way to the other end of the board${p.stun ? `, stunned for ${secs(p.stun)}s when it lands` : ''}. Anyone already there is pushed to the side.`;
     default: return '';
@@ -82,13 +89,15 @@ export const powerCadence = (def) => {
   if (!p) return 'No power';
   if (p.kind === 'opening') return 'Power at battle start';
   if (p.kind === 'splashHeal') return 'Heals with every attack';
+  if (p.kind === 'chill') return 'Slows with every attack';
   if (p.kind === 'selfdestruct') return 'Power when knocked out';
   if (p.kind === 'copy') return 'Copies the nearest enemy';
   if (p.trigger === 'lowHp') return `Power at ${p.hpPct}% HP`;
+  if (p.trigger === 'knockedOut') return 'Power when knocked out';
   return `Power every ${def.energy} attacks`;
 };
 
-export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
+export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProfile = () => {}, onFriends = () => {}, getFriends = () => null, getLastLog = () => null, getProfile = () => ({ name: '', avatar: null, saved: false }), getLog, changelog = [], version = null, build = null }) {
   const $ = (id) => document.getElementById(id);
   const arena = $('arena');
   const layer = $('units');
@@ -121,6 +130,14 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
   let started = false; // past the start screen (it shows once, when the game loads)
   let online = false; // playing a friend (the menu offers Leave instead of New game)
   let lobbyView = null; // which online-lobby screen is showing, if any
+  // What's new: the newest entry the player has opened, to flag unread updates.
+  const SEEN_KEY = 'poke-tactics-seen-update';
+  const latestUpdate = changelog[0]?.id ?? null;
+  const seenUpdate = () => { try { return localStorage.getItem(SEEN_KEY); } catch { return null; } };
+  const hasUnread = () => latestUpdate !== null && seenUpdate() !== latestUpdate;
+  // "v0.6.1 · dev 79ad49f": the game version (newest What's new entry) and build.
+  const channel = /\/builds\//.test(location.pathname) ? 'build' : /\/dev\//.test(location.pathname) ? 'dev' : null;
+  const versionText = [version && `v${version}`, build && (channel ? `${channel} ${build}` : build)].filter(Boolean).join(' · ');
   let deadline = null; // online: when planning auto-locks (Date.now() ms), or null
   let peek = null; // unit id shown in the info pop-up (phones), opened with an ⓘ button
   const sheetBackdrop = $('info-backdrop');
@@ -175,6 +192,11 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
   }
 
   const spriteStyle = (def) => `style="background-image:url('${def.sprite}')"`;
+  // A profile picture: the front-facing frame of a sprite sheet.
+  const avatar = (id, cls = '') => `<span class="avatar ${cls}" style="background-image:url('${avatarUrl(id)}')" aria-hidden="true"></span>`;
+  let profileDraft = null; // the profile screen's unsaved choices
+  let menuView = null; // which menu screen is open
+  let confirmRemove = null; // friend code whose Remove was tapped once
 
   function unitEl(unitId, star, side = 'ally', facing = 'down') {
     const def = catalog[unitId];
@@ -205,7 +227,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
   }
 
   function showOverlay(html) {
-    lobbyView = null;
+    closeLobby();
     overlay.classList.remove('start-screen', 'lobby');
     overlay.querySelector('.card').innerHTML = html;
     overlay.hidden = false;
@@ -309,8 +331,19 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
     if (btn?.id === 'open-dex') openDex();
     if (btn?.id === 'open-menu') openMenu();
   });
+  menuEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.target.id === 'friend-code') { onFriends('add', e.target.value); e.target.value = ''; }
+  });
   menuEl.addEventListener('click', (e) => {
     if (e.target === menuEl) return closeMenu();
+    const pic = e.target.closest('button[data-avatar]');
+    if (pic && profileDraft) {
+      profileDraft.avatar = pic.dataset.avatar;
+      for (const b of menuEl.querySelectorAll('button[data-avatar]')) b.setAttribute('aria-pressed', String(b === pic));
+      menuEl.querySelector('.profile-preview .avatar').style.backgroundImage = `url('${avatarUrl(profileDraft.avatar)}')`;
+      togglePicker(false);
+      return;
+    }
     const btn = e.target.closest('button[data-menu]');
     if (!btn) return;
     const action = btn.dataset.menu;
@@ -318,23 +351,56 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
     else if (action === 'dex') { closeMenu(); openDex(); }
     else if (action === 'new-confirmed') { closeMenu(); onNewGame(); }
     else if (action === 'leave-confirmed') { closeMenu(); onLobby('leave'); }
+    else if (action === 'copy-log') copyLog(btn);
+    else if (action === 'copy-text') copyText(btn.dataset.copy, btn);
+    else if (action === 'profile-save') saveProfileForm();
+    else if (action === 'profile-pick') togglePicker();
+    else if (action === 'friend-add') {
+      const input = menuEl.querySelector('#friend-code');
+      onFriends('add', input?.value ?? '');
+      if (input) input.value = '';
+    } else if (action === 'friend') {
+      // Removing a friend takes a second tap ("Remove?") so it's never by accident.
+      if (btn.dataset.action === 'remove' && confirmRemove !== btn.dataset.code) { confirmRemove = btn.dataset.code; return showFriends(); }
+      confirmRemove = null;
+      onFriends(btn.dataset.action, btn.dataset.code);
+    }
+    else if (action === 'start-battle') { closeMenu(); onLobby('open'); }
+    else if (action === 'start-friend') { closeMenu(); onLobby('friend'); }
+    else if (action === 'start-training') { closeMenu(); started = true; overlay.classList.remove('start-screen'); showTeamBuilder(); }
     else openMenu(action); // 'main', 'help', 'new'
   });
-  overlay.addEventListener('click', (e) => {
+  // Online pop-ups get their own layer over the start screen (see showLobby).
+  const lobbyEl = document.createElement('div');
+  lobbyEl.id = 'lobby';
+  lobbyEl.className = 'lobby';
+  lobbyEl.hidden = true;
+  lobbyEl.setAttribute('role', 'dialog');
+  lobbyEl.innerHTML = '<div class="card"></div>';
+  document.body.append(lobbyEl);
+  function closeLobby() {
+    lobbyEl.hidden = true;
+    lobbyView = null;
+  }
+
+  const overlayClick = (e) => {
     const btn = e.target.closest('button, [data-dex-info]');
     if (btn?.id === 'battle') { started = true; overlay.classList.remove('start-screen'); return showTeamBuilder(); }
     if (btn?.id === 'friend') return onLobby('open');
+    if (btn?.id === 'vs-friend') return onLobby('friend');
+    if (btn?.dataset.lobby === 'friends') return openMenu('friends');
     if (btn?.dataset.lobby) return onLobby(btn.dataset.lobby, lobbyValues());
     if (btn?.dataset.copy) return copyText(btn.dataset.copy, btn);
     if (btn?.id === 'share-link') return navigator.share?.({ title: 'Poke Tactics', text: `Battle me in Poke Tactics! Code: ${btn.dataset.code}`, url: btn.dataset.url }).catch(() => {});
-    if (btn?.id === 'start-help') return openMenu('help');
-    if (btn?.id === 'start-dex') return openDex();
+    if (btn?.id === 'start-menu') return openMenu('main');
+    if (btn?.id === 'profile-chip') return openMenu('profile');
     const info = e.target.closest('[data-dex-info]');
     if (info) return openDex(info.dataset.dexInfo); // a team card's ⓘ: full stats and power
     if (e.target.id === 'open-dex') return openDex();
     if (e.target.id === 'continue') { e.target.disabled = true; onIntent({ type: 'continue' }); }
     if (e.target.id === 'play-again') { started = true; if (online) { e.target.disabled = true; e.target.textContent = 'Waiting for the host…'; } onNewGame(); }
     if (e.target.id === 'leave-match') return onLobby('leave');
+    if (e.target.id === 'game-log') return openMenu('log');
     if (state?.phase !== 'team' || me().ready) return;
     const troop = e.target.closest('[data-pick-troop]');
     if (troop) {
@@ -348,7 +414,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
       if (res?.ok) return;
     }
     if (troop) showTeamBuilder();
-  });
+  };
+  overlay.addEventListener('click', overlayClick);
+  lobbyEl.addEventListener('click', overlayClick);
   controls.addEventListener('click', (e) => {
     if (e.target.id === 'skip') return playback?.skip();
     const s = +e.target.dataset.speed;
@@ -360,7 +428,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
   document.addEventListener('keydown', (e) => {
     if (!state || e.ctrlKey || e.metaKey || e.altKey || e.target.matches('input, textarea')) return;
     const key = e.key.toLowerCase();
-    if (!dexEl.hidden) { if (key === 'escape' || key === 'p') closeDex(); return; }
+    if (!dexEl.hidden) { dexKey(key); return; }
     if (!menuEl.hidden) { if (key === 'escape' || key === 'm') closeMenu(); return; }
     if (peek && key === 'escape') return closeInfo();
     if (key === 'p') openDex();
@@ -375,6 +443,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
   // ---- rendering -----------------------------------------------------------
 
   function render(next) {
+    // An online match is showing: any "connecting…" pop-up is done.
+    if (online) closeLobby();
     // Compare by content, not object identity: in multiplayer every update
     // arrives as a fresh state object deserialized from the network.
     if (!state || next.seed !== state.seed || next.round < state.round) {
@@ -406,9 +476,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
   function hpBox(p, side) {
     const pct = Math.max(0, p.hp);
     return `<div class="hpbox ${side}" title="${esc(p.name)}: ${p.hp} HP">
-      ${side === 'ally' ? `<span class="name">${esc(p.name)}</span>` : `<b>${p.hp}</b>`}
+      ${side === 'ally' ? `${avatar(p.avatar, 'hud-avatar')}<span class="name">${esc(p.name)}</span>` : `<b>${p.hp}</b>`}
       <div class="hpbar"><i style="width:${pct}%"></i></div>
-      ${side === 'ally' ? `<b>${p.hp}</b>` : `<span class="name">${esc(p.name)}</span>`}
+      ${side === 'ally' ? `<b>${p.hp}</b>` : `<span class="name">${esc(p.name)}</span>${avatar(p.avatar, 'hud-avatar')}`}
     </div>`;
   }
 
@@ -421,18 +491,18 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
     shownCoins = p.coins;
     hudEl.innerHTML = `
       <span class="chip"><span class="label">Round</span><b>${state.round || '–'}</b></span>
-      <span class="chip coins" title="Win a battle: +${WIN_COINS}. Lose: +${LOSS_COINS}. Coins carry over."><b class="gold${coinsChanged ? ' bump' : ''}">${p.coins}</b></span>
-      <span class="chip" title="Free rerolls. +1 each round, up to ${MAX_REROLLS}."><span class="label">Rerolls</span><b>${p.rerolls}/${MAX_REROLLS}</b></span>
+      <span class="chip coins" title="Each round: +${ROUND_COINS}, plus ${LOST_COIN} for each of your Pokémon knocked out last battle. Coins carry over."><b class="gold${coinsChanged ? ' bump' : ''}">${p.coins}</b></span>
       <div class="duel">${hpBox(p, 'ally')}<span class="vs">VS</span>${hpBox(foe(), 'enemy')}</div>
       <div class="hud-actions">
         <button id="open-dex" class="icon-btn dex-button" title="Every Pokémon's stats (P)">${ICON_DEX}<span class="label-text">Pokédex</span></button>
-        <button id="open-menu" class="icon-btn" title="Menu (M)" aria-label="Menu">${ICON_MENU}<span class="label-text">Menu</span></button>
+        <button id="open-menu" class="icon-btn${hasUnread() ? ' unread' : ''}" title="Menu (M)" aria-label="Menu">${ICON_MENU}<span class="label-text">Menu</span></button>
       </div>`;
   }
 
   // ---- menu ------------------------------------------------------------------
 
   function openMenu(view = 'main') {
+    menuView = view;
     const panel = menuEl.querySelector('.menu-panel');
     panel.classList.toggle('help', view === 'help');
     const close = '<button class="menu-close ghost" data-menu="close" aria-label="Close">✕</button>';
@@ -448,11 +518,56 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
           <li><b>Fight</b>: the battle plays out by itself. After 30 seconds, sudden death drains everyone until one side falls.</li>
           <li><b>Powers</b>: every Pokémon has one; the blue bar under it fills with each attack. See them all in the Pokédex.</li>
           <li><b>Scouting</b>: from round 2, the faded Pokémon on the enemy side show where your opponent placed theirs last round.</li>
-          <li><b>Coins</b>: you start with 6. Win a battle: +${WIN_COINS}. Lose: +${LOSS_COINS}. Coins carry over.</li>
-          <li><b>Rerolls</b> are free: ${MAX_REROLLS} to start, +1 each round (max ${MAX_REROLLS}). The shop refreshes after every battle.</li>
+          <li><b>Coins</b>: you start with ${START_COINS}. Every round after that: +${ROUND_COINS}, plus ${LOST_COIN} for each of your Pokémon knocked out in the last battle. Coins carry over.</li>
+          <li><b>Shop</b>: it refreshes for free every time you buy, and after every battle. A reroll costs ${REROLL_COST} coin.</li>
           <li><b>Win</b> by bringing your opponent from 100 HP to 0. The loser of a battle loses HP for every Pokémon still standing.</li>
         </ul>
         <p class="muted">Keys: <kbd>D</kbd> reroll · <kbd>F</kbd> fight · <kbd>E</kbd> sell · <kbd>Space</kbd> skip · <kbd>P</kbd> Pokédex · <kbd>M</kbd> menu</p>`;
+    } else if (view === 'news') {
+      try { localStorage.setItem(SEEN_KEY, latestUpdate); } catch {}
+      hudEl.querySelector('#open-menu')?.classList.remove('unread');
+      overlay.querySelector('#start-menu')?.classList.remove('unread');
+      panel.innerHTML = `${close}${back}<h1>What's new</h1>${changelogHTML()}`;
+    } else if (view === 'log') {
+      panel.innerHTML = `${close}${back}<h1>Match log</h1>
+        <p class="muted">Every move both players made this match. Paste it to Claude to analyse the match or test stat changes.</p>
+        <label class="field log-notes" for="log-notes">Your notes (optional)
+          <textarea id="log-notes" rows="4" placeholder="e.g. Mawile felt useless; Tapu Koko's dash won round 6"></textarea></label>
+        <button class="primary" data-menu="copy-log">Copy match log</button>
+        <p class="muted" id="log-status" aria-live="polite"></p>
+        <textarea id="log-text" class="log-text" rows="6" readonly hidden></textarea>`;
+    } else if (view === 'profile') {
+      const p = getProfile();
+      profileDraft = { name: p.name, avatar: p.avatar };
+      panel.innerHTML = `${close}${back}<h1>Profile</h1>
+        <div class="profile-head">
+          <div class="profile-preview">${avatar(profileDraft.avatar, 'big')}
+            <button type="button" class="ghost change-pic" data-menu="profile-pick" aria-expanded="false">Change</button></div>
+          <label class="field">Your name<input id="profile-name" maxlength="${NAME_MAX}" autocomplete="nickname" placeholder="Trainer" value="${esc(p.name)}"></label>
+        </div>
+        <div class="avatar-picker" hidden>
+          <p class="field-label">Pick a profile picture</p>
+          <div class="avatar-grid" role="group" aria-label="Profile picture">${AVATARS.map((id) =>
+            `<button type="button" data-avatar="${id}" aria-pressed="${id === profileDraft.avatar}" title="${esc(catalog[id]?.name ?? id)}">${avatar(id)}</button>`).join('')}</div>
+        </div>
+        <button class="primary profile-save" data-menu="profile-save">Save</button>
+        ${statsHTML(p.stats)}
+        ${friendsSummaryHTML()}
+        <p class="muted small">Your profile and stats are saved in this browser, so they're here next time you play. Clearing your browser's site data resets them.</p>`;
+      menuEl.hidden = false;
+      panel.querySelector('#profile-name').focus();
+      return;
+    } else if (view === 'friends') {
+      confirmRemove = null;
+      panel.innerHTML = `${close}${back}<h1>Friends</h1><div class="friends-body">${friendsViewHTML()}</div>`;
+      menuEl.hidden = false;
+      return;
+    } else if (view === 'lastlog') {
+      const text = getLastLog() ?? '';
+      panel.innerHTML = `${close}${back}<h1>Last online match log</h1>
+        <p class="muted">Every move of your last online match, and what happened to the connection. Copy it and paste it to Claude to look into a drop.</p>
+        <button class="primary" data-menu="copy-text" data-copy="${esc(text)}">Copy match log</button>
+        <textarea class="log-text" rows="6" readonly>${esc(text)}</textarea>`;
     } else if (view === 'leave') {
       panel.innerHTML = `${close}<h1>Leave the match?</h1>
         <p class="muted">Your friend will be told you left, and the match ends.</p>
@@ -461,12 +576,31 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
       panel.innerHTML = `${close}<h1>New game?</h1>
         <p class="muted">This match will be lost.</p>
         <div class="confirm-row"><button data-menu="main">Keep playing</button><button class="danger" data-menu="new-confirmed">Start a new game</button></div>`;
+    } else if (!started) {
+      // From the start screen: everything a player can start from here.
+      panel.innerHTML = `${close}<h1>Menu</h1>
+        <div class="menu-list">
+          <button data-menu="start-battle"><span>⚔</span><div>Battle<small>Play the next player looking for a battle</small></div></button>
+          <button data-menu="start-friend"><span>✉</span><div>Battle a friend<small>Send a battle request with their friend code</small></div></button>
+          <button data-menu="start-training"><span>▶</span><div>Training<small>Play against the bot</small></div></button>
+          <button data-menu="friends" class="${getFriends()?.incoming.length ? 'unread' : ''}"><span>♥</span><div>Friends<small>${friendsSub()}</small></div></button>
+          <button data-menu="profile"><span>☺</span><div>Profile<small>Your name, picture and stats</small></div></button>
+          <button data-menu="news" class="${hasUnread() ? 'unread' : ''}"><span>★</span><div>What's new<small>${esc(changelog[0]?.title ?? 'Updates to the game')}</small></div></button>
+          <button data-menu="help"><span>?</span><div>How to play<small>Rules, controls and keys</small></div></button>
+          <button data-menu="dex"><span>◎</span><div>Pokédex<small>Every Pokémon's stats and power</small></div></button>
+          ${getLastLog() ? '<button data-menu="lastlog"><span>⧉</span><div>Last online match log<small>Copy it to look into a dropped connection</small></div></button>' : ''}
+        </div>
+        ${versionText ? `<p class="menu-version">${esc(versionText)}</p>` : ''}`;
     } else {
       panel.innerHTML = `${close}<h1>Menu</h1>
         <div class="menu-list">
           <button data-menu="close"><span>▶</span><div>Resume</div></button>
+          <button data-menu="news" class="${hasUnread() ? 'unread' : ''}"><span>★</span><div>What's new<small>${esc(changelog[0]?.title ?? 'Updates to the game')}</small></div></button>
           <button data-menu="help"><span>?</span><div>How to play<small>Rules, controls and keys</small></div></button>
           <button data-menu="dex"><span>◎</span><div>Pokédex<small>Every Pokémon's stats and power</small></div></button>
+          <button data-menu="log"><span>⧉</span><div>Match log<small>Copy every move this match, with notes</small></div></button>
+          <button data-menu="friends" class="${getFriends()?.incoming.length ? 'unread' : ''}"><span>♥</span><div>Friends<small>${friendsSub()}</small></div></button>
+          <button data-menu="profile"><span>☺</span><div>Profile<small>Your name, picture and stats</small></div></button>
           ${online
             ? '<button data-menu="leave"><span>⏏</span><div>Leave match<small>Disconnect from your friend</small></div></button>'
             : '<button data-menu="new"><span>↻</span><div>New game<small>Start over with a new team</small></div></button>'}
@@ -476,8 +610,188 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
     panel.querySelector('button:not(.menu-close)')?.focus();
   }
 
+  const KIND = { buff: 'Buff', nerf: 'Nerf', new: 'New', change: 'Change', fix: 'Fix' };
+  function changelogHTML() {
+    if (!changelog.length) return '<p class="muted">No updates yet.</p>';
+    const date = (d) => { try { return new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }); } catch { return d; } };
+    return `<div class="news">${changelog.map((u) => `
+      <section class="news-entry">
+        <div class="news-date">${esc(date(u.date))}</div>
+        <h2>${esc(u.title)}</h2>
+        ${u.intro ? `<p class="muted">${esc(u.intro)}</p>` : ''}
+        <ul>${u.changes.map((c) => {
+          const def = c.pokemon && catalog[c.pokemon];
+          return `<li>${def ? portrait(def) : '<span class="news-dot" aria-hidden="true"></span>'}
+            <div>${c.kind ? `<span class="tag ${c.kind}">${KIND[c.kind] ?? esc(c.kind)}</span>` : ''}${def && !c.text.startsWith(def.name) ? `<b>${esc(def.name)}</b> ` : ''}${esc(c.text)}</div></li>`;
+        }).join('')}</ul>
+      </section>`).join('')}</div>`;
+  }
+
+  async function copyLog(btn) {
+    const status = menuEl.querySelector('#log-status');
+    btn.disabled = true;
+    status.textContent = 'Getting the match log…';
+    const log = await getLog?.();
+    btn.disabled = false;
+    if (!log?.intents?.length) { status.textContent = 'No moves recorded yet. Start a match first.'; return; }
+    const notes = menuEl.querySelector('#log-notes').value.trim();
+    const text = JSON.stringify({ ...log, notes, viewer: log.names[viewer], copied: new Date().toISOString() });
+    try {
+      await navigator.clipboard.writeText(text);
+      status.textContent = `Copied ${log.intents.length} moves. Paste them into your chat with Claude.`;
+    } catch {
+      const box = menuEl.querySelector('#log-text');
+      box.hidden = false;
+      box.value = text;
+      box.focus();
+      box.select();
+      status.textContent = 'Copying was blocked here. The log is selected below: copy it yourself.';
+    }
+  }
+
   function closeMenu() {
     menuEl.hidden = true;
+    profileDraft = null;
+  }
+
+  // The profile picture options only show after pressing Change.
+  function togglePicker(open) {
+    const picker = menuEl.querySelector('.avatar-picker');
+    const btn = menuEl.querySelector('.change-pic');
+    if (!picker || !btn) return;
+    const show = open ?? picker.hidden;
+    picker.hidden = !show;
+    btn.setAttribute('aria-expanded', String(show));
+    btn.textContent = show ? 'Done' : 'Change';
+    if (show) picker.querySelector('[aria-pressed="true"]')?.focus();
+  }
+
+  function statsHTML(stats) {
+    const total = { wins: 0, losses: 0, draws: 0 };
+    for (const r of [stats.online, stats.training]) for (const k in total) total[k] += r[k];
+    const played = total.wins + total.losses + total.draws;
+    const rate = played ? `${Math.round((100 * total.wins) / played)}%` : '–';
+    const row = (label, r) => `<tr><th>${label}</th><td>${r.wins}</td><td>${r.losses}</td><td>${r.draws}</td></tr>`;
+    const fav = favouriteTroop(stats);
+    const favDef = fav && catalog[fav.id];
+    return `<section class="profile-section">
+        <h2>Stats</h2>
+        <div class="stat-tiles">
+          <div><b>${total.wins}</b><span>Wins</span></div>
+          <div><b>${total.losses}</b><span>Losses</span></div>
+          <div><b>${rate}</b><span>Win rate</span></div>
+        </div>
+        <table class="record"><thead><tr><th></th><th>Wins</th><th>Losses</th><th>Draws</th></tr></thead>
+          <tbody>${row('Online', stats.online)}${row('Training', stats.training)}</tbody></table>
+        <div class="favourite">${favDef
+          ? `${avatar(fav.id)}<div><small>Most used Pokémon</small><b>${esc(favDef.name)}</b><span>in ${fav.battles} ${fav.battles === 1 ? 'battle' : 'battles'}</span></div>`
+          : '<div><small>Most used Pokémon</small><span>Play a battle to find out.</span></div>'}</div>
+      </section>`;
+  }
+
+  const onlineCount = () => (getFriends()?.friends ?? []).filter((f) => f.status !== 'offline').length;
+  const friendsSub = () => {
+    const f = getFriends();
+    if (!f?.available) return 'Add friends and battle them';
+    const n = onlineCount();
+    return f.incoming.length ? `${f.incoming.length} friend request${f.incoming.length === 1 ? '' : 's'}` : n ? `${n} online now` : 'Add friends and battle them';
+  };
+
+  function friendsSummaryHTML() {
+    const f = getFriends();
+    return `<section class="profile-section">
+        <h2>Friends <span class="count">${f?.friends.length ?? 0}</span></h2>
+        <p class="muted">${f?.available ? `${onlineCount()} online now.` : 'Friends need online play.'}</p>
+        <button type="button" data-menu="friends">Open friends</button>
+      </section>`;
+  }
+
+  const STATUS_TEXT = { online: 'Online', battling: 'In a battle', offline: 'Offline' };
+  const ORDER = { online: 0, battling: 1, offline: 2 };
+
+  // The Friends screen: your code, adding friends, requests, and the friends
+  // list with who's online and a Battle button.
+  function friendsViewHTML() {
+    const f = getFriends();
+    if (!f?.available) return '<p class="muted">Friends need online play, which isn\'t available in this copy of the game.</p>';
+    const person = (p, actions) => `<li>${avatar(p.avatar)}<div class="who"><b>${esc(p.name)}</b>${p.status ? `<small class="status ${p.status}"><i></i>${STATUS_TEXT[p.status]}</small>` : ''}</div>${actions}</li>`;
+    const act = (action, p, label, cls = '') => `<button type="button" class="${cls}" data-menu="friend" data-action="${action}" data-code="${esc(p.code)}">${label}</button>`;
+    const list = [...f.friends].sort((a, b) => ORDER[a.status] - ORDER[b.status] || a.name.localeCompare(b.name));
+    return `
+      <div class="friend-code"><span>Your friend code</span><b>${esc(f.code ?? '······')}</b>
+        ${f.code ? `<button type="button" data-menu="copy-text" data-copy="${esc(f.code)}">Copy</button>` : ''}</div>
+      <div class="add-friend-row">
+        <input id="friend-code" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Friend's code" aria-label="Friend's code">
+        <button type="button" class="primary" data-menu="friend-add">Add friend</button>
+      </div>
+      ${f.incoming.length ? `<h2>Friend requests</h2><ul class="friend-list">${f.incoming.map((p) => person({ ...p, status: null },
+        `${act('accept', p, 'Accept', 'primary small-btn')}${act('decline', p, 'Decline', 'ghost small-btn')}`)).join('')}</ul>` : ''}
+      ${f.outgoing.length ? `<h2>Sent requests</h2><ul class="friend-list">${f.outgoing.map((p) => person({ ...p, status: null },
+        `<small class="muted">Waiting</small>${act('cancel', p, 'Cancel', 'ghost small-btn')}`)).join('')}</ul>` : ''}
+      <h2>Friends <span class="count">${f.friends.length}</span></h2>
+      ${list.length ? `<ul class="friend-list">${list.map((p) => person(p,
+        `${p.status === 'online'
+          ? (f.waiting?.code === p.code ? '<small class="muted">Asking…</small>' : act('challenge', p, '⚔ Battle', 'primary small-btn'))
+          : ''}${act('remove', p, confirmRemove === p.code ? 'Remove?' : '✕', `ghost small-btn danger-text${confirmRemove === p.code ? ' confirm' : ''}`)}`)).join('')}</ul>`
+        : '<p class="muted">No friends yet. Send a friend your code, or add theirs.</p>'}
+      <p class="muted small">Friends are saved on the game server and linked to this browser. Another browser or device, or clearing this site's data, starts a new friends list with a new code.</p>`;
+  }
+
+  // Battle requests, shown over whatever screen is up.
+  let challengeEl = null;
+  let challengeTimer = 0;
+  function renderChallenge() {
+    const f = getFriends();
+    const ch = f?.challenge;
+    const w = f?.waiting;
+    clearInterval(challengeTimer);
+    if (!ch && !w) { challengeEl?.remove(); challengeEl = null; return; }
+    if (!challengeEl) {
+      challengeEl = document.createElement('div');
+      challengeEl.className = 'challenge-card';
+      challengeEl.setAttribute('role', 'alertdialog');
+      challengeEl.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-challenge]');
+        if (btn) onFriends(btn.dataset.challenge);
+      });
+      document.body.append(challengeEl);
+    }
+    const p = ch ?? w;
+    const left = () => Math.max(0, Math.ceil((p.until - Date.now()) / 1000));
+    challengeEl.innerHTML = ch
+      ? `${avatar(ch.avatar, 'big')}<div class="text"><b>${esc(ch.name)} wants to battle!</b><small><span class="left">${left()}</span>s to answer</small></div>
+         <div class="buttons"><button class="primary" data-challenge="accept-battle">Accept</button><button class="ghost" data-challenge="decline-battle">Decline</button></div>`
+      : `${avatar(w.avatar, 'big')}<div class="text"><b>Asking ${esc(w.name)} to battle…</b><small><span class="left">${left()}</span>s for them to answer</small></div>
+         <div class="buttons"><button class="ghost" data-challenge="withdraw">Cancel</button></div>`;
+    challengeTimer = setInterval(() => { const el = challengeEl?.querySelector('.left'); if (el) el.textContent = left(); }, 1000);
+  }
+
+  // Friends data changed: refresh whatever shows it.
+  function showFriends() {
+    renderChallenge();
+    const mine = lobbyEl.querySelector('#my-friend-code');
+    const code = getFriends()?.code;
+    if (mine && code) {
+      mine.textContent = code;
+      const copy = mine.parentElement.querySelector('[data-copy]');
+      if (copy) { copy.dataset.copy = code; copy.hidden = false; }
+    }
+    if (menuEl.hidden || menuView !== 'friends') return;
+    const panel = menuEl.querySelector('.menu-panel');
+    const input = panel.querySelector('#friend-code');
+    const typed = input?.value ?? '';
+    const focused = document.activeElement === input;
+    panel.querySelector('.friends-body').innerHTML = friendsViewHTML();
+    const fresh = panel.querySelector('#friend-code');
+    if (fresh) { fresh.value = typed; if (focused) fresh.focus(); }
+  }
+
+  function saveProfileForm() {
+    const name = menuEl.querySelector('#profile-name')?.value ?? '';
+    const saved = onProfile({ name, avatar: profileDraft.avatar });
+    toast(saved?.stored === false ? 'This browser blocked saving. Your profile lasts until you close the page.' : 'Profile saved');
+    closeMenu();
+    if (overlay.classList.contains('start-screen')) showStart();
   }
 
   // Phones: Pokémon details open as a pop-up sheet over the game (the layout
@@ -549,8 +863,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
 
   function renderShop() {
     const p = me();
-    // A new round or a reroll deals the cards in; buying one doesn't.
-    const deal = `${state.round}|${p.rerolls}|${state.phase}`;
+    // A new round, a reroll or a purchase deals new cards in.
+    const deal = `${state.round}|${p.shopRolls}|${state.phase}`;
     const dealt = deal !== shownShop && state.phase === 'planning';
     shownShop = deal;
     shopEl.innerHTML = p.shop.map((id, slot) => {
@@ -565,12 +879,12 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
         <span class="type">${def.type}</span>
         <span class="cost c${def.cost}" title="${def.cost} coins">${def.cost}</span>
         <span class="info-btn" data-info="${slot}" role="button" aria-label="${esc(def.name)} info">i</span>
-        ${fielded(p, id) ? `<span class="levelup">Level up ${'★'.repeat(fielded(p, id).star) || '0★'}→${'★'.repeat(fielded(p, id).star + 1)}</span>` : ''}
+        ${fielded(p, id) ? `<span class="levelup">Level up ${'★'.repeat(fielded(p, id).star) || 'Base'}→${'★'.repeat(fielded(p, id).star + 1)}</span>` : ''}
         <span class="left">${p.pool[id]} left in pool</span>
       </button>`;
     }).join('');
-    rerollBtn.textContent = p.rerolls > 0 ? `Reroll (${p.rerolls} left)` : 'No rerolls left';
-    rerollBtn.disabled = !canPlan() || p.rerolls <= 0;
+    rerollBtn.textContent = `Reroll (${REROLL_COST} coin)`;
+    rerollBtn.disabled = !canPlan() || p.coins < REROLL_COST;
     readyBtn.disabled = !canPlan();
     readyBtn.dataset.base = state.phase === 'planning' && p.ready ? 'Waiting for opponent…' : 'Fight!';
     tickDeadline();
@@ -693,6 +1007,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
       while (next < events.length && events[next].t <= tick) { applyEvent(ctx, events[next], next, animate); next++; }
       for (const a of actors.values()) {
         if (a.stunUntil && tick >= a.stunUntil) { a.stunUntil = 0; a.el.classList.remove('stunned'); }
+        if (a.chillUntil && tick >= a.chillUntil) { a.chillUntil = 0; a.el.classList.remove('chilled'); }
         if (a.stealthUntil && tick >= a.stealthUntil) { a.stealthUntil = 0; a.el.classList.remove('stealthed'); }
         if (a.hasteUntil && tick >= a.hasteUntil) { a.hasteUntil = 0; a.el.classList.remove('hasted'); }
       }
@@ -990,6 +1305,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
         // morph, then the new sprite. A Ditto that turns back and copies again in
         // the same moment shows its own form briefly in between.
         a.range = ev.range;
+        if (ev.maxMana !== undefined) { a.maxMana = ev.maxMana; setMana(0); bars(a); } // a form with its own power counter
         // Ditto takes on the copied Pokémon's max HP (keeping its share of HP).
         if (ev.maxHp && newest()) { a.maxHp = ev.maxHp; a.hp = ev.hp; bars(a); }
         const spr = a.el.querySelector('.sprite');
@@ -1030,7 +1346,26 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
         setTimeout(() => { a.el.style.transition = ''; }, ms);
         break;
       }
+      case 'blink': {
+        // Minior's Star Form: a near-instant zip to its target, leaving sparks.
+        const from = viewPos(ev.fromX, ev.fromY);
+        a.x = ev.x;
+        a.y = ev.y;
+        const p = viewPos(a.x, a.y);
+        face(a, p.x - from.x, p.y - from.y);
+        if (!animate) { place(a.el, p.x, p.y); break; }
+        const ms = 120 / speed;
+        a.el.style.transition = `left ${ms}ms cubic-bezier(.5,0,.2,1), top ${ms}ms cubic-bezier(.5,0,.2,1)`;
+        place(a.el, p.x, p.y);
+        play(a.el, 'dashing', ms + 60);
+        fx(from.x, from.y, 'burst', fxColor(a.unitId), 0.9);
+        if (ev.hop) setTimeout(() => fx(p.x, p.y, 'ring', fxColor(a.unitId), 1.4), ms);
+        setTimeout(() => { a.el.style.transition = ''; }, ms);
+        break;
+      }
       case 'morphStart': { // Minior (immune) or Ditto changing form
+        // Minior's Rock form breaking: Star Form's own, full HP bar.
+        if (ev.maxHp && newest()) { a.maxHp = ev.maxHp; a.hp = ev.hp; a.shield = 0; later(ctx.hitDelay.get(a.id) ?? 0, () => bars(a)); }
         if (!animate) break;
         const immune = catalog[a.unitId].ability?.kind === 'transform';
         const cls = immune ? ['morphing', 'immune'] : ['morphing'];
@@ -1046,6 +1381,14 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
           if (animate) floatText(a, '!!', 'crit');
         });
         break;
+      case 'shockwave': { // Minior's Star Form arrives with a stunning burst
+        if (!animate) break;
+        const p = at();
+        fx(p.x, p.y, 'ring', fxColor(a.unitId), ev.radius * 2 + 1.4);
+        fx(p.x, p.y, 'burst', '#ffe14d', ev.radius * 2 + 0.4);
+        pulse(arena, 'shake');
+        break;
+      }
       case 'explode': {
         a.el.classList.remove('fusing');
         if (!animate) break;
@@ -1100,6 +1443,15 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
         bars(a);
         if (animate) { floatText(a, `+${show(ev.amount)}`, 'shield'); fx(at().x, at().y, 'shield', '#ffffff', 1.3); }
         break;
+      case 'chill': { // Frosmoth: slower for a while (each hit restarts it)
+        const fresh = !(a.chillUntil && ev.t < a.chillUntil);
+        a.chillUntil = ev.t + ev.duration + 1;
+        later(ctx.hitDelay.get(a.id) ?? 0, () => {
+          a.el.classList.add('chilled');
+          if (animate && fresh) floatText(a, 'Chilled', 'chill');
+        });
+        break;
+      }
       case 'stun':
         a.stunUntil = ev.t + ev.duration;
         later(ctx.hitDelay.get(a.id) ?? 0, () => {
@@ -1133,7 +1485,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
     showOverlay(`
       <h1 class="${draw ? '' : won ? 'win' : 'loss'}">${title}</h1>
       <p>${detail}</p>
-      <p class="muted">Round ${round} · Your HP ${me().hp} → ${hpAfter} · +${won ? WIN_COINS : LOSS_COINS} coins</p>
+      <p class="muted">Round ${round} · Your HP ${me().hp} → ${hpAfter} · +${ROUND_COINS + LOST_COIN * lostCount(result, viewer)} coins next round (${ROUND_COINS} + ${lostCount(result, viewer)} for Pokémon lost)</p>
       ${me().ready
         ? '<button disabled>Waiting for opponent…</button>'
         : '<button id="continue" class="primary" autofocus>Continue</button>'}`);
@@ -1154,6 +1506,11 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
     </button>`;
   }
 
+  function profileChip() {
+    const p = getProfile();
+    return `<button id="profile-chip" class="profile-chip" title="Your profile">${avatar(p.avatar)}<span>${p.saved && p.name ? esc(p.name) : 'Set up your profile'}</span></button>`;
+  }
+
   function showStart() {
     const ids = troopIds(catalog);
     const parade = ids.map((id, i) => `<span class="walker" style="--i:${i};--n:${ids.length}" data-facing="right"><span class="sprite" ${spriteStyle(catalog[id])}></span></span>`).join('');
@@ -1164,12 +1521,12 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
         <div class="parade" aria-hidden="true">${parade}</div>
         <div class="start-modes">
           <button id="friend" class="primary battle-btn">Battle</button>
+          <button id="vs-friend" class="battle-btn training-btn">Battle a friend</button>
           <button id="battle" class="battle-btn training-btn">Training</button>
         </div>
-        <div class="start-links">
-          <button id="start-help" class="ghost">How to play</button>
-          <button id="start-dex" class="ghost">Pokédex</button>
-        </div>
+        <button id="start-menu" class="icon-btn start-menu${hasUnread() ? ' unread' : ''}" title="Menu (M)" aria-label="Menu">${ICON_MENU}</button>
+        ${profileChip()}
+        ${versionText ? `<div class="start-version">${esc(versionText)}</div>` : ''}
       </div>`);
     overlay.classList.add('start-screen');
     overlay.querySelector('#friend').focus();
@@ -1198,14 +1555,14 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
       ${online && viewer === 1
         ? '<button id="play-again" class="primary">Ask for a rematch</button>'
         : `<button id="play-again" class="primary">${online ? 'Rematch' : 'Play again'}</button>`}
+      <button id="game-log" class="ghost">Copy match log</button>
       ${online ? '<button id="leave-match" class="ghost">Leave</button>' : ''}`);
   }
 
   // ---- online lobby ----------------------------------------------------------
 
   const lobbyValues = () => ({
-    name: overlay.querySelector('#lobby-name')?.value ?? '',
-    code: overlay.querySelector('#lobby-code')?.value ?? '',
+    friendCode: lobbyEl.querySelector('#lobby-friend-code')?.value ?? '',
   });
 
   async function copyText(text, btn) {
@@ -1217,71 +1574,56 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
     } catch { toast('Copy blocked here. Select the text and copy it yourself.'); }
   }
 
-  // Screens: 'menu' (name, create or join), 'connecting', 'hosting' (show the
-  // code), 'error' and 'disconnected'. main.js decides which one to show.
+  // Screens: 'queue' (waiting for an opponent), 'friend' (battle request by
+  // friend code), 'connecting', 'resume', 'error', 'disconnected' and the
+  // connection check. main.js decides which one to show.
   function showLobby(view, data = {}) {
     const back = '<button class="ghost" data-lobby="home">Back</button>';
     const html = {
-      menu: () => `
-        <h1>Battle a Friend</h1>
-        <label class="field">Your name<input id="lobby-name" maxlength="16" autocomplete="nickname" placeholder="Trainer" value="${esc(data.name ?? '')}"></label>
-        <div class="lobby-split">
-          <section>
-            <h2>Create a game</h2>
-            <p class="muted">Get a code to send your friend.</p>
-            <button class="primary" data-lobby="host">Create game</button>
-          </section>
-          <section>
-            <h2>Join a game</h2>
-            <p class="muted">Enter the code your friend sent you.</p>
-            <input id="lobby-code" class="code-input" maxlength="7" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCDE" value="${esc(data.code ?? '')}" aria-label="Game code">
-            <button class="primary" data-lobby="join">Join</button>
-          </section>
-        </div>
-        <div class="lobby-actions">${back}<button class="ghost" data-lobby="check">Check my connection</button></div>`,
+      friend: () => `
+        <h1>Battle a friend</h1>
+        <p class="muted">Enter your friend's code to send them a battle request. They need to have the game open.</p>
+        <input id="lobby-friend-code" class="code-input" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABC123" aria-label="Friend code">
+        <button class="primary" data-lobby="challenge">Send battle request</button>
+        <div class="my-code">Your friend code: <b id="my-friend-code">${esc(data.myCode ?? '······')}</b>
+          <button class="ghost small-btn" data-copy="${esc(data.myCode ?? '')}" ${data.myCode ? '' : 'hidden'}>Copy</button></div>
+        <div class="lobby-actions">${back}<button class="ghost" data-lobby="friends">Friends list</button></div>`,
+      resume: () => `
+        <h1>Match in progress</h1>
+        <p>You were in a match${data.opponent ? ` with <b>${esc(data.opponent)}</b>` : ''} (game <b>${esc(data.code)}</b>) when the page closed.</p>
+        <p class="muted">It's still going on the server: rejoin and you're straight back in.</p>
+        <button class="primary" data-lobby="resume">Rejoin the match</button>
+        <div class="lobby-actions"><button class="ghost" data-lobby="discard">Start fresh</button></div>`,
+      queue: () => `
+        <h1>Waiting for opponent</h1>
+        <div class="spinner" aria-hidden="true"></div>
+        <p class="muted">The battle starts as soon as another player is looking too. Keep this screen open.</p>
+        <button class="ghost" data-lobby="cancel">Cancel</button>`,
       checking: () => `
         <h1>Checking your connection</h1>
         <div class="spinner" aria-hidden="true"></div>
         <p class="muted">This takes a few seconds.</p>`,
       check: () => {
         const c = data;
-        const keyText = {
-          ok: [true, 'Relay login is set'],
-          missing: [false, 'No relay login in this version of the game'],
-          unreachable: [false, 'Couldn\'t reach Metered to check the relay key'],
-        }[c.key] ?? [false, `Metered refused the relay key (${esc(c.key.replace('rejected', '').trim() || 'error')})`];
         const row = ([ok, text]) => `<li class="${ok ? 'ok' : 'bad'}"><span aria-hidden="true">${ok ? '✓' : '✗'}</span>${text}</li>`;
-        const verdict = c.relay
-          ? 'Online play should work from anywhere: if a direct connection is blocked, the relay takes over.'
-          : c.direct
-            ? 'Direct connections work, but the relay doesn\'t. Friends on some networks (many phone carriers, some home routers) won\'t be able to connect to you.'
-            : 'Only same-network connections will work from here. Try a different network.';
+        const verdict = !c.configured ? 'Online play isn\'t set up in this copy of the game.'
+          : !c.ok ? 'Couldn\'t reach the game server. Check your internet connection; if other sites work, the server may be down for a moment.'
+          : !c.sameVersion ? 'The game has been updated: refresh the page to play online.'
+          : 'Online play should work from here.';
         return `
         <h1>Connection check</h1>
         <ul class="check-list">
-          ${row(keyText)}
-          ${row([c.direct, c.direct ? 'Direct connections through your router work' : 'Direct connections are blocked on this network'])}
-          ${row([c.relay, c.relay ? 'Relay connection works' : 'Relay connection not available'])}
+          ${row([c.ok, c.ok ? 'The game server is reachable' : 'The game server can\'t be reached'])}
+          ${c.ok ? row([c.sameVersion, c.sameVersion ? 'You have the latest version' : 'A newer version is out: refresh the page']) : ''}
         </ul>
         <p>${verdict}</p>
-        <button class="primary" data-lobby="open">Back</button>`;
+        <button class="primary" data-lobby="home">Back</button>`;
       },
       connecting: () => `
-        <h1>Battle a Friend</h1>
+        <h1>Battle</h1>
         <div class="spinner" aria-hidden="true"></div>
         <p>${esc(data.text ?? 'Connecting…')}</p>
         ${data.cancel ? '<button class="ghost" data-lobby="home">Cancel</button>' : ''}`,
-      hosting: () => `
-        <h1>Your game code</h1>
-        <p class="muted">Send this code to your friend. They open Poke Tactics, tap <b>Battle</b> and enter it.</p>
-        <div class="code-box" aria-label="Game code ${data.code.split('').join(' ')}">${data.code}</div>
-        <div class="lobby-actions">
-          <button data-copy="${esc(data.code)}">Copy code</button>
-          <button data-copy="${esc(data.link)}">Copy invite link</button>
-          ${navigator.share ? `<button id="share-link" data-code="${esc(data.code)}" data-url="${esc(data.link)}">Share…</button>` : ''}
-        </div>
-        <p class="waiting"><span class="spinner small" aria-hidden="true"></span> Waiting for your friend to join…</p>
-        <button class="ghost" data-lobby="cancel">Cancel</button>`,
       error: () => `
         <h1>Couldn't connect</h1>
         <p>${esc(data.error)}</p>
@@ -1289,23 +1631,33 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
       disconnected: () => `
         <h1>Match ended</h1>
         <p>${esc(data.error)}</p>
-        <button class="primary" data-lobby="home">Back to start</button>`,
+        <button class="primary" data-lobby="home">Back to start</button>
+        ${data.log ? `<p class="muted small">Did the connection drop? Copy the match log and send it in: it shows what happened to the connection.</p>
+        <button class="ghost" data-copy="${esc(data.log)}">Copy match log</button>` : ''}`,
     }[view]();
-    showOverlay(html);
-    overlay.classList.add('lobby');
+    // No match has started for this player yet: the start screen stays behind
+    // the pop-up (never an empty board).
+    if (!overlay.classList.contains('start-screen') || overlay.hidden) {
+      started = false;
+      playback?.cancel();
+      playback = null;
+      showStart();
+    }
+    lobbyEl.querySelector('.card').innerHTML = html;
+    lobbyEl.hidden = false;
     lobbyView = view;
-    const focus = view === 'menu' ? (data.code ? '[data-lobby="join"]' : '#lobby-name') : 'button.primary, button';
-    overlay.querySelector(focus)?.focus();
+    const focus = view === 'friend' ? '#lobby-friend-code' : 'button.primary, button';
+    lobbyEl.querySelector(focus)?.focus();
   }
 
-  overlay.addEventListener('input', (e) => {
-    if (e.target.id !== 'lobby-code') return;
+  lobbyEl.addEventListener('input', (e) => {
+    if (e.target.id !== 'lobby-friend-code') return;
     const v = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (v !== e.target.value) e.target.value = v;
   });
-  overlay.addEventListener('keydown', (e) => {
+  lobbyEl.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
-    if (e.target.id === 'lobby-code') onLobby('join', lobbyValues());
+    if (e.target.id === 'lobby-friend-code') onLobby('challenge', lobbyValues());
   });
 
   // ---- online: planning countdown and the battle intro ----------------------
@@ -1329,7 +1681,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
 
   // A Pokémon-battle screen wipe: black bars sweep across, the two trainers'
   // names meet over a Poké Ball, then the bars sweep away.
-  function playIntro(names) {
+  function playIntro(names, avatars = []) {
     document.querySelector('#wipe')?.remove();
     const el = document.createElement('div');
     el.id = 'wipe';
@@ -1337,9 +1689,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
     const bars = Array.from({ length: 8 }, (_, i) => `<i style="--i:${i}"></i>`).join('');
     el.innerHTML = `<div class="bars">${bars}</div>
       <div class="vs-card">
-        <span class="trainer left">${esc(names[0])}</span>
+        <span class="trainer left">${avatars[0] ? avatar(avatars[0], 'intro-avatar') : ''}${esc(names[0])}</span>
         <span class="ball" aria-hidden="true"></span>
-        <span class="trainer right">${esc(names[1])}</span>
+        <span class="trainer right">${esc(names[1])}${avatars[1] ? avatar(avatars[1], 'intro-avatar') : ''}</span>
         <span class="vs-text">VS</span>
       </div>`;
     el.setAttribute('aria-label', `${names[0]} versus ${names[1]}`);
@@ -1363,16 +1715,37 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
 
   // ---- Pokédex ---------------------------------------------------------------
   // Every Pokémon's stats, read straight from units.json, so new Pokémon and
-  // stat changes show up here automatically.
+  // stat changes show up here automatically. The grid shows a card per
+  // Pokémon (summons too); a card opens its entry, where a button steps through
+  // the levels (Base, ★, ★★, ★★★). A transformation is its own entry, opened
+  // from the Pokémon that transforms.
+
+  let dexForm = false; // showing dexPick's transformed form
+  let dexStar = 0; // level shown in an entry
 
   dexEl.addEventListener('click', (e) => {
     if (e.target === dexEl || e.target.closest('#dex-close')) return closeDex();
+    if (e.target.closest('#dex-back')) { dexStar = 0; return showDexEntry(null); }
+    if (e.target.closest('#dex-level')) { dexStar = (dexStar + 1) % 4; return renderDex(); }
+    const lvl = e.target.closest('[data-dex-star]');
+    if (lvl) { dexStar = +lvl.dataset.dexStar; return renderDex(); }
+    const form = e.target.closest('[data-dex-form]');
+    if (form) return showDexEntry(form.dataset.dexForm, true);
     const pick = e.target.closest('[data-dex]');
-    if (pick) { dexPick = pick.dataset.dex; renderDex(); }
+    if (pick) showDexEntry(pick.dataset.dex);
   });
 
+  function showDexEntry(id, form = false) {
+    dexPick = id;
+    dexForm = form;
+    renderDex();
+    dexEl.scrollTop = 0;
+  }
+
   function openDex(id) {
-    dexPick = id ?? dexPick ?? troopIds(catalog)[0];
+    dexPick = id ?? null;
+    dexForm = false;
+    dexStar = 0;
     renderDex();
     dexEl.hidden = false;
   }
@@ -1381,61 +1754,150 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby }) {
     dexEl.hidden = true;
   }
 
-  function renderDex() {
-    const list = (ids, title) => `<h3>${title}</h3><div class="dex-list">${ids.map((id) => {
-      const def = catalog[id];
-      return `<button class="dex-entry${id === dexPick ? ' active' : ''}" data-dex="${id}" data-type="${def.type}">
-        ${portrait(def)}<span>${esc(def.name)}</span><small>${def.summon ? 'summon' : `${def.cost} 🪙`}</small></button>`;
-    }).join('')}</div>`;
-    const summons = Object.keys(catalog).filter((id) => catalog[id].summon).sort();
-    const def = catalog[dexPick];
-    const form = def.ability?.form;
-    const rows = [0, 1, 2, 3].map((star) => {
-      const st = unitStats(def, star);
-      return {
-        star, hp: show(st.hp), dmg: show(st.atk), crit: show(Math.floor((st.atk * CRIT_PCT) / 100)), dps: dps(st),
-        sup: powerDamage(def, star) === null ? '—' : show(powerDamage(def, star)),
-        form: form ? show(Math.round(form.damage[star] * STAT_SCALE)) : '',
-      };
-    });
-    const col = (label, key) => `<tr><th>${label}</th>${rows.map((r) => `<td>${r[key]}</td>`).join('')}</tr>`;
-    const stats0 = unitStats(def, 0);
-    dexEl.querySelector('.dex-panel').innerHTML = `
-      <button id="dex-close" class="ghost" aria-label="Close">✕</button>
-      <h1>Pokédex</h1>
-      <div class="dex-body">
-        <nav class="dex-nav">${list(troopIds(catalog), 'Pokémon')}${summons.length ? list(summons, 'Summoned in battle') : ''}</nav>
-        <section class="dex-detail" data-type="${def.type}">
-          <div class="dex-hero">
-            <span class="portrait dex-portrait" data-facing="down"><span class="sprite" ${spriteStyle(def)}></span></span>
-            <div>
-              <h2>${esc(def.name)}</h2>
-              <p class="dex-tags">
-                <span>${def.summon ? 'Summoned' : `${def.cost} coins`}</span>
-                ${isCopycat(def) ? `<span>Moves: ${moveText(def)}</span><span>Copies the nearest enemy's stats</span>` : `
-                <span>${def.range > 1 ? `Ranged · ${def.range} tiles` : 'Melee · 1 tile'}</span>
-                <span>Moves: ${moveText(def)}</span>
-                <span>Attacks every ${attackTime(stats0)}s</span>
-                <span>Crit ${stats0.crit}%</span>`}
-                <span>${powerCadence(def)}</span>
-              </p>
-            </div>
-          </div>
-          <table class="dex-table">
-            <thead><tr><th></th>${rows.map((r) => `<th>${r.star ? '★'.repeat(r.star) : '0★'}</th>`).join('')}</tr></thead>
-            <tbody>
-              ${col('HP', 'hp')}
-              ${isCopycat(def) ? '' : `${col('Damage per hit', 'dmg')}${col('Crit damage', 'crit')}${col('DPS', 'dps')}`}
-              ${form ? col(`${esc(form.name)} damage`, 'form') : ''}
-              ${def.ability && powerDamage(def, 0) !== null ? col(`${esc(def.ability.name)} damage`, 'sup') : ''}
-            </tbody>
-          </table>
-          <p class="muted">Copies on the board: 1 = 0★, 2 = ★, 3 = ★★, 4 = ★★★. A crit deals 50% more damage.</p>
-          ${def.ability ? `<h3>Power: ${esc(def.ability.name)}</h3>
-          <p>${describePower(def, null, catalog)}</p>` : `<p>${esc(def.name)} can't be picked: it's summoned in battle.</p>`}
-        </section>
-      </div>`;
+  // Keys while the Pokédex is open: ←/→ change the level, Escape goes back to
+  // the grid (or closes it from the grid).
+  function dexKey(key) {
+    if (dexPick && (key === 'arrowright' || key === 'arrowleft')) {
+      dexStar = (dexStar + (key === 'arrowright' ? 1 : 3)) % 4;
+      return renderDex();
+    }
+    if (key === 'escape' && dexPick) {
+      if (dexForm) return showDexEntry(dexPick);
+      dexStar = 0;
+      return showDexEntry(null);
+    }
+    if (key === 'escape' || key === 'p') closeDex();
   }
 
-  return { render, toast, showLobby, setOnline, setDeadline, playIntro, lobbyView: () => lobbyView };
+  const levelName = (star) => (star ? '★'.repeat(star) : 'Base');
+  const typeName = (type) => type[0].toUpperCase() + type.slice(1);
+  const summonIds = () => Object.keys(catalog).filter((id) => catalog[id].summon).sort();
+  // A transformed form as a Pokémon of its own (HP carries over when the form has none).
+  const formDef = (def) => {
+    const f = def.ability.form;
+    return { ...def, ...f, hp: f.hp ?? def.hp, energy: f.energy ?? 0, ability: null, form: true };
+  };
+  // Who summons this Pokémon.
+  const summonersOf = (id) => troopIds(catalog).filter((t) => catalog[t].ability?.kind === 'summon' && catalog[t].ability.unit === id);
+
+  // Biggest HP / damage / DPS any Pokémon has at this level, for the stat bars.
+  function dexMax(star) {
+    const defs = Object.values(catalog).flatMap((d) => (d.ability?.form ? [d, formDef(d)] : [d]));
+    const st = defs.map((d) => unitStats(d, star));
+    return {
+      hp: Math.max(...st.map((x) => x.hp)),
+      atk: Math.max(...st.map((x) => x.atk)),
+      dps: Math.max(...st.map((x) => +dps(x))),
+    };
+  }
+
+  function dexCard(id) {
+    const def = catalog[id];
+    return `<button class="dex-card" data-dex="${id}" data-type="${def.type}">
+      <span class="dex-card-art">${portrait(def)}</span>
+      <b>${esc(def.name)}</b>
+      <small>${def.summon ? 'Summon' : `${def.cost} 🪙`} · ${typeName(def.type)}</small>
+    </button>`;
+  }
+
+  // A small clickable chip linking to another entry.
+  const dexLink = (def, attrs, label) => `<button class="dex-link" ${attrs} data-type="${def.type}">
+    ${portrait(def)}<span><small>${label}</small><b>${esc(def.name)}</b></span><i aria-hidden="true">›</i></button>`;
+
+  function renderDex() {
+    const panel = dexEl.querySelector('.dex-panel');
+    if (!dexPick || !catalog[dexPick]) {
+      const summons = summonIds();
+      panel.innerHTML = `
+        <button id="dex-close" class="ghost" aria-label="Close">✕</button>
+        <h1>Pokédex</h1>
+        <p class="muted dex-sub">Tap a Pokémon to see its stats and power.</p>
+        <div class="dex-grid">${troopIds(catalog).map(dexCard).join('')}</div>
+        ${summons.length ? `<h3 class="dex-section">Summoned in battle</h3><div class="dex-grid">${summons.map(dexCard).join('')}</div>` : ''}`;
+      return;
+    }
+    const base = catalog[dexPick];
+    const isForm = dexForm && base.ability?.form;
+    const def = isForm ? formDef(base) : base;
+    const star = dexStar;
+    const st = unitStats(def, star);
+    const max = dexMax(star);
+    const copycat = isCopycat(def);
+    const bar = (label, value, shown, top, note = '') => `<div class="dex-stat">
+        <span>${label}</span><b>${shown}</b>
+        <div class="dex-bar"><i style="width:${Math.max(4, Math.round((100 * value) / top))}%"></i></div>${note}</div>`;
+    const fact = (label, value) => `<div class="dex-fact"><span>${label}</span><b>${value}</b></div>`;
+    const critDmg = show(Math.floor((st.atk * CRIT_PCT) / 100));
+    const powerDmg = def.ability && powerDamage(def, star);
+
+    let power = '';
+    if (isForm) {
+      const f = base.ability.form;
+      const traits = [
+        !f.hp && `Keeps ${esc(base.name)}'s HP when it transforms.`,
+        f.shockwave && `As it changes, a shock wave stuns every enemy in the ${2 * f.shockwave.radius + 1}x${2 * f.shockwave.radius + 1} around it for ${secs(f.shockwave.stun)}s.`,
+        f.blink && 'It doesn\'t walk: it zips straight to the square beside its target.',
+        f.hop && `Every ${f.energy} attacks it picks a different enemy and zips beside it (if there's no free square, it stays).`,
+      ].filter(Boolean);
+      power = `<div class="dex-power"><h3>${esc(base.ability.name)} form</h3>
+        <p>${esc(base.name)} becomes ${esc(f.name)} for the rest of the fight. ${traits.join(' ')}</p></div>`;
+    } else if (def.ability) {
+      power = `<div class="dex-power"><h3>${esc(def.ability.name)} <small>${powerCadence(def)}</small></h3>
+        <p>${describePower(def, star, catalog)}</p></div>`;
+    }
+
+    const links = [];
+    if (isForm) links.push(dexLink(base, `data-dex="${dexPick}"`, 'Transforms from'));
+    else if (def.ability?.form) links.push(dexLink(formDef(def), `data-dex-form="${dexPick}"`, 'Transforms into'));
+    if (!isForm && def.ability?.kind === 'summon' && catalog[def.ability.unit]) links.push(dexLink(catalog[def.ability.unit], `data-dex="${def.ability.unit}"`, 'Summons'));
+    if (def.summon) for (const t of summonersOf(dexPick)) links.push(dexLink(catalog[t], `data-dex="${t}"`, 'Summoned by'));
+
+    const tag = isForm ? 'Transformed form' : def.summon ? 'Summoned in battle' : `${def.cost} coins`;
+    panel.innerHTML = `
+      <button id="dex-close" class="ghost" aria-label="Close">✕</button>
+      <button id="dex-back" class="ghost">‹ All Pokémon</button>
+      <section class="dex-detail" data-type="${def.type}">
+        <div class="dex-hero">
+          <span class="portrait dex-portrait" data-facing="down"><span class="sprite" ${spriteStyle(def)}></span></span>
+          <div class="dex-title">
+            <h2>${esc(def.name)}</h2>
+            <p class="dex-tags"><span class="dex-type">${typeName(def.type)}</span><span>${tag}</span></p>
+            <div class="dex-levels">
+              <button id="dex-level" class="dex-level" title="Next level (→)"><small>Level</small><b>${levelName(star)}</b><i aria-hidden="true">▸</i></button>
+              <span class="dex-pips">${[0, 1, 2, 3].map((s) => `<button data-dex-star="${s}" class="${s === star ? 'on' : ''}" aria-label="${levelName(s)}" title="${levelName(s)}"></button>`).join('')}</span>
+            </div>
+          </div>
+        </div>
+        <div class="dex-stats">
+          ${bar('HP', st.hp, show(st.hp), max.hp)}
+          ${copycat ? `<p class="dex-note">Once it transforms, Ditto fights with the copied Pokémon's HP, damage, attack speed, range and crit.</p>` : `
+          ${bar('Damage per hit', st.atk, show(st.atk), max.atk, `<small>Crit ${critDmg} · ${st.crit}% chance</small>`)}
+          ${bar('Damage per second', +dps(st), dps(st), max.dps)}`}
+        </div>
+        <div class="dex-facts">
+          ${copycat ? '' : fact('Attacks every', `${attackTime(st)}s`)}
+          ${copycat ? '' : fact('Range', def.range > 1 ? `${def.range} tiles` : 'Melee')}
+          ${fact('Movement', SPEED_NAME[def.moveSpeed])}
+          ${powerDmg ? fact(`${esc(def.ability.name)} damage`, show(powerDmg)) : ''}
+        </div>
+        ${power}
+        ${links.length ? `<div class="dex-links">${links.join('')}</div>` : ''}
+        <p class="muted dex-foot">${def.summon ? 'A summon comes at the level the power gives it.' : 'Copies on the board: 1 = Base, 2 = ★, 3 = ★★, 4 = ★★★.'} A crit deals ${CRIT_PCT - 100}% more damage.</p>
+      </section>`;
+  }
+
+  // A standing notice about the online connection (null hides it).
+  let netEl = null;
+  function setNetStatus(text) {
+    if (!text) { netEl?.remove(); netEl = null; return; }
+    if (!netEl) {
+      netEl = document.createElement('div');
+      netEl.className = 'net-status';
+      netEl.setAttribute('role', 'status');
+      document.body.append(netEl);
+    }
+    netEl.textContent = text;
+  }
+
+  return { render, toast, showLobby, showFriends, setOnline, setDeadline, setNetStatus, netStatus: () => netEl?.textContent ?? null, playIntro, lobbyView: () => lobbyView };
 }
