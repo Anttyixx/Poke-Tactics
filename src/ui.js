@@ -28,7 +28,7 @@ const moveText = (def) => `${SPEED_NAME[def.moveSpeed]} (waits ${MOVE_SPEEDS[def
 // Level marks: ★, ★★, ★★★, then the shiny star for a full set of copies.
 // `star` is the internal level (0-3).
 export const LEVEL_NAMES = ['1 star', '2 stars', '3 stars', 'Shiny'];
-export const levelMark = (star) => (star >= 3 ? '<span class="star-max" title="Shiny">★</span>' : '★'.repeat(star + 1));
+export const levelMark = (star) => (star >= 3 ? '<span class="star-max" title="Shiny">✦</span>' : '★'.repeat(star + 1));
 const levelSpan = (star) => `<span class="stars s${star}" aria-label="${LEVEL_NAMES[star]}">${levelMark(star)}</span>`;
 
 // Internal combat numbers -> the design sheet's units.
