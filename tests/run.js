@@ -814,13 +814,33 @@ test('Dragon Darts (Dragapult): fires 2 Dreepy into the 2 farthest enemies, shov
   // it attacks normally while the Dreepy are out, and the next volley again
   // replaces an attack.
   const attacks = evs(r, 'attack', d);
-  assert.ok(attacks.length && attacks[0].t > darts[0].t, 'it attacks only after the first volley');
+  assert.ok(attacks.every((a) => a.t > darts[0].t), 'its first attack is the volley');
   // With a power counter it needs that many attacks between pairs.
   const need = catalog.dragapult.energy ?? 0;
   assert.ok(attacks.filter((a) => a.t > darts[0].t && a.t < again.t).length >= need, `at least ${need} attacks between pairs`);
   assert.ok(!attacks.some((a) => a.t === again.t), 'no attack on the tick it fires');
   assert.ok(again.t - Math.max(...attacks.filter((a) => a.t < again.t).map((a) => a.t)) >= Math.round(catalog.dragapult.secPerHit * 10), 'the volley waits for its attack timer, like an attack');
   assert.equal(darts.filter((e) => e.t === again.t).length, p.count, 'as a pair');
+});
+
+test('Dragon Darts (Dragapult): an enemy in the 3x3 around it is hit first, then the farthest', () => {
+  const cat = powerCat();
+  const p = catalog.dragapult.ability;
+  if (!p.near) return;
+  const r = simulate(cat, [
+    [{ uid: 1, unitId: 'dragapult', star: 0, x: 2, y: 0 }], // combat (2,4)
+    [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'wall', star: 0, x: 0, y: 3 }, { uid: 4, unitId: 'wall', star: 0, x: 4, y: 3 }], // (2,3) right next to it, (4,0), (0,0)
+  ], 1);
+  const d = unitOf(r, 1).id;
+  const first = evs(r, 'summon', d).filter((e) => e.dart);
+  const start = new Map(r.initial.map((u) => [u.id, u]));
+  const me = start.get(d);
+  const near = [...start.values()].filter((u) => u.side !== me.side && Math.max(Math.abs(u.x - me.x), Math.abs(u.y - me.y)) <= p.near);
+  assert.ok(near.length >= 1, 'the setup has an enemy next to Dragapult');
+  const t0 = first[0].t;
+  const pair = first.filter((e) => e.t === t0);
+  assert.ok(pair.some((e) => near.some((n) => n.id === e.target)), 'a Dreepy goes at the enemy next to it');
+  assert.ok(pair.some((e) => !near.some((n) => n.id === e.target)), 'the other at a farther one');
 });
 
 test('Earthquake (Torterra): after 5 attacks, hits every enemy on the board for 30% and stuns them', () => {

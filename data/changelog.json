@@ -1,5 +1,17 @@
 [
   {
+    "id": "2026-10-14-dreepy-close-first",
+    "version": "0.30.0",
+    "date": "2026-10-14",
+    "title": "Dragapult fires whenever both Dreepy are home",
+    "intro": "No more counting attacks: Dragapult fires its Dreepy whenever both are back, and protects itself first.",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "change", "text": "Dragapult no longer needs 3 attacks between pairs: whenever both Dreepy are home, its next attack fires them instead." },
+      { "pokemon": "dragapult", "kind": "change", "text": "Dreepy go first at enemies in the 3x3 around Dragapult (closest first), shoving them away. With nobody that close, they go at the farthest enemies as before." },
+      { "pokemon": "dragapult", "kind": "change", "text": "Attacks every 2.5s (was 1.3s), for 70 damage at ★ (was 55): fewer, harder hits, since every pair of Dreepy now takes the place of one." }
+    ]
+  },
+  {
     "id": "2026-10-14-dreepy-10",
     "version": "0.29.1",
     "date": "2026-10-14",

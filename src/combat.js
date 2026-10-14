@@ -639,7 +639,11 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     const busy = new Set(u.darts.filter((s) => s.unit).map((s) => s.aim));
     const foes = units.filter((e) => e.side !== u.side && visible(e) && e.bornAt !== t)
       .sort((a, b) => Math.max(Math.abs(b.x - u.x), Math.abs(b.y - u.y)) - Math.max(Math.abs(a.x - u.x), Math.abs(a.y - u.y)) || dist(u, b) - dist(u, a) || a.slot - b.slot);
-    const target = foes.find((e) => !busy.has(e.id)) ?? foes[0];
+    // `near`: enemies within that many squares (1 = the 3x3 around it) come
+    // first, closest first; `nearOnly`: only those.
+    const close = p.near ? foes.filter((e) => reach(u, e) <= p.near).reverse() : [];
+    const pool = p.nearOnly ? close : [...close, ...foes.filter((e) => !close.includes(e))];
+    const target = pool.find((e) => !busy.has(e.id)) ?? pool[0];
     if (!target) return;
     // `displace`: it crashes into its target, landing on its square and
     // pushing it aside (like any knock: a shield breaks instead, and with no
@@ -994,7 +998,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     if (reach(u, at(target)) <= u.range) {
       // It can't attack mid-step; waiting between steps doesn't stop it.
       if (u.atkTimer > 0 || u.stepTimer > 0) return;
-      if (u.powerKind === 'darts' && dartsHome(u) && !(u.maxMana > 0 && u.mana < u.maxMana)) {
+      if (u.powerKind === 'darts' && dartsHome(u) && !(u.maxMana > 0 && u.mana < u.maxMana) && (!u.power.nearOnly || units.some((e) => e.side !== u.side && visible(e) && reach(u, at(e)) <= u.power.near))) {
         // Its Dreepy go instead of this attack (at the end of the tick). With a
         // power counter, it also needs that many attacks since the last pair.
         if (u.maxMana > 0) u.mana = 0;
