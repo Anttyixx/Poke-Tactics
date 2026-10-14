@@ -609,19 +609,17 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     return best?.e ?? null;
   }
 
-  // Dragapult's Dragon Darts: each of its Dreepy slots, when ready, fires a
-  // Dreepy at one of the farthest enemies (two darts go for two different
-  // ones). It hits on impact, distracting its target (see `lure`), then lands
-  // beside it and fights. When it faints it drifts back; the slot is ready
-  // again once it is home.
+  // Dragapult's Dragon Darts: when it is about to attack and both its Dreepy
+  // are home, it fires them instead of attacking: each at one of the farthest
+  // enemies (two darts go for two different ones). Each lands beside its
+  // target, which must attack it until it faints (see `lure`). A fainted Dreepy
+  // flies back; until both are home again, Dragapult attacks as usual.
   // Darts fly at the end of the tick (both sides at once), at enemies that were
   // already on the board when the tick began.
   let dartQueue = [];
-  function launchDarts(u) {
-    const p = u.power;
-    u.darts ??= Array.from({ length: p.count }, () => ({ readyAt: p.firstAt ?? 1, unit: null, aim: null }));
-    // Both Dreepy go out together: a new volley only once every one is home.
-    if (u.darts.every((slot) => !slot.unit && t >= slot.readyAt)) dartQueue.push(u);
+  function dartsHome(u) {
+    u.darts ??= Array.from({ length: u.power.count }, () => ({ readyAt: 0, unit: null, aim: null }));
+    return u.darts.every((slot) => !slot.unit && t >= slot.readyAt);
   }
   // Every Dragapult's first ready Dreepy goes, then every second one, ... so
   // when both sides' darts want the same squares, neither side gets them all.
@@ -882,7 +880,6 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     // Coming out of a stun (or landing after being carried), a Pokémon looks
     // around again and picks the nearest enemy rather than its old target.
     if (u.stun > 0) { u.stun--; if (u.stun === 0 && !(u.tauntUntil >= t)) u.target = null; return; }
-    if (u.powerKind === 'darts' && standing(u)) launchDarts(u);
     if (u.atkTimer > 0) u.atkTimer--;
     if (u.moveTimer > 0) u.moveTimer--;
     if (u.stepTimer > 0) u.stepTimer--;
@@ -985,7 +982,9 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     if (reach(u, at(target)) <= u.range) {
       // It can't attack mid-step; waiting between steps doesn't stop it.
       if (u.atkTimer > 0 || u.stepTimer > 0) return;
-      if (empowered) {
+      if (u.powerKind === 'darts' && dartsHome(u)) {
+        dartQueue.push(u); // its Dreepy go instead of this attack (at the end of the tick)
+      } else if (empowered) {
         powerStrike(u, target);
       } else {
         if (u.maxMana > 0) u.mana = Math.min(u.maxMana, u.mana + MANA_PER_ATTACK);

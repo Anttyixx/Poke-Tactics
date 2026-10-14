@@ -230,12 +230,12 @@ test a set of changes together. Team styles to pit against each other live in `A
     within the 5x5 around it that is attacking someone else must attack Amoonguss for 5s.
   - Annihilape (cost 4, warrior), **Rage Fist**: each attack in a row without moving makes it attack
     20% faster, up to +100% after 5 attacks. Moving (or being moved) resets it.
-  - Dragapult (cost 4, ranger, range 3), **Dragon Darts**: at the start it fires 2 Dreepy at the two
-    farthest enemies. Each lands beside its target, and the target must attack that Dreepy until it
-    faints. Dreepy hit fast for very little; they're a distraction. A fainted Dreepy flies back
-    (1.5s), and Dragapult fires a new pair once both are home. Darts fire at the end of the tick, at
-    enemies already on the board, every Dragapult's first Dreepy before any second one, so neither
-    side gets an edge.
+  - Dragapult (cost 4, ranger, range 3), **Dragon Darts**: when it attacks with both its Dreepy at
+    home, it fires them instead, at the two farthest enemies. Each lands beside its target, and the
+    target must attack that Dreepy until it faints. Dreepy hit fast for very little; they're a
+    distraction. A fainted Dreepy flies back (1.5s); until both are home, Dragapult attacks as usual.
+    Darts fire at the end of the tick, at enemies already on the board, every Dragapult's first Dreepy
+    before any second one, so neither side gets an edge.
   - Greninja, **Battle Bond**: after 5 attacks, becomes Ash-Greninja for the rest of the fight: fast
     movement, attacks every 0.8s, more damage, range 3 (same HP).
   - Torterra, **Earthquake**: with every 5th attack, every enemy on the board takes 30% and is stunned 1s.
