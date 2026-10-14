@@ -1,5 +1,17 @@
 [
   {
+    "id": "2026-10-14-dex-stat-shape",
+    "version": "0.16.5",
+    "date": "2026-10-14",
+    "title": "Pokédex: stat shape",
+    "changes": [
+      { "kind": "new", "text": "Each Pokédex entry has a stat shape: a hexagon of HP, damage, DPS, attack speed, range and speed. The further a point reaches out, the better that stat is compared to every other Pokémon. The shape grows as you step up the level." },
+      { "kind": "change", "text": "Stat chips keep the same size when the level changes." },
+      { "kind": "change", "text": "Hovering a transformation or summon makes the sprite glow in its type colour." },
+      { "kind": "change", "text": "The info pop-up glows with the Pokémon's type colour from the top corner, and closing it animates like opening it." }
+    ]
+  },
+  {
     "id": "2026-10-14-dex-entry-popup",
     "version": "0.16.4",
     "date": "2026-10-14",

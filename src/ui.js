@@ -1728,6 +1728,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   // small sprites by the big one: tapping one swaps the two places.
 
   const entryEl = $('dex-entry');
+  const reduceMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   let dexForm = false; // the entry shows dexPick's transformed form
   let dexStar = 0; // level shown in the entry
 
@@ -1749,6 +1750,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   function openDex(id) {
     if (id) return openEntry(id);
     renderDexGrid();
+    dexEl.classList.remove('closing');
     dexEl.hidden = false;
   }
   function openEntry(id) {
@@ -1756,15 +1758,23 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     dexForm = false;
     dexStar = 0;
     renderEntry();
+    entryEl.classList.remove('closing');
     entryEl.hidden = false;
     entryEl.scrollTop = 0;
   }
+  // Close a pop-up with the opening animation played backwards.
+  function closeAnimated(el) {
+    if (el.hidden || el.classList.contains('closing')) return;
+    if (reduceMotion()) { el.hidden = true; return; }
+    el.classList.add('closing');
+    setTimeout(() => { el.hidden = true; el.classList.remove('closing'); }, 200);
+  }
   function closeEntry() {
-    entryEl.hidden = true;
+    closeAnimated(entryEl);
   }
   function closeDex() {
     closeEntry();
-    dexEl.hidden = true;
+    closeAnimated(dexEl);
   }
 
   // Keys while the Pokédex is open: ←/→ change the entry's level, Escape
@@ -1807,6 +1817,59 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       ${summons.length ? `<h3 class="dex-section">Summoned in battle</h3><div class="dex-grid">${summons.map(dexCard).join('')}</div>` : ''}`;
   }
 
+  // The stat shape: six stats as a hexagon, each 0-1 against the best any
+  // Pokémon (or form) has at the top level, so the shape grows as it levels up.
+  const RADAR = [['hp', 'HP'], ['atk', 'Damage'], ['dps', 'DPS'], ['spd', 'Atk speed'], ['range', 'Range'], ['move', 'Speed']];
+  const radarRaw = (def, star) => {
+    const st = unitStats(def, star);
+    return {
+      hp: st.hp, atk: st.atk, dps: +dps(st), spd: 1 / attackTime(st), range: def.range,
+      move: 1 / (MOVE_SPEEDS[def.moveSpeed] + STEP_TICKS * TICK_SECONDS),
+    };
+  };
+  let radarTop = null;
+  function radarValues(def, star) {
+    if (!radarTop) {
+      const defs = Object.values(catalog).flatMap((d) => (d.ability?.form ? [d, formDef(d)] : [d]));
+      const raws = defs.map((d) => radarRaw(d, 3));
+      radarTop = Object.fromEntries(RADAR.map(([k]) => [k, Math.max(...raws.map((r) => r[k]))]));
+    }
+    const raw = radarRaw(def, star);
+    // A gentle curve so small stats still show; 1 = the best there is.
+    return RADAR.map(([k]) => Math.min(1, raw[k] / radarTop[k]) ** 0.6);
+  }
+  const RADAR_R = 70;
+  const radarPoint = (i, v) => {
+    const a = (Math.PI / 3) * i - Math.PI / 2;
+    return [100 + Math.cos(a) * RADAR_R * v, 100 + Math.sin(a) * RADAR_R * v];
+  };
+  const radarPoints = (vals) => vals.map((v, i) => radarPoint(i, Math.max(0.04, v)).map((n) => n.toFixed(1)).join(',')).join(' ');
+  function radarSvg(vals) {
+    const ring = (f) => `<polygon class="ring" points="${radarPoints(RADAR.map(() => f))}"/>`;
+    const axes = RADAR.map((_, i) => { const [x, y] = radarPoint(i, 1); return `<line x1="100" y1="100" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}"/>`; }).join('');
+    const labels = RADAR.map(([, label], i) => {
+      const [x, y] = radarPoint(i, 1.27);
+      return `<text x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}">${label}</text>`;
+    }).join('');
+    return `<svg class="dex-radar" viewBox="-12 -2 224 204" role="img" aria-label="Stat shape">
+      ${ring(1)}${ring(2 / 3)}${ring(1 / 3)}<g class="axes">${axes}</g>
+      <polygon class="shape" points="${radarPoints(vals)}" data-vals="${vals.join(',')}"/>${labels}</svg>`;
+  }
+  function tweenRadar(poly, to) {
+    const from = poly.dataset.vals.split(',').map(Number);
+    poly.dataset.vals = to.join(',');
+    if (reduceMotion()) { poly.setAttribute('points', radarPoints(to)); return; }
+    const start = performance.now();
+    cancelAnimationFrame(poly._tween);
+    const step = (now) => {
+      const k = Math.min(1, (now - start) / 320);
+      const e = 1 - (1 - k) ** 3;
+      poly.setAttribute('points', radarPoints(from.map((f, i) => f + (to[i] - f) * e)));
+      if (k < 1) poly._tween = requestAnimationFrame(step);
+    };
+    poly._tween = requestAnimationFrame(step);
+  }
+
   // The parts of an entry that change with the level.
   function dexLevelValues(def, star, formOf) {
     const st = unitStats(def, star);
@@ -1836,7 +1899,10 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     if (!detail) return renderEntry();
     const base = catalog[dexPick];
     const isForm = dexForm && base.ability?.form;
-    const v = dexLevelValues(isForm ? formDef(base) : base, star, isForm ? base : null);
+    const shown = isForm ? formDef(base) : base;
+    const v = dexLevelValues(shown, star, isForm ? base : null);
+    const poly = detail.querySelector('.dex-radar .shape');
+    if (poly) tweenRadar(poly, radarValues(shown, star));
     const lvl = detail.querySelector('#dex-level');
     lvl.innerHTML = `<span class="stars s${star}">${levelMark(star)}</span>`;
     lvl.setAttribute('aria-label', `Level: ${LEVEL_NAMES[star]}. Tap for the next level.`);
@@ -1872,7 +1938,6 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     el._tween = requestAnimationFrame(step);
   }
 
-  const reduceMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   // Tapping a related Pokémon: it grows into the big spot while the current one
   // shrinks into the small spot (FLIP: measure, redraw, play from the old places).
   function swapEntry(id, form) {
@@ -1909,7 +1974,11 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     const copycat = isCopycat(def);
     const v = dexLevelValues(def, star, isForm ? base : null);
     const st = unitStats(def, star);
-    const chip = (k, label, value) => `<span class="dex-chip"${k ? ` data-k="${k}"` : ''}><small>${label}</small><b>${value}</b></span>`;
+    // Each number gets room for its widest value at any level, so chips keep
+    // their size as the level changes.
+    const all = [0, 1, 2, 3].map((s2) => dexLevelValues(def, s2, isForm ? base : null));
+    const width = (k) => Math.max(...all.map((x) => String(x[k] ?? '').length));
+    const chip = (k, label, value) => `<span class="dex-chip"${k ? ` data-k="${k}"` : ''}><small>${label}</small><b${k ? ` style="min-width:${width(k)}ch"` : ''}>${value}</b></span>`;
     const chips = [
       chip('hp', 'HP', v.hp),
       !copycat && chip('dmg', 'Damage', v.dmg),
@@ -1934,6 +2003,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     const relatedHtml = related.map(([d, attrs, label, key]) => `<button class="dex-rel" ${attrs} title="${esc(label)}" aria-label="${esc(label)}">${sprite(d, 'dex-rel-sprite', key)}</button>`).join('');
 
     const tag = isForm ? 'Transformed form' : def.summon ? 'Summoned in battle' : `${def.cost} coins`;
+    entryEl.querySelector('.dex-panel').dataset.type = def.type;
     entryEl.querySelector('.dex-panel').innerHTML = `
       <button id="entry-close" class="ghost" aria-label="Close">✕</button>
       <section class="dex-detail${fade ? ' refresh' : ''}" data-type="${def.type}">
@@ -1951,7 +2021,10 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
             ${related.length ? `<p class="dex-rel-names">${related.map(([, attrs, label]) => `<button class="linkish" ${attrs}>${esc(label)}</button>`).join('')}</p>` : ''}
           </div>
         </div>
-        <div class="dex-chips">${chips}</div>
+        <div class="dex-statbox">
+          ${copycat ? '' : radarSvg(radarValues(def, star))}
+          <div class="dex-chips">${chips}</div>
+        </div>
         ${power}
         <p class="muted dex-foot">${def.summon ? 'A summon comes at the level the power gives it.' : `Copies on the board: 1 = ★, 2 = ★★, 3 = ★★★, 4 = ${levelMark(3)} (shiny).`} A crit deals ${CRIT_PCT - 100}% more damage.</p>
       </section>`;
