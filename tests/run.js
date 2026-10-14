@@ -764,9 +764,9 @@ test('Wild Charge (Tapu Koko): dashes in a line next to the farthest enemy, immu
   assert.ok(evs(r, 'stun', unitOf(r, 3).id).some((e) => e.t === dash.t), 'the one in its path is stunned');
 });
 
-test('Transform (Ditto): walks into the nearest enemy\'s range, takes 0.5s to copy it (max HP too, keeping its HP %), stands still, and turns back when it faints', () => {
+test('Transform (Ditto): walks into the nearest enemy\'s range, takes 1s to copy it (max HP too, keeping its HP %), stands still, and turns back when it faints', () => {
   const cat = powerCat();
-  cat.weak = { ...clone(catalog.mawile), hp: [300, 300, 300, 300], moveSpeed: 'statue' };
+  cat.weak = { ...clone(catalog.mawile), hp: [300, 300, 300, 300], moveSpeed: 'statue', secPerHit: 2 }; // slow, so the copy outlasts it
   cat.far = { ...clone(catalog.coalossal), moveSpeed: 'statue', hp: [1e6, 1e6, 1e6, 1e6] };
   cat.ditto = { ...clone(catalog.ditto), hp: [4000, 4000, 4000, 4000] }; // survives long enough to copy twice
   const r = simulate(cat, [
@@ -785,7 +785,7 @@ test('Transform (Ditto): walks into the nearest enemy\'s range, takes 0.5s to co
   assert.ok(moves[0].t >= 8, 'waits before its first step too');
   const tfs = evs(r, 'transform', d);
   const hpBefore = r.events.filter((e) => e.type === 'damage' && e.id === d && e.t <= tfs[0].t).at(-1)?.hp ?? max;
-  assert.deepEqual([tfs[0].copy, tfs[0].t, tfs[0].maxHp, tfs[0].hp], ['weak', start.t + 4, 300, Math.round((hpBefore * 300) / max)], 'copies it 0.5s later, with its max HP (same share of HP)');
+  assert.deepEqual([tfs[0].copy, tfs[0].t, tfs[0].maxHp, tfs[0].hp], ['weak', start.t + cat.ditto.ability.morph - 1, 300, Math.round((hpBefore * 300) / max)], 'copies it 1s later, with its max HP (same share of HP)');
   assert.ok(!r.events.some((e) => e.src === d && e.t <= tfs[0].t), 'does not attack before copying');
   const first = r.events.find((e) => e.type === 'damage' && e.src === d && !e.crit);
   assert.equal(first.amount, cat.weak.damage[0], "with the copied Pokémon's damage");

@@ -1,5 +1,17 @@
 [
   {
+    "id": "2026-10-14-ditto-3-cost",
+    "version": "0.15.1",
+    "date": "2026-10-14",
+    "title": "Ditto: cheaper, slower to transform",
+    "intro": "Ditto now costs 3 instead of 4. To make up for it, it's frailer before it transforms and takes a little longer to change.",
+    "changes": [
+      { "pokemon": "ditto", "kind": "buff", "text": "Cost 4 → 3." },
+      { "pokemon": "ditto", "kind": "nerf", "text": "Transform takes 1s (was 0.5s)." },
+      { "pokemon": "ditto", "kind": "nerf", "text": "Before it transforms: HP 990 → 600 and damage 60 → 40 at 0★. Once transformed it still copies the target's full stats and keeps its share of HP." }
+    ]
+  },
+  {
     "id": "2026-10-14-frosmoth",
     "version": "0.15.0",
     "date": "2026-10-14",

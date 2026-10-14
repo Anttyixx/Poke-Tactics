@@ -70,9 +70,9 @@
     "ability": {"name": "Wild Charge", "kind": "empower", "damagePct": 150, "dash": true, "stun": 10}
   },
   "ditto": {
-    "name": "Ditto", "sprite": "assets/sprites/ditto.png", "fx": "#c9a4ff", "type": "mage", "cost": 4,
-    "hp": [990, 1683, 2860, 4851], "damage": [60, 102, 173, 294], "range": 1, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 0,
-    "ability": {"name": "Transform", "kind": "copy", "morph": 5}
+    "name": "Ditto", "sprite": "assets/sprites/ditto.png", "fx": "#c9a4ff", "type": "mage", "cost": 3,
+    "hp": [600, 1020, 1734, 2940], "damage": [40, 68, 116, 196], "range": 1, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 0,
+    "ability": {"name": "Transform", "kind": "copy", "morph": 10}
   },
   "combee": {
     "name": "Combee", "summon": true, "sprite": "assets/sprites/combee.png", "fx": "#ffd35a", "type": "warrior", "cost": 0,
