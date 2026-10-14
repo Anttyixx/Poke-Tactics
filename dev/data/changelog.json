@@ -1,5 +1,18 @@
 [
   {
+    "id": "2026-10-14-dreepy-outside",
+    "version": "0.31.0",
+    "date": "2026-10-14",
+    "title": "Dreepy fly at far targets only",
+    "intro": "Dragapult's Dreepy are for disrupting enemies at a distance, and now keep the same stats all game.",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "change", "text": "Dreepy are only fired at enemies outside the 3x3 around Dragapult, farthest first. One enemy that far gets one Dreepy; with none, Dragapult just attacks." },
+      { "pokemon": "dreepy", "kind": "change", "text": "Dreepy have 150 HP and hit for 25 every 0.5s at every level (was 55 HP and 10 at ★, growing with level)." },
+      { "pokemon": "dragapult", "kind": "change", "text": "Each Dreepy's landing hit is 50 at every level (was 40 at ★, growing with level). The 0.5s stun and shove are unchanged." },
+      { "pokemon": "dragapult", "kind": "change", "text": "Attacks every 1.8s (was 2.5s) for 65 damage at ★ (was 70)." }
+    ]
+  },
+  {
     "id": "2026-10-14-dreepy-close-first",
     "version": "0.30.0",
     "date": "2026-10-14",
