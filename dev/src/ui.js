@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=08b2011';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=626b087';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=08b2011';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=08b2011';
+} from './game.js?v=626b087';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=626b087';
 
 const TICK_MS = 100;
 // Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
@@ -72,7 +72,7 @@ export function powerText(def, star, catalog) {
     case 'rage': return { when: 'Every attack', text: `Each attack in a row without moving makes it attack ${vNum(`${p.stackPct}%`)} faster, up to ${vNum(`${p.stackPct * p.maxStacks}%`)} after ${vNum(p.maxStacks)} attacks. Moving resets it.` };
     case 'darts': {
       const name = catalog?.[p.unit]?.name ?? p.unit;
-      return { when: 'At battle start', text: `Fires ${vNum(p.count)} ${name} at the farthest enemies: each hits for ${vDmg(`${p.impactPct}%`)} damage (${vDmg(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.impactPct) / 100)))}), then lands beside its target and fights. A ${name} that faints flies back (${vTime(Math.round(p.returnSec * 10))} a square) and is fired again once it's home. They come at ${esc(def.name)}'s level.` };
+      return { when: 'At battle start', text: `Fires ${vNum(p.count)} ${name} at the farthest enemies: each hits for ${vDmg(`${p.impactPct}%`)} damage (${vDmg(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.impactPct) / 100)))}), then lands beside its target and fights.${p.lure ? ` The hit distracts the target: it stops attacking whoever it was and must attack the ${name} for up to ${vTime(p.lure)}.` : ''} A ${name} that faints drifts back and is fired again ${vTime(Math.round(p.returnSec * 10))} later. They come at ${esc(def.name)}'s level.` };
     }
     case 'boost': return { when: every, text: `Charges up the allies directly left, right, in front of and behind it: each gains ${vNum(`+${p.charges}`)} toward its power (Pokémon without a power counter don't benefit).` };
     case 'snipe': return { when: every, text: `The attack also zaps the farthest enemy for ${hit}.` };
@@ -1066,7 +1066,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         if (a.stealthUntil && tick >= a.stealthUntil) { a.stealthUntil = 0; a.el.classList.remove('stealthed'); }
         if (a.hasteUntil && tick >= a.hasteUntil) { a.hasteUntil = 0; a.el.classList.remove('hasted'); }
         if (a.guardUntil && tick > a.guardUntil) { a.guardUntil = 0; a.el.classList.remove('guarded'); }
-        if (a.tauntUntil && tick > a.tauntUntil) { a.tauntUntil = 0; a.el.classList.remove('taunted'); }
+        if (a.tauntUntil && (tick > a.tauntUntil || actors.get(a.tauntBy)?.el.classList.contains('dead'))) { a.tauntUntil = 0; a.el.classList.remove('taunted'); }
         if (a.boundUntil && tick > a.boundUntil) { a.boundUntil = 0; a.el.classList.remove('bound'); }
         if (a.treatUntil && tick > a.treatUntil) { a.treatUntil = 0; a.el.classList.remove('treated'); delete a.el.dataset.treat; }
       }
@@ -1340,8 +1340,11 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       }
       case 'taunt': { // Amoonguss: this Pokémon must attack it for a while
         a.tauntUntil = ev.t + ev.duration;
+        a.tauntBy = ev.by;
         a.el.classList.add('taunted');
-        if (animate) {
+        if (animate && ev.dart) {
+          later(ctx.hitDelay.get(a.id) ?? 0, () => floatText(a, 'Distracted', 'taunt'));
+        } else if (animate) {
           const from = actors.get(ev.by);
           const ms = from ? projectile(viewPos(from.x, from.y), at(), '#ff6fa8', false) : 0;
           later(ms, () => { floatText(a, 'Taunted', 'taunt'); fx(at().x, at().y, 'burst', '#ff6fa8', 1.2); });
