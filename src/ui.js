@@ -1811,8 +1811,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       ${summons.length ? `<h3 class="dex-section">Summoned in battle</h3><div class="dex-grid">${summons.map(dexCard).join('')}</div>` : ''}`;
   }
 
-  // The stat shape: four stats as a diamond, each 0-1 against the best any
-  // Pokémon (or form) has at the top level, so the shape grows as it levels up.
+  // The stat shape: four stats as a diamond. Each point is the stat divided
+  // by the highest value any Pokémon (or form) has at the same level, so the
+  // edge of the diamond is the best there is and shapes compare directly.
   const RADAR = [['hp', 'HP'], ['atk', 'Damage'], ['spd', 'Atk speed'], ['move', 'Speed']];
   const radarRaw = (def, star) => {
     const st = unitStats(def, star);
@@ -1821,16 +1822,15 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       move: 1 / (MOVE_SPEEDS[def.moveSpeed] + STEP_TICKS * TICK_SECONDS),
     };
   };
-  let radarTop = null;
+  const radarTop = [];
   function radarValues(def, star) {
-    if (!radarTop) {
+    if (!radarTop[star]) {
       const defs = Object.values(catalog).flatMap((d) => (d.ability?.form ? [d, formDef(d)] : [d]));
-      const raws = defs.map((d) => radarRaw(d, 3));
-      radarTop = Object.fromEntries(RADAR.map(([k]) => [k, Math.max(...raws.map((r) => r[k]))]));
+      const raws = defs.map((d) => radarRaw(d, star));
+      radarTop[star] = Object.fromEntries(RADAR.map(([k]) => [k, Math.max(...raws.map((r) => r[k]))]));
     }
     const raw = radarRaw(def, star);
-    // A gentle curve so small stats still show; 1 = the best there is.
-    return RADAR.map(([k]) => Math.min(1, raw[k] / radarTop[k]) ** 0.6);
+    return RADAR.map(([k]) => Math.min(1, raw[k] / radarTop[star][k]));
   }
   const RADAR_R = 70;
   const radarPoint = (i, v) => {
