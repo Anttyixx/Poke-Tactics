@@ -1,3 +1,4 @@
+3a92dce	dev	2026-10-14 04:39 UTC	Match replay: write an HTML report with HP chart, boards per round and suggested layouts
 b8bc31b	dev	2026-10-14 04:10 UTC	Pokédex: label the movement chip Speed
 8c7fc48	dev	2026-10-14 04:10 UTC	Team selection: Pokédex-style cards, picked ones walk with a green border, update in place
 faf64fb	dev	2026-10-14 04:06 UTC	Stat shape: headroom so the best stat stops short of the edge
@@ -27,4 +28,3 @@ c200ba6	dev	2026-10-13 22:14 UTC	Online: a quiet player is locked in, not kicked
 73e2a1e	dev	2026-10-13 21:30 UTC	Profile chip is a rounded rectangle; pictures centred
 0eed4d0	dev	2026-10-13 19:51 UTC	Player profiles: name and picture, saved in the browser
 519c610	dev	2026-10-13 07:06 UTC	Shop refreshes on every purchase; rerolls cost 1 coin; new income
-a5c1264	dev	2026-10-13 06:56 UTC	Minior: second life as Star Form, hops every 10 attacks
