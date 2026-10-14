@@ -99,6 +99,8 @@ function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, in
     moveTimer: stats.moveCd, // waiting before the next step (it waits before its first one too)
     stepTimer: 0, // mid-step: ticks until it reaches the square it's walking to
     hasteUntil: 0, hastePct: 0, stealthFrom: 0, stealthUntil: 0,
+    chillFrom: 0, chillUntil: 0, chillPct: 0, // Frosmoth's chill: slower attacks and steps through chillUntil
+    pendingChill: null, // { duration, pct }: a chill that lands at the end of the tick
     hold: 0, // ticks it can't move or attack (riding a Psywave); cooldowns still run
     landStun: 0, // stun applied when the hold ends (it has landed)
     pendingHeal: 0, // healing lands at the end of the tick, like stuns
@@ -216,8 +218,11 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
 
   // Healing lands at the end of the tick (see the main loop), so it never
   // depends on who acted first, and a Pokémon knocked out this tick stays out.
-  function heal(target, amount) {
-    if (standing(target) && amount > 0) target.pendingHeal += amount;
+  // `src` is who healed (for the event log: each healer's share of what landed).
+  function heal(target, amount, src) {
+    if (!standing(target) || amount <= 0) return;
+    target.pendingHeal += amount;
+    (target.healFrom ??= {})[src.id] = (target.healFrom[src.id] ?? 0) + amount;
   }
 
   // HP reached 0. Usually that's a knockout; a Golem instead lights its fuse:
@@ -482,7 +487,7 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
     u.mana = 0;
     emit('cast', { id: u.id, target: target.id });
     const dealt = damage(target, Math.floor((u.atk * p.damagePct) / 100), u);
-    if (p.lifestealPct && dealt) heal(u, Math.floor((dealt * p.lifestealPct) / 100));
+    if (p.lifestealPct && dealt) heal(u, Math.floor((dealt * p.lifestealPct) / 100), u);
     if (!standing(target)) return;
     if (p.knockback) knockback(u, target, p.knockback);
     if (p.stun) stun(target, p.stun);
@@ -515,7 +520,17 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
     if (shoved) shoved.hold = travel;
   }
 
-  const cooldown = (u) => (u.hasteUntil > t ? Math.max(1, Math.round((u.attackCd * 100) / (100 + u.hastePct))) : u.attackCd);
+  // Chilled (Frosmoth): attacks and steps take chillPct% longer. Like stuns, a
+  // chill lands at the end of the tick and counts from the next one.
+  const chilled = (u) => t >= u.chillFrom && t <= u.chillUntil;
+  const slowed = (ticks, u) => (chilled(u) ? Math.round((ticks * (100 + u.chillPct)) / 100) : ticks);
+  const cooldown = (u) => slowed(u.hasteUntil > t ? Math.max(1, Math.round((u.attackCd * 100) / (100 + u.hastePct))) : u.attackCd, u);
+  // A hit from Frosmoth chills the target (a new hit restarts the timer).
+  function chill(target, p) {
+    if (!standing(target) || immune(target)) return;
+    target.pendingChill = { duration: p.duration, pct: p.slowPct };
+    emit('chill', { id: target.id, duration: p.duration, pct: p.slowPct });
+  }
 
   // Minior's Star Form, every `energy` attacks: it picks a new target (a
   // seeded pick among the other enemies it can land beside) and zips to the
@@ -586,7 +601,7 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
   // A step: STEP_TICKS crossing to the new square, then the movement-speed wait.
   function startStep(u) {
     u.stepTimer = STEP_TICKS;
-    u.moveTimer = STEP_TICKS + u.moveCd;
+    u.moveTimer = STEP_TICKS + slowed(u.moveCd, u);
   }
 
   function moveTo(u, cell) {
@@ -720,13 +735,15 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
         const crit = critRoll(seed, t, u.slot) < u.crit;
         const hit = crit ? Math.floor((u.atk * CRIT_PCT) / 100) : u.atk;
         damage(target, Math.max(1, Math.floor((hit * 100) / (100 + target.armor))), u, crit);
+        // Frosmoth: every hit chills its target.
+        if (u.power?.kind === 'chill' && !u.copyOf) chill(target, u.power);
         // Lilligant: each attack also heals its allies next to the square it hit.
         if (u.power?.kind === 'splashHeal') {
           const p = at(target);
           const amount = Math.floor((u.atk * u.power.healPct) / 100);
           for (const [dx, dy] of NEIGHBORS) {
             const o = unitAt(p.x + dx, p.y + dy);
-            if (o && o.side === u.side) heal(o, amount);
+            if (o && o.side === u.side) heal(o, amount, u);
           }
         }
         if (u.power && u.power.kind !== 'empower' && u.maxMana > 0 && u.mana >= u.maxMana) instantPower(u, target);
@@ -804,9 +821,12 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
       if (u.pendingHeal && u.hp > 0) {
         const gained = Math.min(u.pendingHeal, u.maxHp - u.hp);
         u.hp += gained;
-        emit('heal', { id: u.id, amount: gained, hp: u.hp });
+        // from: healer id -> [HP it restored, HP it offered] (the rest was over max HP).
+        const from = Object.fromEntries(Object.entries(u.healFrom ?? {}).map(([id, a]) => [id, [Math.round((gained * a) / u.pendingHeal), a]]));
+        emit('heal', { id: u.id, amount: gained, hp: u.hp, from });
       }
       u.pendingHeal = 0;
+      u.healFrom = null;
       // Minior: a low-HP transformation takes `morph` ticks, during which it
       // is immune to everything; then it becomes its new form.
       if (u.pendingForm && u.hp > 0) {
@@ -850,6 +870,12 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
       if (u.hp === 0 && !(u.fuse > 0)) u.alive = false; // knocked out this tick (a lit Golem stays)
       u.mana = shownMana(u);
       u.stun = Math.max(u.stun, u.pendingStun);
+      if (u.pendingChill && u.hp > 0) {
+        u.chillFrom = t + 1;
+        u.chillUntil = t + u.pendingChill.duration;
+        u.chillPct = u.pendingChill.pct;
+      }
+      u.pendingChill = null;
       u.pendingMana = 0;
       u.pendingStun = 0;
     }

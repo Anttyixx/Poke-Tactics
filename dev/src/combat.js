@@ -218,8 +218,11 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
 
   // Healing lands at the end of the tick (see the main loop), so it never
   // depends on who acted first, and a Pokémon knocked out this tick stays out.
-  function heal(target, amount) {
-    if (standing(target) && amount > 0) target.pendingHeal += amount;
+  // `src` is who healed (for the event log: each healer's share of what landed).
+  function heal(target, amount, src) {
+    if (!standing(target) || amount <= 0) return;
+    target.pendingHeal += amount;
+    (target.healFrom ??= {})[src.id] = (target.healFrom[src.id] ?? 0) + amount;
   }
 
   // HP reached 0. Usually that's a knockout; a Golem instead lights its fuse:
@@ -484,7 +487,7 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
     u.mana = 0;
     emit('cast', { id: u.id, target: target.id });
     const dealt = damage(target, Math.floor((u.atk * p.damagePct) / 100), u);
-    if (p.lifestealPct && dealt) heal(u, Math.floor((dealt * p.lifestealPct) / 100));
+    if (p.lifestealPct && dealt) heal(u, Math.floor((dealt * p.lifestealPct) / 100), u);
     if (!standing(target)) return;
     if (p.knockback) knockback(u, target, p.knockback);
     if (p.stun) stun(target, p.stun);
@@ -740,7 +743,7 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
           const amount = Math.floor((u.atk * u.power.healPct) / 100);
           for (const [dx, dy] of NEIGHBORS) {
             const o = unitAt(p.x + dx, p.y + dy);
-            if (o && o.side === u.side) heal(o, amount);
+            if (o && o.side === u.side) heal(o, amount, u);
           }
         }
         if (u.power && u.power.kind !== 'empower' && u.maxMana > 0 && u.mana >= u.maxMana) instantPower(u, target);
@@ -818,9 +821,12 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
       if (u.pendingHeal && u.hp > 0) {
         const gained = Math.min(u.pendingHeal, u.maxHp - u.hp);
         u.hp += gained;
-        emit('heal', { id: u.id, amount: gained, hp: u.hp });
+        // from: healer id -> [HP it restored, HP it offered] (the rest was over max HP).
+        const from = Object.fromEntries(Object.entries(u.healFrom ?? {}).map(([id, a]) => [id, [Math.round((gained * a) / u.pendingHeal), a]]));
+        emit('heal', { id: u.id, amount: gained, hp: u.hp, from });
       }
       u.pendingHeal = 0;
+      u.healFrom = null;
       // Minior: a low-HP transformation takes `morph` ticks, during which it
       // is immune to everything; then it becomes its new form.
       if (u.pendingForm && u.hp > 0) {

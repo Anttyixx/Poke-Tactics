@@ -11,7 +11,7 @@
 // copies drawn from the pool; buying one places it straight onto the board and
 // removes that copy from the pool. There is no bench and no limit on how many
 // troops are on the board (which starts empty), but each troop can only be there once: buying a troop
-// you already field levels that one up instead (1 copy = 0★, 2 = 1★, 3 = 2★, 4 = 3★).
+// you already field levels that one up instead (1 copy = ★, 2 = ★★, 3 = ★★★, 4 = shiny; stored as star 0-3).
 //
 // Intents:
 //   { type: 'chooseTeam', troops }            before round 1; troops = TEAM_SIZE distinct troop ids
@@ -24,8 +24,8 @@
 //   { type: 'ready' }                         lock in planning; combat starts when all are ready
 //   { type: 'continue' }                      done watching combat; next round starts when all continue
 
-import { randInt } from './rng.js?v=519c610';
-import { simulate, COLS, HALF } from './combat.js?v=519c610';
+import { randInt } from './rng.js?v=45bf21b';
+import { simulate, COLS, HALF } from './combat.js?v=45bf21b';
 
 export const TEAM_SIZE = 6;
 export const COPIES_PER_TROOP = 4;
@@ -57,7 +57,8 @@ const isIndex = (v, n) => Number.isInteger(v) && v >= 0 && v < n;
 
 // `featured` (optional, for testing): a troop id that is put in the first shop
 // slot whenever the player's pool still has a copy of it. Invalid ids are ignored.
-export function createGame({ seed, catalog, names, featured = null }) {
+// `avatars` (optional): each player's profile picture id, for display only.
+export function createGame({ seed, catalog, names, avatars = [], featured = null }) {
   return {
     version: 3,
     seed: seed >>> 0,
@@ -67,6 +68,7 @@ export function createGame({ seed, catalog, names, featured = null }) {
     nextUid: 1,
     players: names.map((name, i) => ({
       name,
+      avatar: avatars[i] ?? null,
       hp: START_HP,
       coins: START_COINS,
       shopRolls: 0, // counts shop refreshes (the UI deals new cards in when it changes)
