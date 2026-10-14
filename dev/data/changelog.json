@@ -1,5 +1,15 @@
 [
   {
+    "id": "2026-10-14-dreepy-dash",
+    "version": "0.33.1",
+    "date": "2026-10-14",
+    "title": "Dreepy dash out",
+    "changes": [
+      { "pokemon": "dreepy", "kind": "change", "text": "Dreepy now streak out of Dragapult like Tapu Koko's dash: fast, straight, glowing, with sparks behind them. They still start small and reach full size as they land." },
+      { "pokemon": "dragapult", "kind": "fix", "text": "Dragapult no longer fires its Dreepy half a second into the fight. Firing counts as an attack, so like every other Pokémon it waits its full attack cooldown first." }
+    ]
+  },
+  {
     "id": "2026-10-14-dreepy-next-action",
     "version": "0.33.0",
     "date": "2026-10-14",

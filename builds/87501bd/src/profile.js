@@ -13,6 +13,8 @@ export const AVATARS = [
   'infernape', 'greninja', 'ash-greninja', 'decidueye', 'tapukoko', 'mawile',
   'lilligant', 'vespiquen', 'combee', 'hoopa', 'beheeyem', 'toxtricity',
   'torterra', 'golem', 'coalossal', 'minior', 'minior-star', 'ditto', 'frosmoth',
+  'alcremie', 'alcremie-matcha', 'alcremie-ruby', 'alcremie-mint',
+  'hoopa-unbound', 'amoonguss', 'annihilape', 'dragapult', 'dreepy',
 ];
 export const DEFAULT_AVATAR = 'ditto';
 export const BOT_AVATAR = 'golem';
