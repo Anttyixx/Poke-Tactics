@@ -1317,27 +1317,28 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         if (!animate) break;
         const p = viewPos(pal.x, pal.y);
         if (ev.dart) {
-          // Dragapult's Dreepy: the Dreepy itself is shot out of Dragapult in a
-          // low arc, small at first and full size as it lands (onto its target,
-          // which is shoved aside when it arrives).
+          // Dragapult's Dreepy: shot out of Dragapult like Tapu Koko's dash, a
+          // fast straight streak with sparks behind it, small at first and full
+          // size as it lands (onto its target, which is shoved aside on arrival).
           pal.el.style.visibility = 'hidden';
           const from = at();
           const dx = p.x - from.x;
           const dy = p.y - from.y;
-          const ms = Math.max(320 / speed, flightMs(from, p) * 2);
+          const squares = Math.max(Math.abs(dx), Math.abs(dy));
+          const ms = Math.max(160, 55 * squares) / speed;
+          const color = fxColor(pal.unitId);
           const flyer = document.createElement('div');
-          flyer.className = 'unit sprite-unit dart-flyer';
+          flyer.className = 'unit sprite-unit dart-flyer dashing';
+          flyer.style.setProperty('--fx', color);
           flyer.dataset.facing = facingFor(Math.abs(dx) >= Math.abs(dy) ? dx : 0, Math.abs(dx) >= Math.abs(dy) ? 0 : dy, 'down');
           flyer.innerHTML = `<div class="body"><div class="sprite" style="background-image:url('${catalog[pal.unitId]?.sprite ?? ''}')"></div></div>`;
           place(flyer, from.x, from.y);
           layer.append(flyer);
-          const lift = 0.35 + 0.12 * Math.hypot(dx, dy); // arc height, in squares
-          const frames = [];
-          for (let k = 0; k <= 8; k++) {
-            const q = k / 8;
-            frames.push({ offset: q, translate: `${dx * q * 100}% ${(dy * q - lift * 4 * q * (1 - q)) * 100}%`, scale: `${0.3 + 0.7 * q}` });
+          flyer.animate([{ translate: '0 0', scale: '0.35' }, { translate: `${dx * 100}% ${dy * 100}%`, scale: '1' }], { duration: ms, easing: 'cubic-bezier(.6,0,.2,1)' }).onfinish = () => flyer.remove();
+          for (let i = 1; i <= squares; i++) {
+            const k = i / (squares + 1);
+            setTimeout(() => fx(from.x + dx * k, from.y + dy * k, 'zap', color, 0.8), ms * k);
           }
-          flyer.animate(frames, { duration: ms, easing: 'linear' }).onfinish = () => flyer.remove();
           ctx.hitDelay.set(pal.id, ms);
           later(ms, () => { pal.el.style.visibility = ''; play(pal.el, 'spawned', 300); fx(p.x, p.y, 'burst', fxColor(pal.unitId), 1.2); });
         } else { play(pal.el, 'spawned', 400); fx(p.x, p.y, 'ring', fxColor(pal.unitId), 1.3); }

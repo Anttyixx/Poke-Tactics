@@ -961,18 +961,20 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     if (!target) return;
     u.target = target.id;
 
-    // Dragapult's Dragon Darts: with both Dreepy home, its next action (an
-    // attack, or a step toward its target) fires them instead, at the end of
-    // the tick. With a power counter it also needs that many attacks since the
+    // Dragapult's Dragon Darts: with both Dreepy home and its attack ready,
+    // its next action (an attack, or a step toward its target) fires them
+    // instead, at the end of the tick. With a power counter it also needs that many attacks since the
     // last pair.
     if (u.powerKind === 'darts' && u.stepTimer === 0 && dartsHome(u) && !(u.maxMana > 0 && u.mana < u.maxMana)
       && (!u.power.outside || units.some((e) => e.side !== u.side && visible(e) && reach(u, at(e)) > u.power.outside))) {
+      // Firing is an attack: it waits for its attack timer like one (so not
+      // before a full attack cooldown at the start of the fight).
       const inRange = reach(u, at(target)) <= u.range;
-      if (inRange ? u.atkTimer === 0 : u.moveTimer === 0) {
+      if (u.atkTimer === 0 && (inRange || u.moveTimer === 0)) {
         if (u.maxMana > 0) u.mana = 0;
         dartQueue.push(u);
-        if (inRange) u.atkTimer = cooldown(u); // it used its attack
-        else u.moveTimer = slowed(u.moveCd, u); // it used its step: waits as if it had walked
+        u.atkTimer = cooldown(u);
+        if (!inRange) u.moveTimer = slowed(u.moveCd, u); // it used its step too: waits as if it had walked
         return;
       }
     }

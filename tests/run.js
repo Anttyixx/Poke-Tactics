@@ -833,7 +833,7 @@ test('Dragon Darts (Dragapult): never at an enemy in the 3x3 around it: one far 
   assert.ok(evs(close, 'attack', d2).length > 0, 'it attacks normally');
 });
 
-test('Dragon Darts (Dragapult): with both Dreepy home, its next action fires them even if it was about to take a step', () => {
+test('Dragon Darts (Dragapult): with both Dreepy home, its next action fires them even if it was about to take a step, once its attack is ready', () => {
   const cat = powerCat();
   const r = simulate(cat, [
     [{ uid: 1, unitId: 'dragapult', star: 0, x: 2, y: 3 }], // combat (2,7): nobody in its range 3
@@ -843,8 +843,10 @@ test('Dragon Darts (Dragapult): with both Dreepy home, its next action fires the
   const first = evs(r, 'summon', d).find((e) => e.dart);
   const firstMove = evs(r, 'move', d)[0];
   assert.ok(first, 'it fires');
-  assert.ok(!firstMove || first.t < firstMove.t, 'before its first step');
-  assert.equal(first.t, Math.round(MOVE_SPEEDS[catalog.dragapult.moveSpeed] * 10), 'when its first step would have been');
+  assert.ok(first.t >= Math.round(catalog.dragapult.secPerHit * 10), 'not before a full attack cooldown, like any attack');
+  assert.ok(firstMove && firstMove.t < first.t, 'it walks while it waits');
+  assert.ok(!evs(r, 'move', d).some((m) => m.t === first.t), 'and fires instead of its next step');
+  assert.ok(!evs(r, 'attack', d).some((a) => a.t <= first.t), 'with no attack before it');
 });
 
 test('Earthquake (Torterra): after 5 attacks, hits every enemy on the board for 30% and stuns them', () => {
