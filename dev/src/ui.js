@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=b43e1f1';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=0eb0cd2';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=b43e1f1';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=b43e1f1';
+} from './game.js?v=0eb0cd2';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=0eb0cd2';
 
 const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
 // Attack-effect colour when a unit doesn't set its own "fx" colour in units.json.
@@ -28,7 +28,7 @@ const moveText = (def) => `${SPEED_NAME[def.moveSpeed]} (waits ${MOVE_SPEEDS[def
 // Level marks: ★, ★★, ★★★, then the shiny star for a full set of copies.
 // `star` is the internal level (0-3).
 export const LEVEL_NAMES = ['1 star', '2 stars', '3 stars', 'Shiny'];
-export const levelMark = (star) => (star >= 3 ? '<span class="star-max" title="Shiny">★</span>' : '★'.repeat(star + 1));
+export const levelMark = (star) => (star >= 3 ? '<span class="star-max" title="Shiny">✦</span>' : '★'.repeat(star + 1));
 const levelSpan = (star) => `<span class="stars s${star}" aria-label="${LEVEL_NAMES[star]}">${levelMark(star)}</span>`;
 
 // Internal combat numbers -> the design sheet's units.

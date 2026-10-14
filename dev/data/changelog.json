@@ -1,5 +1,14 @@
 [
   {
+    "id": "2026-10-14-shiny-sparkle",
+    "version": "0.16.9",
+    "date": "2026-10-14",
+    "title": "New shiny level mark",
+    "changes": [
+      { "kind": "change", "text": "The top level (4 copies) is now marked with a rainbow four-pointed sparkle instead of a star." }
+    ]
+  },
+  {
     "id": "2026-10-14-dex-shape-scale",
     "version": "0.16.8",
     "date": "2026-10-14",
