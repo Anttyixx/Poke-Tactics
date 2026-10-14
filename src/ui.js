@@ -33,7 +33,7 @@ export function describePower(def, star, catalog) {
   const p = def.ability;
   if (!p) return '';
   const every = `After every ${def.energy} attacks`;
-  const dmg = powerDamage(def, star ?? 0); // no star given (the Pokédex): quote 0★
+  const dmg = powerDamage(def, star ?? 0); // no star given: quote the base level
   switch (p.kind) {
     case 'empower': {
       const extras = [
@@ -53,9 +53,9 @@ export function describePower(def, star, catalog) {
       const counts = p.countByStar ?? [1, 1, 1, 1];
       const n = star === null ? (counts.every((c) => c === counts[0]) ? counts[0] : null) : counts[star];
       const what = n === null
-        ? `${counts.join(' / ')} ${name} (0★ / ★ / ★★ / ★★★)`
+        ? `${counts.join(' / ')} ${name} (Base / ★ / ★★ / ★★★)`
         : n === 1 ? `a ${name}` : `${n} ${name}`;
-      return `${every}, it summons ${what} beside it (sides first, then behind, in front, and the diagonals).${p.summonStar !== undefined ? ` ${name} ${n === 1 ? 'is' : 'are'} always ${p.summonStar ? '★'.repeat(p.summonStar) : '0★'}.` : ` ${n === 1 ? 'It comes' : 'They come'} at ${def.name}'s star level.`}`;
+      return `${every}, it summons ${what} beside it (sides first, then behind, in front, and the diagonals).${p.summonStar !== undefined ? ` ${name} ${n === 1 ? 'is' : 'are'} always ${p.summonStar ? '★'.repeat(p.summonStar) : 'base level'}.` : ` ${n === 1 ? 'It comes' : 'They come'} at ${def.name}'s star level.`}`;
     }
     case 'stealth': return `${every}, it turns invisible for ${secs(p.duration)}s${p.hastePct ? ` and attacks ${p.hastePct}% faster` : ''}. Enemies can't target or follow it while it's invisible.`;
     case 'haste': return `${every}, it's enraged: ${p.hastePct}% faster attacks for ${secs(p.duration)}s.`;
@@ -428,7 +428,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   document.addEventListener('keydown', (e) => {
     if (!state || e.ctrlKey || e.metaKey || e.altKey || e.target.matches('input, textarea')) return;
     const key = e.key.toLowerCase();
-    if (!dexEl.hidden) { if (key === 'escape' || key === 'p') closeDex(); return; }
+    if (!dexEl.hidden) { dexKey(key); return; }
     if (!menuEl.hidden) { if (key === 'escape' || key === 'm') closeMenu(); return; }
     if (peek && key === 'escape') return closeInfo();
     if (key === 'p') openDex();
@@ -879,7 +879,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         <span class="type">${def.type}</span>
         <span class="cost c${def.cost}" title="${def.cost} coins">${def.cost}</span>
         <span class="info-btn" data-info="${slot}" role="button" aria-label="${esc(def.name)} info">i</span>
-        ${fielded(p, id) ? `<span class="levelup">Level up ${'★'.repeat(fielded(p, id).star) || '0★'}→${'★'.repeat(fielded(p, id).star + 1)}</span>` : ''}
+        ${fielded(p, id) ? `<span class="levelup">Level up ${'★'.repeat(fielded(p, id).star) || 'Base'}→${'★'.repeat(fielded(p, id).star + 1)}</span>` : ''}
         <span class="left">${p.pool[id]} left in pool</span>
       </button>`;
     }).join('');
@@ -1715,16 +1715,37 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
 
   // ---- Pokédex ---------------------------------------------------------------
   // Every Pokémon's stats, read straight from units.json, so new Pokémon and
-  // stat changes show up here automatically.
+  // stat changes show up here automatically. The grid shows a card per
+  // Pokémon (summons too); a card opens its entry, where a button steps through
+  // the levels (Base, ★, ★★, ★★★). A transformation is its own entry, opened
+  // from the Pokémon that transforms.
+
+  let dexForm = false; // showing dexPick's transformed form
+  let dexStar = 0; // level shown in an entry
 
   dexEl.addEventListener('click', (e) => {
     if (e.target === dexEl || e.target.closest('#dex-close')) return closeDex();
+    if (e.target.closest('#dex-back')) { dexStar = 0; return showDexEntry(null); }
+    if (e.target.closest('#dex-level')) { dexStar = (dexStar + 1) % 4; return renderDex(); }
+    const lvl = e.target.closest('[data-dex-star]');
+    if (lvl) { dexStar = +lvl.dataset.dexStar; return renderDex(); }
+    const form = e.target.closest('[data-dex-form]');
+    if (form) return showDexEntry(form.dataset.dexForm, true);
     const pick = e.target.closest('[data-dex]');
-    if (pick) { dexPick = pick.dataset.dex; renderDex(); }
+    if (pick) showDexEntry(pick.dataset.dex);
   });
 
+  function showDexEntry(id, form = false) {
+    dexPick = id;
+    dexForm = form;
+    renderDex();
+    dexEl.scrollTop = 0;
+  }
+
   function openDex(id) {
-    dexPick = id ?? dexPick ?? troopIds(catalog)[0];
+    dexPick = id ?? null;
+    dexForm = false;
+    dexStar = 0;
     renderDex();
     dexEl.hidden = false;
   }
@@ -1733,60 +1754,136 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     dexEl.hidden = true;
   }
 
+  // Keys while the Pokédex is open: ←/→ change the level, Escape goes back to
+  // the grid (or closes it from the grid).
+  function dexKey(key) {
+    if (dexPick && (key === 'arrowright' || key === 'arrowleft')) {
+      dexStar = (dexStar + (key === 'arrowright' ? 1 : 3)) % 4;
+      return renderDex();
+    }
+    if (key === 'escape' && dexPick) {
+      if (dexForm) return showDexEntry(dexPick);
+      dexStar = 0;
+      return showDexEntry(null);
+    }
+    if (key === 'escape' || key === 'p') closeDex();
+  }
+
+  const levelName = (star) => (star ? '★'.repeat(star) : 'Base');
+  const typeName = (type) => type[0].toUpperCase() + type.slice(1);
+  const summonIds = () => Object.keys(catalog).filter((id) => catalog[id].summon).sort();
+  // A transformed form as a Pokémon of its own (HP carries over when the form has none).
+  const formDef = (def) => {
+    const f = def.ability.form;
+    return { ...def, ...f, hp: f.hp ?? def.hp, energy: f.energy ?? 0, ability: null, form: true };
+  };
+  // Who summons this Pokémon.
+  const summonersOf = (id) => troopIds(catalog).filter((t) => catalog[t].ability?.kind === 'summon' && catalog[t].ability.unit === id);
+
+  // Biggest HP / damage / DPS any Pokémon has at this level, for the stat bars.
+  function dexMax(star) {
+    const defs = Object.values(catalog).flatMap((d) => (d.ability?.form ? [d, formDef(d)] : [d]));
+    const st = defs.map((d) => unitStats(d, star));
+    return {
+      hp: Math.max(...st.map((x) => x.hp)),
+      atk: Math.max(...st.map((x) => x.atk)),
+      dps: Math.max(...st.map((x) => +dps(x))),
+    };
+  }
+
+  function dexCard(id) {
+    const def = catalog[id];
+    return `<button class="dex-card" data-dex="${id}" data-type="${def.type}">
+      <span class="dex-card-art">${portrait(def)}</span>
+      <b>${esc(def.name)}</b>
+      <small>${def.summon ? 'Summon' : `${def.cost} 🪙`} · ${typeName(def.type)}</small>
+    </button>`;
+  }
+
+  // A small clickable chip linking to another entry.
+  const dexLink = (def, attrs, label) => `<button class="dex-link" ${attrs} data-type="${def.type}">
+    ${portrait(def)}<span><small>${label}</small><b>${esc(def.name)}</b></span><i aria-hidden="true">›</i></button>`;
+
   function renderDex() {
-    const list = (ids, title) => `<h3>${title}</h3><div class="dex-list">${ids.map((id) => {
-      const def = catalog[id];
-      return `<button class="dex-entry${id === dexPick ? ' active' : ''}" data-dex="${id}" data-type="${def.type}">
-        ${portrait(def)}<span>${esc(def.name)}</span><small>${def.summon ? 'summon' : `${def.cost} 🪙`}</small></button>`;
-    }).join('')}</div>`;
-    const summons = Object.keys(catalog).filter((id) => catalog[id].summon).sort();
-    const def = catalog[dexPick];
-    const form = def.ability?.form;
-    const rows = [0, 1, 2, 3].map((star) => {
-      const st = unitStats(def, star);
-      return {
-        star, hp: show(st.hp), dmg: show(st.atk), crit: show(Math.floor((st.atk * CRIT_PCT) / 100)), dps: dps(st),
-        sup: powerDamage(def, star) === null ? '—' : show(powerDamage(def, star)),
-        form: form ? show(Math.round(form.damage[star] * STAT_SCALE)) : '',
-      };
-    });
-    const col = (label, key) => `<tr><th>${label}</th>${rows.map((r) => `<td>${r[key]}</td>`).join('')}</tr>`;
-    const stats0 = unitStats(def, 0);
-    dexEl.querySelector('.dex-panel').innerHTML = `
+    const panel = dexEl.querySelector('.dex-panel');
+    if (!dexPick || !catalog[dexPick]) {
+      const summons = summonIds();
+      panel.innerHTML = `
+        <button id="dex-close" class="ghost" aria-label="Close">✕</button>
+        <h1>Pokédex</h1>
+        <p class="muted dex-sub">Tap a Pokémon to see its stats and power.</p>
+        <div class="dex-grid">${troopIds(catalog).map(dexCard).join('')}</div>
+        ${summons.length ? `<h3 class="dex-section">Summoned in battle</h3><div class="dex-grid">${summons.map(dexCard).join('')}</div>` : ''}`;
+      return;
+    }
+    const base = catalog[dexPick];
+    const isForm = dexForm && base.ability?.form;
+    const def = isForm ? formDef(base) : base;
+    const star = dexStar;
+    const st = unitStats(def, star);
+    const max = dexMax(star);
+    const copycat = isCopycat(def);
+    const bar = (label, value, shown, top, note = '') => `<div class="dex-stat">
+        <span>${label}</span><b>${shown}</b>
+        <div class="dex-bar"><i style="width:${Math.max(4, Math.round((100 * value) / top))}%"></i></div>${note}</div>`;
+    const fact = (label, value) => `<div class="dex-fact"><span>${label}</span><b>${value}</b></div>`;
+    const critDmg = show(Math.floor((st.atk * CRIT_PCT) / 100));
+    const powerDmg = def.ability && powerDamage(def, star);
+
+    let power = '';
+    if (isForm) {
+      const f = base.ability.form;
+      const traits = [
+        !f.hp && `Keeps ${esc(base.name)}'s HP when it transforms.`,
+        f.shockwave && `As it changes, a shock wave stuns every enemy in the ${2 * f.shockwave.radius + 1}x${2 * f.shockwave.radius + 1} around it for ${secs(f.shockwave.stun)}s.`,
+        f.blink && 'It doesn\'t walk: it zips straight to the square beside its target.',
+        f.hop && `Every ${f.energy} attacks it picks a different enemy and zips beside it (if there's no free square, it stays).`,
+      ].filter(Boolean);
+      power = `<div class="dex-power"><h3>${esc(base.ability.name)} form</h3>
+        <p>${esc(base.name)} becomes ${esc(f.name)} for the rest of the fight. ${traits.join(' ')}</p></div>`;
+    } else if (def.ability) {
+      power = `<div class="dex-power"><h3>${esc(def.ability.name)} <small>${powerCadence(def)}</small></h3>
+        <p>${describePower(def, star, catalog)}</p></div>`;
+    }
+
+    const links = [];
+    if (isForm) links.push(dexLink(base, `data-dex="${dexPick}"`, 'Transforms from'));
+    else if (def.ability?.form) links.push(dexLink(formDef(def), `data-dex-form="${dexPick}"`, 'Transforms into'));
+    if (!isForm && def.ability?.kind === 'summon' && catalog[def.ability.unit]) links.push(dexLink(catalog[def.ability.unit], `data-dex="${def.ability.unit}"`, 'Summons'));
+    if (def.summon) for (const t of summonersOf(dexPick)) links.push(dexLink(catalog[t], `data-dex="${t}"`, 'Summoned by'));
+
+    const tag = isForm ? 'Transformed form' : def.summon ? 'Summoned in battle' : `${def.cost} coins`;
+    panel.innerHTML = `
       <button id="dex-close" class="ghost" aria-label="Close">✕</button>
-      <h1>Pokédex</h1>
-      <div class="dex-body">
-        <nav class="dex-nav">${list(troopIds(catalog), 'Pokémon')}${summons.length ? list(summons, 'Summoned in battle') : ''}</nav>
-        <section class="dex-detail" data-type="${def.type}">
-          <div class="dex-hero">
-            <span class="portrait dex-portrait" data-facing="down"><span class="sprite" ${spriteStyle(def)}></span></span>
-            <div>
-              <h2>${esc(def.name)}</h2>
-              <p class="dex-tags">
-                <span>${def.summon ? 'Summoned' : `${def.cost} coins`}</span>
-                ${isCopycat(def) ? `<span>Moves: ${moveText(def)}</span><span>Copies the nearest enemy's stats</span>` : `
-                <span>${def.range > 1 ? `Ranged · ${def.range} tiles` : 'Melee · 1 tile'}</span>
-                <span>Moves: ${moveText(def)}</span>
-                <span>Attacks every ${attackTime(stats0)}s</span>
-                <span>Crit ${stats0.crit}%</span>`}
-                <span>${powerCadence(def)}</span>
-              </p>
+      <button id="dex-back" class="ghost">‹ All Pokémon</button>
+      <section class="dex-detail" data-type="${def.type}">
+        <div class="dex-hero">
+          <span class="portrait dex-portrait" data-facing="down"><span class="sprite" ${spriteStyle(def)}></span></span>
+          <div class="dex-title">
+            <h2>${esc(def.name)}</h2>
+            <p class="dex-tags"><span class="dex-type">${typeName(def.type)}</span><span>${tag}</span></p>
+            <div class="dex-levels">
+              <button id="dex-level" class="dex-level" title="Next level (→)"><small>Level</small><b>${levelName(star)}</b><i aria-hidden="true">▸</i></button>
+              <span class="dex-pips">${[0, 1, 2, 3].map((s) => `<button data-dex-star="${s}" class="${s === star ? 'on' : ''}" aria-label="${levelName(s)}" title="${levelName(s)}"></button>`).join('')}</span>
             </div>
           </div>
-          <table class="dex-table">
-            <thead><tr><th></th>${rows.map((r) => `<th>${r.star ? '★'.repeat(r.star) : '0★'}</th>`).join('')}</tr></thead>
-            <tbody>
-              ${col('HP', 'hp')}
-              ${isCopycat(def) ? '' : `${col('Damage per hit', 'dmg')}${col('Crit damage', 'crit')}${col('DPS', 'dps')}`}
-              ${form ? col(`${esc(form.name)} damage`, 'form') : ''}
-              ${def.ability && powerDamage(def, 0) !== null ? col(`${esc(def.ability.name)} damage`, 'sup') : ''}
-            </tbody>
-          </table>
-          <p class="muted">Copies on the board: 1 = 0★, 2 = ★, 3 = ★★, 4 = ★★★. A crit deals 50% more damage.</p>
-          ${def.ability ? `<h3>Power: ${esc(def.ability.name)}</h3>
-          <p>${describePower(def, null, catalog)}</p>` : `<p>${esc(def.name)} can't be picked: it's summoned in battle.</p>`}
-        </section>
-      </div>`;
+        </div>
+        <div class="dex-stats">
+          ${bar('HP', st.hp, show(st.hp), max.hp)}
+          ${copycat ? `<p class="dex-note">Once it transforms, Ditto fights with the copied Pokémon's HP, damage, attack speed, range and crit.</p>` : `
+          ${bar('Damage per hit', st.atk, show(st.atk), max.atk, `<small>Crit ${critDmg} · ${st.crit}% chance</small>`)}
+          ${bar('Damage per second', +dps(st), dps(st), max.dps)}`}
+        </div>
+        <div class="dex-facts">
+          ${copycat ? '' : fact('Attacks every', `${attackTime(st)}s`)}
+          ${copycat ? '' : fact('Range', def.range > 1 ? `${def.range} tiles` : 'Melee')}
+          ${fact('Movement', SPEED_NAME[def.moveSpeed])}
+          ${powerDmg ? fact(`${esc(def.ability.name)} damage`, show(powerDmg)) : ''}
+        </div>
+        ${power}
+        ${links.length ? `<div class="dex-links">${links.join('')}</div>` : ''}
+        <p class="muted dex-foot">${def.summon ? 'A summon comes at the level the power gives it.' : 'Copies on the board: 1 = Base, 2 = ★, 3 = ★★, 4 = ★★★.'} A crit deals ${CRIT_PCT - 100}% more damage.</p>
+      </section>`;
   }
 
   // A standing notice about the online connection (null hides it).
