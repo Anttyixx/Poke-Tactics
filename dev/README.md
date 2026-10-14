@@ -238,7 +238,7 @@ test a set of changes together. Team styles to pit against each other live in `A
     and Tapu Koko is immune to everything on the way. When it arrives it hits for 150%; the target and
     every enemy it passed through are stunned for 1s.
   - Ditto, **Transform**: walks (medium speed) toward the nearest enemy until it's within that enemy's
-    range, then takes 0.5s to transform into it, copying its max HP, damage, attack speed, range and crit
+    range, then takes 1s to transform into it, copying its max HP, damage, attack speed, range and crit
     (not its power or movement). It keeps its share of HP across the change, shows the copied sprite in
     Ditto's colours, and doesn't move while transformed. When the copied Pokémon faints or no enemy is in
     range, it turns back into Ditto and walks to the next nearest.
