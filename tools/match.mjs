@@ -5,7 +5,7 @@
 //
 // Teams are 6 Pokémon, comma-separated ids or names, e.g.
 //   node tools/match.mjs "beheeyem,infernape,ditto,vespiquen,lilligant,hoopa" \
-//                        "coalossal,torterra,golem,minior,mawile,decidueye" --place=smart
+//                        "coalossal,torterra,golem,minior,annihilape,decidueye" --place=smart
 // Each team plays half the games from each side of the board.
 // --place=smart: both players rearrange before every fight to counter the
 // opponent's lineup from the round before (see placer.mjs); default: the game

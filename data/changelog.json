@@ -1,5 +1,21 @@
 [
   {
+    "id": "2026-10-14-dreepy-distract-fast-sims",
+    "version": "0.23.0",
+    "date": "2026-10-14",
+    "title": "Dragapult's Dreepy distract, and faster battles",
+    "intro": "Dreepy are now a distraction: the Pokémon they hit has to deal with them first. The battle engine also runs over twice as fast, with every fight playing out exactly the same.",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "change", "text": "Dragon Darts: the Pokémon a Dreepy hits stops attacking whoever it was and must attack that Dreepy for up to 3 seconds (or until it faints)." },
+      { "pokemon": "dragapult", "kind": "buff", "text": "Dreepy are fired again 3 seconds after they faint (was 4 seconds for every square they had to fly back), so they come out much more often." },
+      { "pokemon": "dreepy", "kind": "change", "text": "Dreepy attack every 0.5s (was 0.8s) but hit for 6 at ★ (was 12): fast, but more of a nuisance than a threat." },
+      { "pokemon": "dragapult", "kind": "nerf", "text": "Damage 75 → 40 at ★ (its darts' impact damage drops with it), to make up for the distraction." },
+      { "pokemon": "dragapult", "kind": "fix", "text": "When two Dragapult fire at the same moment, they now take turns placing their Dreepy, so neither side grabs every square." },
+      { "kind": "change", "text": "Fainted Dreepy drift back more faintly, behind everything else, so they don't distract you." },
+      { "kind": "new", "text": "The battle engine runs over twice as fast. Every fight plays out exactly the same as before." }
+    ]
+  },
+  {
     "id": "2026-10-14-new-trio-hoopa-j",
     "version": "0.22.0",
     "date": "2026-10-14",

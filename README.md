@@ -119,20 +119,22 @@ node tools/sweep.mjs             # try stat changes one at a time without editin
 Two specific teams, with each team's stats per Pokémon:
 
 ```sh
-node tools/match.mjs "beheeyem,infernape,ditto,vespiquen,lilligant,hoopa" "coalossal,torterra,golem,minior,mawile,decidueye" --games=500 --place=smart
+node tools/match.mjs "beheeyem,infernape,ditto,vespiquen,lilligant,hoopa" "coalossal,torterra,golem,minior,annihilape,decidueye" --games=500 --place=smart
 ```
 
 `--place=smart` makes the simulated players reposition before every fight to counter the
 opponent's lineup from the round before (`tools/placer.mjs`), the way a real player would;
 `--place-a` / `--place-b` set each side separately. `balance.mjs --smart` does the same for
-the whole study. All tools use the game's own code (`src/combat.js`, `src/game.js`,
+the whole study (`--smart=classic`: the older, slower search). Games run on every CPU core at
+once: on 4 cores, 10,000 games take about half a minute, or about 4.5 minutes with `--smart`.
+All tools use the game's own code (`src/combat.js`, `src/game.js`,
 `src/bot.js`), so they stay accurate as the game changes.
 
 One Pokémon in depth (best squares, rows and columns, hardest and easiest opponents, best
 teammates, who knocks it out, stats by star), as a console summary and an HTML report:
 
 ```sh
-node tools/focus.mjs mawile --games=4000 [--smart]   # -> tools/out/focus-mawile.html
+node tools/focus.mjs dragapult --games=4000 [--smart]   # -> tools/out/focus-dragapult.html
 ```
 
 A real match: in the game, **Menu → Match log** (or **Copy match log** after a match) copies
@@ -229,9 +231,11 @@ test a set of changes together. Team styles to pit against each other live in `A
   - Annihilape (cost 4, warrior), **Rage Fist**: each attack in a row without moving makes it attack
     20% faster, up to +100% after 5 attacks. Moving (or being moved) resets it.
   - Dragapult (cost 4, ranger, range 3), **Dragon Darts**: at the start it fires 2 Dreepy at the two
-    farthest enemies (50% damage on impact); they land beside their targets and fight. A Dreepy that
-    faints flies back (4s a square) and is fired again once it's home. Darts fire at the end of the
-    tick, at enemies already on the board, so neither side gets an edge.
+    farthest enemies (50% damage on impact). The hit distracts the target: it must attack its Dreepy
+    for up to 3s (or until the Dreepy faints). Dreepy hit fast for very little; they're a distraction.
+    A Dreepy that faints drifts back, faded, and is fired again 3s later. Darts fire at the end of
+    the tick, at enemies already on the board, every Dragapult's first Dreepy before any second one,
+    so neither side gets an edge.
   - Greninja, **Battle Bond**: after 5 attacks, becomes Ash-Greninja for the rest of the fight: fast
     movement, attacks every 0.8s, more damage, range 3 (same HP).
   - Torterra, **Earthquake**: with every 5th attack, every enemy on the board takes 30% and is stunned 1s.

@@ -765,7 +765,7 @@ test('Rage Fist (Annihilape): each attack in a row without moving makes the next
   assert.equal(Math.max(...evs(r, 'rage', a).map((e) => e.stacks)), p.maxStacks);
 });
 
-test('Dragon Darts (Dragapult): fires 2 Dreepy at the 2 farthest enemies; a fainted one flies back, then is fired again', () => {
+test('Dragon Darts (Dragapult): fires 2 Dreepy at the 2 farthest enemies, who must attack them; a fainted one flies back, then is fired again', () => {
   const cat = powerCat();
   cat.biter = { ...cat.wall, range: 1, secPerHit: 1, damage: [500, 500, 500, 500] }; // knocks out a Dreepy fast
   const r = simulate(cat, [
@@ -780,8 +780,16 @@ test('Dragon Darts (Dragapult): fires 2 Dreepy at the 2 farthest enemies; a fain
   assert.deepEqual(first.map((e) => e.target).sort(), [unitOf(r, 3).id, unitOf(r, 4).id].sort(), 'at the two farthest');
   const impact = Math.floor((Math.round(catalog.dragapult.damage[0] * STAT_SCALE) * p.impactPct) / 100);
   assert.ok(first.every((e) => r.events.some((x) => x.type === 'damage' && x.src === d && x.id === e.target && x.amount === impact && x.t === e.t)), 'each hits on impact');
+  const lured = r.events.filter((x) => x.type === 'taunt' && x.dart && x.t === first[0].t);
+  assert.deepEqual(lured.map((x) => x.id).sort(), first.map((e) => e.target).sort(), 'both targets are distracted');
+  assert.ok(lured.every((x) => x.duration === p.lure && first.some((e) => e.unit.id === x.by && e.target === x.id)), 'by the Dreepy that hit them');
+  // The walker (biter) turns on its Dreepy: its first attack goes at it.
+  const biter = unitOf(r, 3).id;
+  const dreepyOnBiter = first.find((e) => e.target === biter).unit.id;
+  assert.equal(evs(r, 'attack', biter)[0].target, dreepyOnBiter, 'the distracted Pokémon attacks the Dreepy');
   const back = evs(r, 'dartReturn', d)[0];
   assert.ok(back, 'a fainted Dreepy flies back');
+  assert.equal(back.duration, Math.round(p.returnSec * 10));
   const again = darts.find((e) => e.t > back.t);
   assert.ok(again && again.t === back.t + back.duration, 'fired again once it is home');
 });

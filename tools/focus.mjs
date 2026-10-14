@@ -1,5 +1,5 @@
 // Everything about one Pokémon: full games where one team always has it.
-//   node tools/focus.mjs <pokemon> [--games=4000] [--smart]
+//   node tools/focus.mjs <pokemon> [--games=4000] [--smart[=classic]]
 // writes tools/out/focus-<id>.json and tools/out/focus-<id>.html
 //
 // Half the games play normally (the bot, or --smart repositioning, decides
@@ -9,7 +9,7 @@
 // Its teammates and the opposing team are random (the opponent never has it).
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { runJobs } from './balance.mjs';
+import { runJobs, progressBar } from './balance.mjs';
 import { hashSeed } from '../src/rng.js';
 import { COLS, HALF } from '../src/combat.js';
 
@@ -19,9 +19,9 @@ const args = process.argv.slice(2);
 const flags = Object.fromEntries(args.filter((a) => a.startsWith('--')).map((a) => { const [k, v] = a.slice(2).split('='); return [k, v ?? true]; }));
 const key = (s) => String(s).toLowerCase().replace(/[^a-z]/g, '');
 const focus = troops.find((id) => key(id) === key(args.find((a) => !a.startsWith('--')) ?? '') || key(catalog[id].name) === key(args.find((a) => !a.startsWith('--')) ?? ''));
-if (!focus) { console.error(`Usage: node tools/focus.mjs <pokemon> [--games=4000] [--smart]\nPokémon: ${troops.join(', ')}`); process.exit(1); }
+if (!focus) { console.error(`Usage: node tools/focus.mjs <pokemon> [--games=4000] [--smart[=classic]]\nPokémon: ${troops.join(', ')}`); process.exit(1); }
 const games = Number(flags.games ?? 4000);
-const place = flags.smart ? 'smart' : 'default';
+const place = flags.smart === 'classic' ? 'smart-classic' : flags.smart ? 'smart' : 'default';
 const name = (id) => catalog[id].name;
 
 // ---- jobs ----
@@ -42,7 +42,7 @@ const jobs = Array.from({ length: games }, (_, i) => {
 });
 
 const t0 = Date.now();
-const results = await runJobs(jobs);
+const results = await runJobs(jobs, null, { onProgress: progressBar() });
 const secs = (Date.now() - t0) / 1000;
 
 // ---- analysis ----
