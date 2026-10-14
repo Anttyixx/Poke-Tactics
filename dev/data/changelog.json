@@ -1,5 +1,16 @@
 [
   {
+    "id": "2026-10-14-dex-powers",
+    "version": "0.16.7",
+    "date": "2026-10-14",
+    "title": "Clearer power descriptions",
+    "changes": [
+      { "kind": "change", "text": "Every power is now described the same way: a tag for when it goes off (Every 5 attacks, Every attack, When knocked out, At battle start), then what it does. Damage, durations, healing and other key values are coloured." },
+      { "kind": "change", "text": "Pokédex entries show HP, damage, attack speed, range and movement. DPS, crit and power damage are gone from the chips, and a power's damage is in its description." },
+      { "kind": "change", "text": "The stat shape is now a diamond of HP, damage, attack speed and speed." }
+    ]
+  },
+  {
     "id": "2026-10-14-dex-power-numbers",
     "version": "0.16.6",
     "date": "2026-10-14",

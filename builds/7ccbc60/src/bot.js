@@ -1,8 +1,8 @@
 // Dummy opponent. It plays through the exact same intent API as a human, so
 // in Phase 3 a remote guest can take its seat without touching the rules.
 
-import { MAX_STAR, fielded, teamSize, troopIds } from './game.js?v=f1199da';
-import { COLS, HALF } from './combat.js?v=f1199da';
+import { MAX_STAR, REROLL_COST, fielded, teamSize, troopIds } from './game.js?v=7ccbc60';
+import { COLS, HALF } from './combat.js?v=7ccbc60';
 
 // Columns ordered from the centre outwards, e.g. [2, 1, 3, 0, 4] for 5 columns.
 const CENTER_OUT = [...Array(COLS).keys()].sort((a, b) => Math.abs(2 * a - (COLS - 1)) - Math.abs(2 * b - (COLS - 1)) || a - b);
@@ -17,11 +17,11 @@ export function botTurn(state, catalog, p, send) {
     return;
   }
   shop(state, catalog, p, send);
-  // Rerolls are free but limited; keep rerolling while there are coins left to
-  // spend (at least the price of the cheapest troop on the team).
+  // Rerolls cost coins; keep rerolling while it still leaves enough to buy the
+  // cheapest troop on the team.
   const me = state.players[p];
   const cheapest = Math.min(...me.team.map((id) => catalog[id].cost));
-  while (me.rerolls > 0 && me.coins >= cheapest && send({ type: 'reroll' }).ok) shop(state, catalog, p, send);
+  while (me.coins >= cheapest + REROLL_COST && send({ type: 'reroll' }).ok) shop(state, catalog, p, send);
   send({ type: 'ready' });
 }
 
