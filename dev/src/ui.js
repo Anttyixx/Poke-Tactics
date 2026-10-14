@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=d9ee80b';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=305a902';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=d9ee80b';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=d9ee80b';
+} from './game.js?v=305a902';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=305a902';
 
 const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
 // Attack-effect colour when a unit doesn't set its own "fx" colour in units.json.
@@ -86,6 +86,13 @@ export function powerText(def, star, catalog) {
       const morph = p.morph ? ` It takes ${vTime(p.morph)} and can't be hurt while it does.` : '';
       const wave = f.shockwave ? ` A shock wave stuns every enemy in the ${area(f.shockwave.radius)} around it for ${vTime(f.shockwave.stun)}.` : '';
       return { when, text: `${into} into ${f.name} for the rest of the fight: ${stats}${f.hp ? '' : ' (HP stays the same)'}.${morph}${wave}` };
+    }
+    case 'treat': {
+      const fl = Object.fromEntries(p.flavors.map((f) => [f.flavor, f]));
+      const heal = fl.heal && `<b>${esc(fl.heal.name.replace(/.*\((.*)\)/, '$1'))}</b> heals the ally with the lowest share of HP for ${vHeal(`${fl.heal.healPct}%`)} of its damage (${vHeal(show(Math.floor((def.damage[lvl] * STAT_SCALE * fl.heal.healPct) / 100)))}) over ${vTime(p.duration)}`;
+      const haste = fl.haste && `<b>${esc(fl.haste.name.replace(/.*\((.*)\)/, '$1'))}</b> makes the hardest-hitting ally attack ${vNum(`${fl.haste.hastePct}%`)} faster for ${vTime(p.duration)}`;
+      const guard = fl.guard && `<b>${esc(fl.guard.name.replace(/.*\((.*)\)/, '$1'))}</b> shields the ally most enemies are attacking for ${vTime(p.duration)}: ${vNum(`${fl.guard.guardPct}%`)} less damage, and the first stun or knockback only breaks the shield`;
+      return { when: every, text: `Changes into a random flavour and treats one ally. ${[heal, haste, guard].filter(Boolean).join('. ')}.` };
     }
     case 'opening': return { when: 'At battle start', text: `Fires a wave down its column. The first enemy hit takes ${hit}, is carried to the far end of the board${p.stun ? ` and is stunned for ${vTime(p.stun)}` : ''}.` };
     default: return null;
@@ -1013,6 +1020,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         if (a.chillUntil && tick >= a.chillUntil) { a.chillUntil = 0; a.el.classList.remove('chilled'); }
         if (a.stealthUntil && tick >= a.stealthUntil) { a.stealthUntil = 0; a.el.classList.remove('stealthed'); }
         if (a.hasteUntil && tick >= a.hasteUntil) { a.hasteUntil = 0; a.el.classList.remove('hasted'); }
+        if (a.guardUntil && tick > a.guardUntil) { a.guardUntil = 0; a.el.classList.remove('guarded'); }
       }
     };
     const finish = () => {
@@ -1446,6 +1454,27 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         bars(a);
         if (animate) { floatText(a, `+${show(ev.amount)}`, 'shield'); fx(at().x, at().y, 'shield', '#ffffff', 1.3); }
         break;
+      case 'guard': // Alcremie's Mint Cream: a shield bubble for a while
+        a.guardUntil = ev.t + ev.duration;
+        a.el.classList.add('guarded');
+        if (animate) floatText(a, 'Shielded', 'guard');
+        break;
+      case 'guardBreak':
+        a.guardUntil = 0;
+        a.el.classList.remove('guarded');
+        if (animate) { floatText(a, 'Shield broke', 'guard'); fx(at().x, at().y, 'burst', '#9fd8ff', 1.2); }
+        break;
+      case 'treat': { // Alcremie: who got the treat
+        const to = actors.get(ev.target);
+        if (to && animate) {
+          const color = { heal: '#7fe08a', haste: '#ff8fb0', guard: '#9fd8ff' }[ev.flavor];
+          const p = viewPos(to.x, to.y);
+          fx(p.x, p.y, 'burst', color, 1.4);
+          if (ev.flavor === 'heal') floatText(to, 'Sweet heal', 'heal');
+          if (ev.flavor === 'haste') floatText(to, 'Faster!', 'cast');
+        }
+        break;
+      }
       case 'chill': { // Frosmoth: slower for a while (each hit restarts it)
         const fresh = !(a.chillUntil && ev.t < a.chillUntil);
         a.chillUntil = ev.t + ev.duration + 1;
@@ -1741,7 +1770,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
 
   const entryEl = $('dex-entry');
   const reduceMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  let dexForm = false; // the entry shows dexPick's transformed form
+  let dexForm = null; // index of dexPick's form the entry shows (null: the Pokémon itself)
   let dexStar = 0; // level shown in the entry
 
   dexEl.addEventListener('click', (e) => {
@@ -1753,9 +1782,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     if (e.target === entryEl || e.target.closest('#entry-close')) return closeEntry();
     if (e.target.closest('#dex-level')) return setDexLevel((dexStar + 1) % 4);
     const form = e.target.closest('[data-dex-form]');
-    if (form) return swapEntry(form.dataset.dexForm, true);
+    if (form) { const [id, i] = form.dataset.dexForm.split(':'); return swapEntry(id, Number(i)); }
     const pick = e.target.closest('[data-dex]');
-    if (pick) swapEntry(pick.dataset.dex, false);
+    if (pick) swapEntry(pick.dataset.dex, null);
   });
 
   // The Pokédex grid; with an id (a team card's ⓘ), just that Pokémon's entry.
@@ -1767,7 +1796,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   }
   function openEntry(id) {
     dexPick = id;
-    dexForm = false;
+    dexForm = null;
     dexStar = 0;
     renderEntry();
     entryEl.classList.remove('closing');
@@ -1803,10 +1832,13 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   const typeName = (type) => type[0].toUpperCase() + type.slice(1);
   const summonIds = () => Object.keys(catalog).filter((id) => catalog[id].summon).sort();
   // A transformed form as a Pokémon of its own (HP carries over when the form has none).
-  const formDef = (def) => {
-    const f = def.ability.form;
+  // A Pokémon's forms: Greninja's or Minior's one transformation, Alcremie's flavours.
+  const formsOf = (def) => (def.ability?.form ? [def.ability.form] : def.ability?.flavors ?? []);
+  const formDef = (def, i = 0) => {
+    const f = formsOf(def)[i];
     return { ...def, ...f, hp: f.hp ?? def.hp, energy: f.energy ?? 0, ability: null, form: true };
   };
+  const formKey = (id, i) => `form:${id}:${i}`;
   // Who summons this Pokémon.
   const summonersOf = (id) => troopIds(catalog).filter((t) => catalog[t].ability?.kind === 'summon' && catalog[t].ability.unit === id);
 
@@ -1845,7 +1877,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   const radarTop = [];
   function radarValues(def, star) {
     if (!radarTop[star]) {
-      const defs = Object.values(catalog).flatMap((d) => (d.ability?.form ? [d, formDef(d)] : [d]));
+      const defs = Object.values(catalog).flatMap((d) => [d, ...formsOf(d).map((_, i) => formDef(d, i))]);
       const raws = defs.map((d) => radarRaw(d, star));
       radarTop[star] = Object.fromEntries(RADAR.map(([k]) => [k, Math.max(...raws.map((r) => r[k]))]));
     }
@@ -1885,11 +1917,20 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   }
 
   // The parts of an entry that change with the level.
-  function dexLevelValues(def, star, formOf) {
+  function dexLevelValues(def, star, formOf, formIndex = 0) {
     const st = unitStats(def, star);
     let power = '';
-    if (formOf) {
-      const f = formOf.ability.form;
+    const f = formOf && formsOf(formOf)[formIndex];
+    if (f?.flavor) {
+      // An Alcremie flavour: what its treat does.
+      const p = formOf.ability;
+      const amount = (pct) => show(Math.floor((formOf.damage[star] * STAT_SCALE * pct) / 100));
+      power = {
+        heal: `Heals the ally with the lowest share of HP for ${vHeal(`${f.healPct}%`)} of ${esc(formOf.name)}'s damage (${vHeal(amount(f.healPct))}), spread over ${vTime(p.duration)}.`,
+        haste: `The hardest-hitting ally attacks ${vNum(`${f.hastePct}%`)} faster for ${vTime(p.duration)}.`,
+        guard: `Shields the ally most enemies are attacking for ${vTime(p.duration)}: it takes ${vNum(`${f.guardPct}%`)} less damage, and the first stun or knockback only breaks the shield.`,
+      }[f.flavor] + ` ${esc(formOf.name)} keeps this form until its next Sweet Treat.`;
+    } else if (f) {
       power = [
         `${esc(formOf.name)} stays in this form for the rest of the fight.`,
         !f.hp && `It keeps ${esc(formOf.name)}'s HP.`,
@@ -1912,9 +1953,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     const detail = entryEl.querySelector('.dex-detail');
     if (!detail) return renderEntry();
     const base = catalog[dexPick];
-    const isForm = dexForm && base.ability?.form;
-    const shown = isForm ? formDef(base) : base;
-    const v = dexLevelValues(shown, star, isForm ? base : null);
+    const isForm = dexForm !== null && Boolean(formsOf(base)[dexForm]);
+    const shown = isForm ? formDef(base, dexForm) : base;
+    const v = dexLevelValues(shown, star, isForm ? base : null, dexForm ?? 0);
     const poly = detail.querySelector('.dex-radar .shape');
     if (poly) tweenRadar(poly, radarValues(shown, star));
     const lvl = detail.querySelector('#dex-level');
@@ -1963,8 +2004,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   // Tapping a related Pokémon: it grows into the big spot while the current one
   // shrinks into the small spot (FLIP: measure, redraw, play from the old places).
   function swapEntry(id, form) {
-    const oldKey = dexForm ? `form:${dexPick}` : dexPick;
-    const newKey = form ? `form:${id}` : id;
+    const oldKey = dexForm !== null ? formKey(dexPick, dexForm) : dexPick;
+    const newKey = form !== null ? formKey(id, form) : id;
     const was = (key) => entryEl.querySelector(`[data-key="${key}"]`)?.getBoundingClientRect();
     const fromMain = was(oldKey); // the big sprite now
     const fromSmall = was(newKey); // the small sprite that was tapped
@@ -1990,15 +2031,15 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   function renderEntry({ fade = false } = {}) {
     const base = catalog[dexPick];
     if (!base) return closeEntry();
-    const isForm = Boolean(dexForm && base.ability?.form);
-    const def = isForm ? formDef(base) : base;
+    const isForm = dexForm !== null && Boolean(formsOf(base)[dexForm]);
+    const def = isForm ? formDef(base, dexForm) : base;
     const star = dexStar;
     const copycat = isCopycat(def);
-    const v = dexLevelValues(def, star, isForm ? base : null);
+    const v = dexLevelValues(def, star, isForm ? base : null, dexForm ?? 0);
     const st = unitStats(def, star);
     // Each number gets room for its widest value at any level, so chips keep
     // their size as the level changes.
-    const all = [0, 1, 2, 3].map((s2) => dexLevelValues(def, s2, isForm ? base : null));
+    const all = [0, 1, 2, 3].map((s2) => dexLevelValues(def, s2, isForm ? base : null, dexForm ?? 0));
     const width = (k) => Math.max(...all.map((x) => String(x[k] ?? '').length));
     const chip = (k, label, value) => `<span class="dex-chip"${k ? ` data-k="${k}"` : ''}><small>${label}</small><b${k ? ` style="min-width:${width(k)}ch"` : ''}>${value}</b></span>`;
     const chips = [
@@ -2009,13 +2050,17 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       chip('', 'Speed', SPEED_NAME[def.moveSpeed]),
     ].filter(Boolean).join('');
     const power = isForm
-      ? `<div class="dex-power"><h3>${esc(base.ability.name)} form</h3><p data-k="power">${v.power}</p></div>`
+      ? `<div class="dex-power"><h3>${esc(base.ability.name)} ${formsOf(base)[dexForm].flavor ? 'flavour' : 'form'}</h3><p data-k="power">${v.power}</p></div>`
       : def.ability ? `<div class="dex-power"><h3>${esc(def.ability.name)} <span class="pw-when">${powerText(def, star, catalog).when}</span></h3><p data-k="power">${v.power}</p></div>` : '';
 
     // Related Pokémon: [def, attributes, label, key].
     const related = [];
+    const forms = formsOf(base);
     if (isForm) related.push([base, `data-dex="${dexPick}"`, `Transforms from ${base.name}`, dexPick]);
-    else if (def.ability?.form) related.push([formDef(def), `data-dex-form="${dexPick}"`, `Transforms into ${def.ability.form.name}`, `form:${dexPick}`]);
+    forms.forEach((f, i) => {
+      if (isForm && i === dexForm) return;
+      related.push([formDef(base, i), `data-dex-form="${dexPick}:${i}"`, `${isForm ? 'Also becomes' : forms.length > 1 ? 'Can become' : 'Transforms into'} ${f.name}`, formKey(dexPick, i)]);
+    });
     if (!isForm && def.ability?.kind === 'summon' && catalog[def.ability.unit]) related.push([catalog[def.ability.unit], `data-dex="${def.ability.unit}"`, `Summons ${catalog[def.ability.unit].name}`, def.ability.unit]);
     if (def.summon) for (const t of summonersOf(dexPick)) related.push([catalog[t], `data-dex="${t}"`, `Summoned by ${catalog[t].name}`, t]);
     const sprite = (d, cls, key) => `<span class="portrait ${cls}" data-facing="down" data-key="${key}"><span class="sprite" ${spriteStyle(d)}></span></span>`;
@@ -2029,7 +2074,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         <div class="dex-hero">
           <div class="dex-figure">
             <div class="dex-art">
-              ${sprite(def, 'dex-portrait', isForm ? `form:${dexPick}` : dexPick)}
+              ${sprite(def, 'dex-portrait', isForm ? formKey(dexPick, dexForm) : dexPick)}
               ${relatedHtml ? `<div class="dex-rels">${relatedHtml}</div>` : ''}
             </div>
             <button id="dex-level" class="dex-level" title="Tap for the next level (→)" aria-label="Level: ${LEVEL_NAMES[star]}. Tap for the next level."><span class="stars s${star}">${levelMark(star)}</span></button>

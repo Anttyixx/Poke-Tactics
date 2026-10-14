@@ -230,6 +230,13 @@ test a set of changes together. Team styles to pit against each other live in `A
     hit chills the target for 3s: it attacks 30% slower and waits 30% longer between steps; another
     hit restarts the timer. Chills land at the end of the tick, like stuns. Chilled Pokémon are
     tinted blue with a snowflake badge.
+  - Alcremie (cost 3, cleric, range 2, attacks every 1.25s), **Sweet Treat**: every 4 attacks it
+    changes into a random flavour (seeded, so replays match) and treats one ally for 3s. Matcha
+    Cream heals the ally with the lowest share of HP for 600% of its damage, a chunk every second;
+    Ruby Cream makes the hardest-hitting ally attack 100% faster; Mint Cream shields the ally most
+    enemies are attacking: 40% less damage, and the first stun or shove (knockback, Psywave) that
+    would land breaks the shield instead, blocking anything else in that same tick. Treats land
+    at the end of the tick. Shielded Pokémon show a bubble.
   - Minior, **Shining Star**: two lives. Rock form is a slow, soft-hitting wall (very slow, 30 damage
     every 3.0s, 1100 HP). When it would be knocked out it doesn't faint: at the end of that tick it gets
     Star Form's own HP (600), spends 0.5s transforming, immune to everything (damage, stuns, knockbacks,

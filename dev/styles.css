@@ -857,6 +857,9 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 /* Hover: a glow around the sprite's own outline, in its type colour. */
 .dex-rel:hover .dex-rel-sprite { transform: scale(1.1); filter: drop-shadow(0 0 2px var(--type)) drop-shadow(0 0 7px var(--type)); }
 .dex-rel:hover .sprite { animation: walk 0.7s steps(4) infinite; }
+/* Three or more forms (Alcremie's flavours): smaller, so the stack fits beside the sprite. */
+.dex-rels:has(> :nth-child(3)) { gap: 0; bottom: -8px; }
+.dex-rels:has(> :nth-child(3)) .dex-rel-sprite { width: 42px; height: 42px; }
 /* The level chip under the sprite: tap to step through the levels. */
 .dex-level {
   display: inline-flex; align-items: center; justify-content: center; min-width: 76px; min-height: 30px;
@@ -1397,3 +1400,14 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 }
 @keyframes chill-spin { to { rotate: 360deg; } }
 .float.chill { color: #a8ecff; }
+.float.guard { color: #9fd8ff; }
+/* Alcremie's Mint Cream shield: a soft bubble around the Pokémon. */
+.unit.guarded::after {
+  content: ""; position: absolute; inset: 2% 4% 0; border-radius: 50%; pointer-events: none; z-index: 3;
+  border: 2px solid #b8e6ffcc;
+  background: radial-gradient(circle at 35% 30%, #ffffff55, #9fd8ff22 45%, #9fd8ff10 70%, transparent 72%);
+  box-shadow: 0 0 10px #9fd8ff88, inset 0 0 8px #9fd8ff66;
+  animation: bubble 1.6s ease-in-out infinite;
+}
+@keyframes bubble { 50% { transform: scale(1.04); } }
+@media (prefers-reduced-motion: reduce) { .unit.guarded::after { animation: none; } }

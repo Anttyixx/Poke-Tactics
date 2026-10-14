@@ -1,5 +1,19 @@
 [
   {
+    "id": "2026-10-14-alcremie",
+    "version": "0.19.0",
+    "date": "2026-10-14",
+    "title": "New Pokémon: Alcremie",
+    "intro": "Alcremie joins as a support Pokémon. Every few attacks it whips up a random flavour and treats one of your Pokémon.",
+    "changes": [
+      { "pokemon": "alcremie", "kind": "new", "text": "Alcremie (cost 3, cleric, range 2). Sweet Treat, every 4 attacks: it changes into a random flavour and treats one ally for 3 seconds." },
+      { "pokemon": "alcremie", "kind": "new", "text": "Matcha Cream heals the ally with the lowest share of HP over 3 seconds." },
+      { "pokemon": "alcremie", "kind": "new", "text": "Ruby Cream makes your hardest-hitting Pokémon attack twice as fast." },
+      { "pokemon": "alcremie", "kind": "new", "text": "Mint Cream shields the Pokémon the enemy is attacking most: 40% less damage, and the first stun or knockback only breaks the shield. Shielded Pokémon show a bubble." },
+      { "kind": "new", "text": "The Pokédex shows all of Alcremie's flavours; tap one to see what it does. All four flavours are also new profile pictures." }
+    ]
+  },
+  {
     "id": "2026-10-14-bot-layout",
     "version": "0.18.0",
     "date": "2026-10-14",
