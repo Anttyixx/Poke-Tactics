@@ -1,5 +1,16 @@
 [
   {
+    "id": "2026-10-14-dex-entry-popup",
+    "version": "0.16.4",
+    "date": "2026-10-14",
+    "title": "Pokédex: entries in their own pop-up",
+    "changes": [
+      { "kind": "change", "text": "Tapping a Pokémon in the Pokédex opens its info in a pop-up on top of the grid. Close it (or press Esc) to go back to the grid." },
+      { "kind": "change", "text": "The Pokémon is no longer framed in a box, and related Pokémon (a transformation, a summon) sit beside it as a small sprite with no frame." },
+      { "kind": "new", "text": "Tapping a related Pokémon swaps them: it grows into the main spot while the other shrinks into the small one." }
+    ]
+  },
+  {
     "id": "2026-10-14-dex-chips",
     "version": "0.16.3",
     "date": "2026-10-14",
