@@ -1,5 +1,14 @@
 [
   {
+    "id": "2026-10-14-dex-shape-scale",
+    "version": "0.16.8",
+    "date": "2026-10-14",
+    "title": "Pokédex: stat shape scaled to the best",
+    "changes": [
+      { "kind": "change", "text": "Each point of the stat shape is now measured against the highest value any Pokémon has for that stat at the same level. The edge of the diamond is the best there is, so you can compare Pokémon just by their shapes." }
+    ]
+  },
+  {
     "id": "2026-10-14-dex-powers",
     "version": "0.16.7",
     "date": "2026-10-14",
