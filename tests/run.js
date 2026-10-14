@@ -58,10 +58,10 @@ function assertCopiesConserved(player) {
 // ---- catalog --------------------------------------------------------------
 
 test('unit catalog is well formed, and every unit has a sprite that exists', () => {
-  const kinds = new Set(['empower', 'snipe', 'summon', 'stealth', 'haste', 'opening', 'quake', 'transform', 'splashHeal', 'selfdestruct', 'copy', 'chill']);
+  const kinds = new Set(['empower', 'snipe', 'summon', 'stealth', 'haste', 'opening', 'quake', 'transform', 'splashHeal', 'selfdestruct', 'copy', 'chill', 'treat']);
   // Powers that fire on a counter of attacks need `energy`; the rest (battle
   // start, passives, knockout or low-HP triggers) have none.
-  const counted = (a) => ['empower', 'snipe', 'summon', 'stealth', 'haste', 'quake'].includes(a.kind) || (a.kind === 'transform' && !a.trigger);
+  const counted = (a) => ['empower', 'snipe', 'summon', 'stealth', 'haste', 'quake', 'treat'].includes(a.kind) || (a.kind === 'transform' && !a.trigger);
   for (const [id, u] of Object.entries(catalog)) {
     for (const k of ['hp', 'damage']) {
       const v = u[k];
@@ -186,7 +186,7 @@ test('no duplicates on the field: buying a troop you already have levels it up (
   const s = startedGame();
   const p = s.players[0];
   const id = 'mawile';
-  const other = TROOPS.find((t) => t !== id);
+  const other = DEFAULT_TEAM.find((t) => t !== id); // in this player's pool
   p.coins = 99;
   p.shop = [id, id, other];
   assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: 0, y: 0 }).ok);
@@ -428,6 +428,81 @@ test('Jaw Lock (Mawile): after 8 attacks the next one hits 30% harder and stuns'
   const hit = r.events.find((e) => e.type === 'damage' && e.src === m && e.t === cast.t);
   assert.equal(hit.amount, Math.floor((catalog.mawile.damage[0] * 130) / 100));
   assert.ok(r.events.some((e) => e.type === 'stun' && e.t === cast.t && e.duration === catalog.mawile.ability.stun));
+});
+
+// Alcremie with only one flavour, an ally in front of it and an enemy brute
+// hitting that ally: Alcremie (combat 2,5) shoots the brute (2,3) over the ally (2,4).
+function treatFight(flavor, ally, brute = {}) {
+  const cat = powerCat();
+  const a = catalog.alcremie.ability;
+  cat.alcremie = { ...clone(catalog.alcremie), ability: { ...a, flavors: a.flavors.filter((f) => f.flavor === flavor) } };
+  cat.ally = { ...cat.wall, hp: [1e5, 1e5, 1e5, 1e5], ...ally };
+  cat.brute = { ...cat.wall, range: 1, secPerHit: 1, damage: [200, 200, 200, 200], ...brute };
+  const r = simulate(cat, [
+    [{ uid: 1, unitId: 'alcremie', star: 0, x: 2, y: 1 }, { uid: 2, unitId: 'ally', star: 0, x: 2, y: 0 }],
+    [{ uid: 3, unitId: 'brute', star: 0, x: 2, y: 0 }],
+  ], 1);
+  const al = unitOf(r, 1).id;
+  const treat = evs(r, 'treat', al)[0];
+  return { r, cat, al, ally: unitOf(r, 2).id, brute: unitOf(r, 3).id, treat };
+}
+
+test('Sweet Treat (Alcremie): after 4 attacks it changes flavour; Matcha heals the most hurt ally over 3 seconds', () => {
+  const { r, al, ally, treat } = treatFight('heal');
+  assert.equal(evs(r, 'attack', al).filter((e) => e.t <= treat.t).length, catalog.alcremie.energy, 'charged by 4 attacks');
+  const form = evs(r, 'transform', al)[0];
+  assert.deepEqual([form.name, form.sprite], ['Alcremie (Matcha Cream)', 'assets/sprites/alcremie-matcha.png']);
+  assert.equal(treat.target, ally, 'the ally losing HP, not Alcremie at full HP');
+  const healPct = catalog.alcremie.ability.flavors.find((f) => f.flavor === 'heal').healPct;
+  const per = Math.floor((Math.round(catalog.alcremie.damage[0] * STAT_SCALE) * healPct) / 100 / 3);
+  const heals = evs(r, 'heal', ally).filter((h) => h.from?.[al] && h.t > treat.t && h.t <= treat.t + 30);
+  assert.deepEqual(heals.map((h) => [h.t - treat.t, h.from[al][1]]), [[10, per], [20, per], [30, per]], 'a chunk every second for 3 seconds');
+});
+
+test('Sweet Treat (Alcremie): Ruby Cream makes the hardest-hitting ally attack faster for 3 seconds', () => {
+  const { r, ally, treat } = treatFight('haste', { range: 1, secPerHit: 1, damage: [300, 300, 300, 300] });
+  assert.equal(treat.target, ally, 'the ally hitting harder than Alcremie');
+  assert.ok(evs(r, 'haste', ally).some((h) => h.t === treat.t), 'hasted');
+  const times = evs(r, 'attack', ally).map((e) => e.t);
+  const gap = (from, to) => { const ts = times.filter((x) => x > from && x <= to); return ts[1] - ts[0]; };
+  assert.equal(gap(0, treat.t), 10, 'every second before');
+  assert.equal(gap(treat.t, treat.t + 30), 5, 'twice as often during the treat');
+});
+
+test('Sweet Treat (Alcremie): Mint Cream shields the ally under attack: less damage, and a stun only breaks the shield', () => {
+  const guardPct = catalog.alcremie.ability.flavors.find((f) => f.flavor === 'guard').guardPct;
+  // A brute that stuns with every other attack.
+  const { r, ally, brute, treat } = treatFight('guard', {}, { energy: 1, ability: { name: 'Bash', kind: 'empower', damagePct: 100, stun: 10 } });
+  assert.equal(treat.target, ally, 'the ally the brute is attacking');
+  const g = evs(r, 'guard', ally)[0];
+  const hits = r.events.filter((e) => e.type === 'damage' && e.src === brute && e.id === ally);
+  const broke = evs(r, 'guardBreak', ally)[0];
+  const during = hits.filter((e) => e.t > g.t && e.t <= broke.t);
+  assert.ok(during.length && during.every((e) => e.amount === Math.floor((200 * (100 - guardPct)) / 100)), `${guardPct}% less damage while shielded`);
+  assert.ok(broke && broke.t > g.t && broke.t <= g.t + g.duration, 'the first stun breaks the shield early');
+  assert.ok(!evs(r, 'stun', ally).some((e) => e.t === broke.t), 'and does not stun');
+  const after = hits.find((e) => e.t > broke.t);
+  assert.equal(after.amount, 200, 'full damage once it is broken');
+});
+
+test('a shield also stops a shove: a Heat Crash breaks it instead of knocking the Pokémon back and stunning it', () => {
+  const cat = powerCat();
+  const a = catalog.alcremie.ability;
+  cat.alcremie = { ...clone(catalog.alcremie), energy: 1, ability: { ...a, flavors: a.flavors.filter((f) => f.flavor === 'guard') } };
+  cat.ally = { ...cat.wall, hp: [1e5, 1e5, 1e5, 1e5] };
+  // Alcremie (charged by every attack) shields the ally; then the enemy's Heat
+  // Crash, which knocks back and stuns, hits that ally.
+  cat.crasher = { ...cat.wall, range: 1, secPerHit: 1, damage: [1, 1, 1, 1], energy: 3, ability: { name: 'Heat Crash', kind: 'empower', damagePct: 100, knockback: 2, stun: 10 } };
+  const r = simulate(cat, [
+    [{ uid: 1, unitId: 'alcremie', star: 0, x: 2, y: 1 }, { uid: 2, unitId: 'ally', star: 0, x: 2, y: 0 }],
+    [{ uid: 3, unitId: 'crasher', star: 0, x: 2, y: 0 }],
+  ], 1);
+  const ally = unitOf(r, 2).id;
+  const g = evs(r, 'guard', ally)[0];
+  const crash = evs(r, 'cast', unitOf(r, 3).id).find((e) => e.t > g.t);
+  assert.ok(crash && crash.t <= g.t + 30, 'a Heat Crash lands while shielded');
+  assert.ok(evs(r, 'guardBreak', ally).some((e) => e.t === crash.t), 'the shield breaks');
+  assert.ok(!evs(r, 'knock', ally).some((e) => e.t === crash.t) && !evs(r, 'stun', ally).some((e) => e.t === crash.t), 'neither the knockback nor the stun lands');
 });
 
 test('Psywave (Beheeyem): at the start, the first enemy in its column is knocked to the far end; anyone there is pushed aside', () => {

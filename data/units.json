@@ -74,6 +74,15 @@
     "hp": [600, 1020, 1734, 2940], "damage": [40, 68, 116, 196], "range": 1, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 0,
     "ability": {"name": "Transform", "kind": "copy", "morph": 10}
   },
+  "alcremie": {
+    "name": "Alcremie", "sprite": "assets/sprites/alcremie.png", "fx": "#ffc4e1", "type": "cleric", "cost": 3,
+    "hp": [760,  1292,  2196,  3724], "damage": [55,  94,  159,  270], "range": 2, "moveSpeed": "medium", "secPerHit": 1.25, "critChance": 15, "energy": 4,
+    "ability": {"name": "Sweet Treat", "kind": "treat", "duration": 30, "flavors": [
+      {"flavor": "heal", "name": "Alcremie (Matcha Cream)", "sprite": "assets/sprites/alcremie-matcha.png", "healPct": 600},
+      {"flavor": "haste", "name": "Alcremie (Ruby Cream)", "sprite": "assets/sprites/alcremie-ruby.png", "hastePct": 100},
+      {"flavor": "guard", "name": "Alcremie (Mint Cream)", "sprite": "assets/sprites/alcremie-mint.png", "guardPct": 40}
+    ]}
+  },
   "combee": {
     "name": "Combee", "summon": true, "sprite": "assets/sprites/combee.png", "fx": "#ffd35a", "type": "warrior", "cost": 0,
     "hp": [188, 300, 481, 769], "damage": [30, 47, 75, 120], "range": 1, "moveSpeed": "very fast", "secPerHit": 0.8, "critChance": 15, "energy": 0,

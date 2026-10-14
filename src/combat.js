@@ -99,6 +99,8 @@ function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, in
     moveTimer: stats.moveCd, // waiting before the next step (it waits before its first one too)
     stepTimer: 0, // mid-step: ticks until it reaches the square it's walking to
     hasteUntil: 0, hastePct: 0, stealthFrom: 0, stealthUntil: 0,
+    guardUntil: 0, guardPct: 0, guardBrokeAt: -1, // Alcremie's Mint Cream shield: less damage; the first stun or shove only breaks it
+    regen: null, // Alcremie's Matcha Cream: { src, per, left, next } healing once a second
     chillFrom: 0, chillUntil: 0, chillPct: 0, // Frosmoth's chill: slower attacks and steps through chillUntil
     pendingChill: null, // { duration, pct }: a chill that lands at the end of the tick
     hold: 0, // ticks it can't move or attack (riding a Psywave); cooldowns still run
@@ -159,6 +161,18 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
   // Minior transforming and Tapu Koko dashing can't be hurt, stunned or moved.
   // Immunity always starts on a new tick, so it never decides a same-tick trade.
   const immune = (u) => t >= u.immuneFrom && t <= u.immuneUntil;
+  // Shielded by Alcremie (Mint Cream) this tick.
+  const guarded = (u) => u.guardUntil > 0 && t <= u.guardUntil;
+  // A stun or a shove that hits a shield breaks it instead of landing. Anything
+  // else that would stun or shove it in the same tick (a Heat Crash does both)
+  // is blocked too.
+  const blocks = (u) => guarded(u) || u.guardBrokeAt === t;
+  function breakGuard(u) {
+    if (u.guardBrokeAt === t) return;
+    u.guardUntil = 0;
+    u.guardBrokeAt = t;
+    emit('guardBreak', { id: u.id });
+  }
   const shownMana = (u) => Math.min(u.maxMana, u.mana + u.pendingMana);
   // Where a unit stood at the start of the tick. Targeting, range and pathing
   // all read this, so a unit that moved earlier in the tick isn't seen at its
@@ -203,6 +217,7 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
   // Returns the damage actually dealt to HP.
   function damage(target, amount, src, crit = false) {
     if (!standing(target) || immune(target)) return 0;
+    if (guarded(target)) amount = Math.max(1, Math.floor((amount * (100 - target.guardPct)) / 100));
     const absorbed = Math.min(target.shield, amount);
     target.shield -= absorbed;
     const before = target.hp;
@@ -302,6 +317,7 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
 
   function stun(target, duration) {
     if (immune(target)) return;
+    if (blocks(target)) { breakGuard(target); return; }
     target.pendingStun = Math.max(target.pendingStun, duration);
     emit('stun', { id: target.id, duration });
   }
@@ -334,7 +350,15 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
   // displaceSpot); if they have nowhere to go, the launched one lands on the
   // closest free square instead. Returns the displaced Pokémon, if any.
   function land(target, goal, side) {
+    if (blocks(target)) { breakGuard(target); return null; } // the shield takes the shove
     const o = unitAt(goal.x, goal.y);
+    if (o && o !== target && blocks(o)) {
+      // A shielded Pokémon can't be pushed aside: its shield breaks and the
+      // launched one lands on the closest free square instead.
+      breakGuard(o);
+      relocate(target, closestFree(goal, target, target, side), 'knock');
+      return null;
+    }
     if (o && o !== target) {
       const spot = displaceSpot(o);
       if (!spot) { relocate(target, closestFree(goal, target, target, side), 'knock'); return null; }
@@ -471,6 +495,9 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
         }
         break;
       }
+      case 'treat':
+        sweetTreat(u);
+        break;
       case 'transform':
         if (u.form) { hop(u, target); break; } // Star Form's own power
         emit('cast', { id: u.id, target: null });
@@ -479,6 +506,49 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
       default:
         throw new Error(`Unknown power kind "${p.kind}"`);
     }
+  }
+
+  // Alcremie's Sweet Treat: a random flavour (seeded, so replays match). It
+  // changes into that flavour's form and treats one ally for `duration` ticks:
+  //   heal   - the ally with the lowest share of HP heals healPct% of Alcremie's
+  //            damage, spread over the duration (a chunk every second);
+  //   haste  - the hardest-hitting ally attacks hastePct% faster;
+  //   guard  - the ally most enemies are attacking takes guardPct% less damage,
+  //            and the first stun or shove that would land breaks the shield instead.
+  // The treat itself lands at the end of the tick, like stuns and heals, so it
+  // never depends on which side acted first.
+  let treats = [];
+  function sweetTreat(u) {
+    const p = u.power;
+    const f = p.flavors[hash(seed, t, u.slot + 211) % p.flavors.length];
+    emit('cast', { id: u.id, target: null });
+    setStats(u, { sprite: f.sprite }, { name: f.name, flavor: f.flavor });
+    treats.push({ u, f });
+  }
+  function serveTreat({ u, f }) {
+    const p = u.power;
+    const allies = units.filter((a) => a.side === u.side && standing(a));
+    if (!allies.length) return;
+    const share = (a) => a.hp / a.maxHp;
+    const first = (key) => allies.reduce((best, a) => (key(a) > key(best) || (key(a) === key(best) && a.slot < best.slot) ? a : best));
+    let target;
+    if (f.flavor === 'heal') {
+      target = first((a) => -share(a));
+      const chunks = Math.max(1, Math.round(p.duration / 10));
+      target.regen = { src: u, per: Math.floor((u.atk * f.healPct) / 100 / chunks), left: chunks, next: t + 10 };
+    } else if (f.flavor === 'haste') {
+      target = first((a) => a.atk / a.attackCd);
+      target.hastePct = target.hasteUntil > t ? Math.max(target.hastePct, f.hastePct) : f.hastePct;
+      target.hasteUntil = Math.max(target.hasteUntil, t + p.duration);
+      emit('haste', { id: target.id, duration: p.duration });
+    } else {
+      const attackers = (a) => units.filter((e) => e.side !== u.side && standing(e) && e.target === a.id).length;
+      target = first((a) => attackers(a) * 10 - share(a));
+      target.guardUntil = t + p.duration;
+      target.guardPct = f.guardPct;
+      emit('guard', { id: target.id, duration: p.duration, pct: f.guardPct });
+    }
+    emit('treat', { id: u.id, target: target.id, flavor: f.flavor, duration: p.duration });
   }
 
   // An empowered attack: the one after the counter fills.
@@ -514,6 +584,7 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
     const travel = WAVE_WINDUP + Math.abs(end - at(u).y);
     damage(target, Math.floor((u.atk * p.damagePct) / 100), u);
     if (!standing(target) || target.y === end) return;
+    if (blocks(target)) { breakGuard(target); return; } // the shield takes the wave
     const shoved = land(target, { x: u.x, y: end }, u.side);
     target.hold = travel;
     target.landStun = p.stun ?? 0; // stunned once it lands (see act)
@@ -819,8 +890,15 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
     }
     for (const k of knocks) if (standing(k.target) && !immune(k.target)) land(k.target, k.goal, k.side);
     knocks = [];
+    for (const tr of treats) if (standing(tr.u)) serveTreat(tr);
+    treats = [];
     for (const u of units) {
       if (!u.alive) continue; // out since an earlier tick: nothing left to resolve
+      // Alcremie's Matcha Cream: a chunk of healing every second.
+      if (u.regen && t >= u.regen.next) {
+        heal(u, u.regen.per, u.regen.src);
+        u.regen = --u.regen.left > 0 ? { ...u.regen, next: u.regen.next + 10 } : null;
+      }
       if (u.pendingHeal && u.hp > 0) {
         const gained = Math.min(u.pendingHeal, u.maxHp - u.hp);
         u.hp += gained;

@@ -53,7 +53,7 @@ export function botTurn(state, catalog, p, send, { arrange = true } = {}) {
 
 const STURDY_HP = 900;
 function roleOf(def) {
-  if (def.ability?.kind === 'splashHeal') return 'healer';
+  if (def.ability?.kind === 'splashHeal' || def.ability?.kind === 'treat') return 'healer';
   if (def.ability?.kind === 'copy' || def.ability?.teleport || def.ability?.dash) return 'rusher';
   if (def.range <= 1) return def.hp[0] >= STURDY_HP ? 'tank' : 'melee';
   return 'ranged';
