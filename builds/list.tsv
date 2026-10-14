@@ -1,3 +1,4 @@
+b8bc31b	dev	2026-10-14 04:10 UTC	Pokédex: label the movement chip Speed
 8c7fc48	dev	2026-10-14 04:10 UTC	Team selection: Pokédex-style cards, picked ones walk with a green border, update in place
 faf64fb	dev	2026-10-14 04:06 UTC	Stat shape: headroom so the best stat stops short of the edge
 0eb0cd2	dev	2026-10-14 04:06 UTC	Shiny level mark: rainbow four-pointed sparkle
@@ -27,4 +28,3 @@ c200ba6	dev	2026-10-13 22:14 UTC	Online: a quiet player is locked in, not kicked
 0eed4d0	dev	2026-10-13 19:51 UTC	Player profiles: name and picture, saved in the browser
 519c610	dev	2026-10-13 07:06 UTC	Shop refreshes on every purchase; rerolls cost 1 coin; new income
 a5c1264	dev	2026-10-13 06:56 UTC	Minior: second life as Star Form, hops every 10 attacks
-ae52230	dev	2026-10-13 04:50 UTC	Minior rework: tanky Rock form, Star Form zips to its target

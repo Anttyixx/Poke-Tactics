@@ -11,33 +11,34 @@
 // copies drawn from the pool; buying one places it straight onto the board and
 // removes that copy from the pool. There is no bench and no limit on how many
 // troops are on the board (which starts empty), but each troop can only be there once: buying a troop
-// you already field levels that one up instead (1 copy = 0★, 2 = 1★, 3 = 2★, 4 = 3★).
+// you already field levels that one up instead (1 copy = ★, 2 = ★★, 3 = ★★★, 4 = shiny; stored as star 0-3).
 //
 // Intents:
 //   { type: 'chooseTeam', troops }            before round 1; troops = TEAM_SIZE distinct troop ids
 //   { type: 'buy', slot, x, y }               buy shop slot onto empty own square (x, y); if that troop is
-//                                             already on the board it levels up instead (x, y ignored)
+//                                             already on the board it levels up instead (x, y ignored).
+//                                             The shop then refreshes for free.
 //   { type: 'sell', uid }                     sell a troop; its copies go back to the pool
-//   { type: 'reroll' }                        new shop; uses one of the player's free rerolls
+//   { type: 'reroll' }                        new shop for REROLL_COST coins
 //   { type: 'move', uid, x, y }               move on the board; onto another unit = swap
 //   { type: 'ready' }                         lock in planning; combat starts when all are ready
 //   { type: 'continue' }                      done watching combat; next round starts when all continue
 
-import { randInt } from './rng.js?v=ae52230';
-import { simulate, COLS, HALF } from './combat.js?v=ae52230';
+import { randInt } from './rng.js?v=b8bc31b';
+import { simulate, COLS, HALF } from './combat.js?v=b8bc31b';
 
 export const TEAM_SIZE = 6;
 export const COPIES_PER_TROOP = 4;
 export const SHOP_SIZE = 3;
 export const START_HP = 100;
-// Economy: coins carry over between rounds with no cap. After each battle the
-// winner earns WIN_COINS and the loser LOSS_COINS (a draw pays both LOSS_COINS).
-export const START_COINS = 6;
-export const WIN_COINS = 6;
-export const LOSS_COINS = 9;
-// Rerolls are free but limited: start with MAX_REROLLS, +1 each new round, capped.
-export const MAX_REROLLS = 3;
-export const REROLLS_PER_ROUND = 1;
+// Economy: coins carry over between rounds with no cap. Round 1 starts with
+// START_COINS. Every later buy phase pays ROUND_COINS plus LOST_COIN for each
+// of the player's Pokémon knocked out in the battle just fought (summons
+// don't count). Buying refreshes the shop for free; a reroll costs REROLL_COST.
+export const START_COINS = 10;
+export const ROUND_COINS = 5;
+export const LOST_COIN = 1;
+export const REROLL_COST = 1;
 export const MAX_STAR = COPIES_PER_TROOP - 1; // stars = copies - 1
 
 export const copiesOf = (inst) => inst.star + 1;
@@ -56,7 +57,8 @@ const isIndex = (v, n) => Number.isInteger(v) && v >= 0 && v < n;
 
 // `featured` (optional, for testing): a troop id that is put in the first shop
 // slot whenever the player's pool still has a copy of it. Invalid ids are ignored.
-export function createGame({ seed, catalog, names, featured = null }) {
+// `avatars` (optional): each player's profile picture id, for display only.
+export function createGame({ seed, catalog, names, avatars = [], featured = null }) {
   return {
     version: 3,
     seed: seed >>> 0,
@@ -66,9 +68,11 @@ export function createGame({ seed, catalog, names, featured = null }) {
     nextUid: 1,
     players: names.map((name, i) => ({
       name,
+      avatar: avatars[i] ?? null,
       hp: START_HP,
       coins: START_COINS,
-      rerolls: MAX_REROLLS,
+      shopRolls: 0, // counts shop refreshes (the UI deals new cards in when it changes)
+      lastIncome: null, // { base, lost } paid at the start of this buy phase
       team: [], // chosen troop ids
       pool: {}, // troop id -> copies left to buy
       shop: [],
@@ -130,7 +134,7 @@ const HANDLERS = {
     }
     player.coins -= cost;
     player.pool[unitId]--;
-    player.shop[slot] = null;
+    rollShop(player, state.featured); // a fresh shop after every purchase, free
     return OK;
   },
 
@@ -148,8 +152,8 @@ const HANDLERS = {
   reroll(state, catalog, player) {
     const blocked = planningGuard(state, player);
     if (blocked) return blocked;
-    if (player.rerolls <= 0) return fail('No rerolls left this round');
-    player.rerolls--;
+    if (player.coins < REROLL_COST) return fail('Not enough coins to reroll');
+    player.coins -= REROLL_COST;
     rollShop(player, state.featured);
     return OK;
   },
@@ -202,6 +206,7 @@ function rollShop(player, featured) {
   while (shop.length < SHOP_SIZE && bag.length) shop.push(...bag.splice(randInt(player, bag.length), 1));
   while (shop.length < SHOP_SIZE) shop.push(null);
   player.shop = shop;
+  player.shopRolls = (player.shopRolls ?? 0) + 1;
 }
 
 function startRound(state, catalog) {
@@ -209,7 +214,6 @@ function startRound(state, catalog) {
   state.phase = 'planning';
   state.combat = null;
   for (const p of state.players) {
-    if (state.round > 1) p.rerolls = Math.min(MAX_REROLLS, p.rerolls + REROLLS_PER_ROUND);
     p.ready = false;
     rollShop(p, state.featured);
   }
@@ -221,6 +225,13 @@ export function roundDamage(result, round) {
   const copies = result.survivors.reduce((sum, u) => sum + u.star + 1, 0);
   damage[1 - result.winner] = round + 2 * copies;
   return damage;
+}
+
+// How many of player `side`'s own Pokémon were knocked out in a battle.
+export function lostCount(result, side) {
+  const fielded = result.initial.filter((u) => u.side === side && !u.summoned).length;
+  const standing = result.survivors.filter((u) => u.side === side).length;
+  return fielded - standing;
 }
 
 function beginCombat(state, catalog) {
@@ -238,7 +249,9 @@ function endRound(state, catalog) {
   const { result, damage } = state.combat;
   state.players.forEach((p, i) => {
     p.hp = Math.max(0, p.hp - damage[i]);
-    p.coins += result.winner === i ? WIN_COINS : LOSS_COINS;
+    const lost = lostCount(result, i);
+    p.lastIncome = { base: ROUND_COINS, lost: lost * LOST_COIN };
+    p.coins += ROUND_COINS + lost * LOST_COIN;
   });
   const alive = state.players.map((p, i) => (p.hp > 0 ? i : -1)).filter((i) => i !== -1);
   if (alive.length < state.players.length) {

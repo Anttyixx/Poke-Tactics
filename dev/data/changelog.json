@@ -7,7 +7,8 @@
     "changes": [
       { "kind": "change", "text": "Team selection cards now look like the Pokédex cards: the Pokémon in a glow of its type colour, its name, cost and type." },
       { "kind": "change", "text": "Picked Pokémon get a green border and walk on the spot, instead of showing a check mark." },
-      { "kind": "fix", "text": "Picking a Pokémon no longer makes every picked card shake." }
+      { "kind": "fix", "text": "Picking a Pokémon no longer makes every picked card shake." },
+      { "kind": "change", "text": "The Pokédex calls movement speed Speed, matching the stat shape." }
     ]
   },
   {
