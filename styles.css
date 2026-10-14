@@ -1301,3 +1301,5 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .challenge-card .buttons button { min-width: 0; padding: 8px 14px; }
 @keyframes challenge-in { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }
 #overlay .friends-shortcut { width: 100%; margin: 12px 0 0; min-width: 0; }
+.my-code { margin-top: 16px; display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--muted); font-size: 14px; font-weight: 700; }
+.my-code b { font: 900 18px/1 ui-monospace, Menlo, monospace; letter-spacing: 0.1em; color: var(--text, #fff); }

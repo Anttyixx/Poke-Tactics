@@ -10,8 +10,8 @@ import { createGame, applyIntent } from './game.js';
 import { botTurn } from './bot.js';
 import { createUI } from './ui.js';
 import { hashSeed } from './rng.js';
-import { connect, cleanCode, isCode, randomCode, playerId, serverUrl, checkServer, netLog, note } from './online.js';
-import { loadProfile, saveProfile, recordBattle, recordMatch, cleanName, BOT_AVATAR } from './profile.js';
+import { connect, isCode, playerId, serverUrl, checkServer, netLog, note } from './online.js';
+import { loadProfile, saveProfile, recordBattle, recordMatch, BOT_AVATAR } from './profile.js';
 
 const BOT = 1;
 
@@ -196,13 +196,6 @@ function sendIntent(intent) {
 // ---- online ----------------------------------------------------------------
 
 const savedName = () => profile.name;
-// The name typed in the lobby is saved to the profile too.
-function playerName(name) {
-  const clean = cleanName(name);
-  if (clean !== profile.name) profile = saveProfile({ ...profile, name: clean });
-  return clean;
-}
-
 // The profile screen saved a new name or picture. In a game against the bot it
 // shows right away; online, from the next match.
 function updateProfile(next) {
@@ -219,20 +212,17 @@ function updateProfile(next) {
 const NO_SERVER = 'Online play isn\'t available in this copy of the game.';
 
 function lobby(action, data = {}) {
-  if (action === 'open') {
-    const join = cleanCode(new URLSearchParams(location.search).get('join'));
-    return ui.showLobby('menu', { name: savedName(), code: join });
+  // Battle: straight into the queue for the next player looking.
+  if (action === 'open' || action === 'queue') return serverUrl() ? findMatch() : ui.showLobby('error', { error: NO_SERVER });
+  // Battle a friend: send a battle request to a friend code.
+  if (action === 'friend') return serverUrl() ? ui.showLobby('friend', { myCode: friends.code }) : ui.showLobby('error', { error: NO_SERVER });
+  if (action === 'challenge') {
+    const code = String(data.friendCode ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (code.length !== 6) return ui.toast('Friend codes are 6 letters and numbers.');
+    if (code === friends.code) return ui.toast('That\'s your own friend code!');
+    return friendAction('challenge', code);
   }
-  if (!serverUrl() && ['host', 'join', 'queue', 'resume'].includes(action)) return ui.showLobby('error', { error: NO_SERVER });
-  if (action === 'host') { playerName(data.name); return openRoom(randomCode(), { create: true }); }
-  if (action === 'join') {
-    const code = cleanCode(data.code);
-    if (!isCode(code)) return ui.toast('Codes are 5 letters and numbers, like KOKO4.');
-    playerName(data.name);
-    return openRoom(code);
-  }
-  if (action === 'queue') { playerName(data.name); return findMatch(); }
-  if (action === 'cancel') { stopOnline(); return ui.showLobby('menu', { name: savedName() }); }
+  if (action === 'cancel') { stopOnline(); return goHome(); }
   if (action === 'leave') return leave();
   if (action === 'check') {
     ui.showLobby('checking');
@@ -243,10 +233,10 @@ function lobby(action, data = {}) {
   if (action === 'home') { stopOnline(); return goHome(); }
   if (action === 'resume') {
     const saved = loadSession();
-    if (!saved) { ui.toast('That match has expired.'); return ui.showLobby('menu', { name: savedName() }); }
+    if (!saved || !serverUrl()) { ui.toast('That match has expired.'); return goHome(); }
     return openRoom(saved.code, { resuming: true });
   }
-  if (action === 'discard') { clearSession(); return ui.showLobby('menu', { name: savedName() }); }
+  if (action === 'discard') { clearSession(); return goHome(); }
 }
 
 const who = () => ({ pid: playerId(), name: savedName() || 'Player', avatar: profile.avatar, build: BUILD });
@@ -269,32 +259,25 @@ function findMatch() {
       if (msg.type === 'matched') { note(`matched: ${msg.code}`); stopOnline(); openRoom(msg.code); }
       else if (msg.type === 'refuse') { stopOnline(); ui.showLobby('error', { error: msg.text }); }
     },
-    onStatus: (s) => { if (c === conn && s === 'replaced') { stopOnline(); ui.showLobby('menu', { name: savedName() }); } },
+    onStatus: (s) => { if (c === conn && s === 'replaced') { stopOnline(); goHome(); } },
   });
   conn = c;
 }
 
 // Create (create: true), join or rejoin the room with this code.
-function openRoom(code, { create = false, resuming = false, tries = 0 } = {}) {
+function openRoom(code, { resuming = false } = {}) {
   stopOnline();
   roomCode = code;
   let inMatch = false; // this connection has had a state with a match in it
   let lastSeed = null;
   let planKey = null;
-  ui.showLobby('connecting', { text: create ? 'Creating a game…' : resuming ? 'Getting back into your match…' : `Joining ${code}…`, cancel: true });
-  note(`${create ? 'creating' : 'joining'} ${code}`);
-  const c = connect('/room', { ...who(), code, create: create ? '1' : null }, {
+  ui.showLobby('connecting', { text: resuming ? 'Getting back into your match…' : 'Opponent found! Starting the battle…', cancel: true });
+  note(`joining ${code}`);
+  const c = connect('/room', { ...who(), code }, {
     onMessage: (msg) => {
       if (c !== conn) return;
       if (msg.type === 'welcome') {
         me = msg.you;
-        if (create && !inMatch && mode !== 'online') {
-          const url = new URL(location.href);
-          url.search = `?join=${code}`;
-          ui.showLobby('hosting', { code, link: url.href });
-        } else if (!inMatch && mode !== 'online') {
-          ui.showLobby('connecting', { text: 'Connected! Waiting for the game to start…', cancel: true });
-        }
       } else if (msg.type === 'state') {
         const next = msg.state;
         if (mode !== 'online') {
@@ -336,7 +319,6 @@ function openRoom(code, { create = false, resuming = false, tries = 0 } = {}) {
       } else if (msg.type === 'refuse') {
         note(`refused: ${msg.reason}`);
         stopOnline();
-        if (msg.reason === 'taken' && create && tries < 4) return openRoom(randomCode(), { create: true, tries: tries + 1 });
         clearSession();
         if (mode === 'online') return endMatch(msg.text);
         ui.showLobby('error', { error: msg.text });
@@ -469,8 +451,6 @@ window.game = { get state() { return state; }, get mode() { return mode; }, cata
 
 newGame();
 startPresence();
-// An online match this browser was in (before a reload) can be picked back up;
-// otherwise a shared invite link (?join=CODE) goes straight to the join screen.
+// An online match this browser was in (before a reload) can be picked back up.
 const unfinished = serverUrl() ? loadSession() : null;
 if (unfinished) ui.showLobby('resume', { code: unfinished.code, opponent: unfinished.opponent });
-else if (new URLSearchParams(location.search).get('join')) lobby('open');

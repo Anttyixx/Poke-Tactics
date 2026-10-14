@@ -364,6 +364,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       onFriends(btn.dataset.action, btn.dataset.code);
     }
     else if (action === 'start-battle') { closeMenu(); onLobby('open'); }
+    else if (action === 'start-friend') { closeMenu(); onLobby('friend'); }
     else if (action === 'start-training') { closeMenu(); started = true; overlay.classList.remove('start-screen'); showTeamBuilder(); }
     else openMenu(action); // 'main', 'help', 'new'
   });
@@ -371,6 +372,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     const btn = e.target.closest('button, [data-dex-info]');
     if (btn?.id === 'battle') { started = true; overlay.classList.remove('start-screen'); return showTeamBuilder(); }
     if (btn?.id === 'friend') return onLobby('open');
+    if (btn?.id === 'vs-friend') return onLobby('friend');
     if (btn?.dataset.lobby === 'friends') return openMenu('friends');
     if (btn?.dataset.lobby) return onLobby(btn.dataset.lobby, lobbyValues());
     if (btn?.dataset.copy) return copyText(btn.dataset.copy, btn);
@@ -559,7 +561,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       // From the start screen: everything a player can start from here.
       panel.innerHTML = `${close}<h1>Menu</h1>
         <div class="menu-list">
-          <button data-menu="start-battle"><span>⚔</span><div>Battle<small>Play a friend online</small></div></button>
+          <button data-menu="start-battle"><span>⚔</span><div>Battle<small>Play the next player looking for a battle</small></div></button>
+          <button data-menu="start-friend"><span>✉</span><div>Battle a friend<small>Send a battle request with their friend code</small></div></button>
           <button data-menu="start-training"><span>▶</span><div>Training<small>Play against the bot</small></div></button>
           <button data-menu="friends" class="${getFriends()?.incoming.length ? 'unread' : ''}"><span>♥</span><div>Friends<small>${friendsSub()}</small></div></button>
           <button data-menu="profile"><span>☺</span><div>Profile<small>Your name, picture and stats</small></div></button>
@@ -747,6 +750,13 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   // Friends data changed: refresh whatever shows it.
   function showFriends() {
     renderChallenge();
+    const mine = overlay.querySelector('#my-friend-code');
+    const code = getFriends()?.code;
+    if (mine && code) {
+      mine.textContent = code;
+      const copy = mine.parentElement.querySelector('[data-copy]');
+      if (copy) { copy.dataset.copy = code; copy.hidden = false; }
+    }
     if (menuEl.hidden || menuView !== 'friends') return;
     const panel = menuEl.querySelector('.menu-panel');
     const input = panel.querySelector('#friend-code');
@@ -1482,6 +1492,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         <div class="parade" aria-hidden="true">${parade}</div>
         <div class="start-modes">
           <button id="friend" class="primary battle-btn">Battle</button>
+          <button id="vs-friend" class="battle-btn training-btn">Battle a friend</button>
           <button id="battle" class="battle-btn training-btn">Training</button>
         </div>
         <button id="start-menu" class="icon-btn start-menu${hasUnread() ? ' unread' : ''}" title="Menu (M)" aria-label="Menu">${ICON_MENU}</button>
@@ -1522,8 +1533,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   // ---- online lobby ----------------------------------------------------------
 
   const lobbyValues = () => ({
-    name: overlay.querySelector('#lobby-name')?.value ?? '',
-    code: overlay.querySelector('#lobby-code')?.value ?? '',
+    friendCode: overlay.querySelector('#lobby-friend-code')?.value ?? '',
   });
 
   async function copyText(text, btn) {
@@ -1535,35 +1545,20 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     } catch { toast('Copy blocked here. Select the text and copy it yourself.'); }
   }
 
-  // Screens: 'menu' (name, create or join), 'connecting', 'hosting' (show the
-  // code), 'error' and 'disconnected'. main.js decides which one to show.
+  // Screens: 'queue' (waiting for an opponent), 'friend' (battle request by
+  // friend code), 'connecting', 'resume', 'error', 'disconnected' and the
+  // connection check. main.js decides which one to show.
   function showLobby(view, data = {}) {
     const back = '<button class="ghost" data-lobby="home">Back</button>';
     const html = {
-      menu: () => `
-        <h1>Battle</h1>
-        <label class="field">Your name<input id="lobby-name" maxlength="16" autocomplete="nickname" placeholder="Trainer" value="${esc(data.name ?? '')}"></label>
-        <section class="lobby-queue">
-          <h2>Find a match</h2>
-          <p class="muted">Play the next player looking for a battle.</p>
-          <button class="primary" data-lobby="queue">Find a match</button>
-        </section>
-        <p class="lobby-or">or play a friend</p>
-        <button class="friends-shortcut" data-lobby="friends">♥ Battle someone on your friends list</button>
-        <div class="lobby-split">
-          <section>
-            <h2>Create a game</h2>
-            <p class="muted">Get a code to send your friend.</p>
-            <button class="primary" data-lobby="host">Create game</button>
-          </section>
-          <section>
-            <h2>Join a game</h2>
-            <p class="muted">Enter the code your friend sent you.</p>
-            <input id="lobby-code" class="code-input" maxlength="7" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCDE" value="${esc(data.code ?? '')}" aria-label="Game code">
-            <button class="primary" data-lobby="join">Join</button>
-          </section>
-        </div>
-        <div class="lobby-actions">${back}<button class="ghost" data-lobby="check">Check my connection</button></div>`,
+      friend: () => `
+        <h1>Battle a friend</h1>
+        <p class="muted">Enter your friend's code to send them a battle request. They need to have the game open.</p>
+        <input id="lobby-friend-code" class="code-input" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABC123" aria-label="Friend code">
+        <button class="primary" data-lobby="challenge">Send battle request</button>
+        <div class="my-code">Your friend code: <b id="my-friend-code">${esc(data.myCode ?? '······')}</b>
+          <button class="ghost small-btn" data-copy="${esc(data.myCode ?? '')}" ${data.myCode ? '' : 'hidden'}>Copy</button></div>
+        <div class="lobby-actions">${back}<button class="ghost" data-lobby="friends">Friends list</button></div>`,
       resume: () => `
         <h1>Match in progress</h1>
         <p>You were in a match${data.opponent ? ` with <b>${esc(data.opponent)}</b>` : ''} (game <b>${esc(data.code)}</b>) when the page closed.</p>
@@ -1571,10 +1566,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         <button class="primary" data-lobby="resume">Rejoin the match</button>
         <div class="lobby-actions"><button class="ghost" data-lobby="discard">Start fresh</button></div>`,
       queue: () => `
-        <h1>Finding a match</h1>
+        <h1>Waiting for opponent</h1>
         <div class="spinner" aria-hidden="true"></div>
-        <p>Looking for another player…</p>
-        <p class="muted">Keep this screen open. The match starts as soon as someone else is looking too.</p>
+        <p class="muted">The battle starts as soon as another player is looking too. Keep this screen open.</p>
         <button class="ghost" data-lobby="cancel">Cancel</button>`,
       checking: () => `
         <h1>Checking your connection</h1>
@@ -1594,24 +1588,13 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
           ${c.ok ? row([c.sameVersion, c.sameVersion ? 'You have the latest version' : 'A newer version is out: refresh the page']) : ''}
         </ul>
         <p>${verdict}</p>
-        <button class="primary" data-lobby="open">Back</button>`;
+        <button class="primary" data-lobby="home">Back</button>`;
       },
       connecting: () => `
         <h1>Battle</h1>
         <div class="spinner" aria-hidden="true"></div>
         <p>${esc(data.text ?? 'Connecting…')}</p>
         ${data.cancel ? '<button class="ghost" data-lobby="home">Cancel</button>' : ''}`,
-      hosting: () => `
-        <h1>Your game code</h1>
-        <p class="muted">Send this code to your friend. They open Poke Tactics, tap <b>Battle</b> and enter it.</p>
-        <div class="code-box" aria-label="Game code ${data.code.split('').join(' ')}">${data.code}</div>
-        <div class="lobby-actions">
-          <button data-copy="${esc(data.code)}">Copy code</button>
-          <button data-copy="${esc(data.link)}">Copy invite link</button>
-          ${navigator.share ? `<button id="share-link" data-code="${esc(data.code)}" data-url="${esc(data.link)}">Share…</button>` : ''}
-        </div>
-        <p class="waiting"><span class="spinner small" aria-hidden="true"></span> Waiting for your friend to join…</p>
-        <button class="ghost" data-lobby="cancel">Cancel</button>`,
       error: () => `
         <h1>Couldn't connect</h1>
         <p>${esc(data.error)}</p>
@@ -1626,18 +1609,18 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     showOverlay(html);
     overlay.classList.add('lobby');
     lobbyView = view;
-    const focus = view === 'menu' ? (data.code ? '[data-lobby="join"]' : '#lobby-name') : 'button.primary, button';
+    const focus = view === 'friend' ? '#lobby-friend-code' : 'button.primary, button';
     overlay.querySelector(focus)?.focus();
   }
 
   overlay.addEventListener('input', (e) => {
-    if (e.target.id !== 'lobby-code') return;
+    if (e.target.id !== 'lobby-friend-code') return;
     const v = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (v !== e.target.value) e.target.value = v;
   });
   overlay.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
-    if (e.target.id === 'lobby-code') onLobby('join', lobbyValues());
+    if (e.target.id === 'lobby-friend-code') onLobby('challenge', lobbyValues());
   });
 
   // ---- online: planning countdown and the battle intro ----------------------

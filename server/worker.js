@@ -325,7 +325,7 @@ export class Queue extends DurableObject {
 //
 // To the server: { type: 'add', code } (send a friend request, or accept theirs),
 // 'accept' / 'decline' / 'cancel' / 'remove' { code }, { type: 'challenge', code }
-// (battle request to a friend), { type: 'withdraw', code }, { type: 'answer',
+// (battle request to anyone, by friend code), { type: 'withdraw', code }, { type: 'answer',
 // code, accept }, { type: 'status', status: 'online' | 'battling' },
 // { type: 'profile', name, avatar }, 'ping'.
 // From the server: { type: 'me', code }, { type: 'friends', friends: [{ code,
@@ -450,7 +450,6 @@ export class Presence extends DurableObject {
     }
 
     if (msg.type === 'challenge') {
-      if (!me.friends.includes(them.pid)) return notice(`Add ${them.name} as a friend first.`);
       const status = this.statusOf(them.pid);
       if (status === 'offline') return notice(`${them.name} isn't online right now.`);
       if (status === 'battling') return notice(`${them.name} is in a battle right now.`);

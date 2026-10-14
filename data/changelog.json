@@ -1,5 +1,16 @@
 [
   {
+    "id": "2026-10-14-simpler-battle",
+    "version": "0.14.0",
+    "date": "2026-10-14",
+    "title": "Simpler Battle button",
+    "changes": [
+      { "kind": "change", "text": "Battle now goes straight into the queue and shows \"Waiting for opponent\" until another player is found." },
+      { "kind": "new", "text": "Battle a friend (on the start screen): enter anyone's friend code to send them a battle request. You don't need to be friends first." },
+      { "kind": "change", "text": "Game codes (Create game / Join) are gone; friend codes replace them." }
+    ]
+  },
+  {
     "id": "2026-10-14-friends",
     "version": "0.13.0",
     "date": "2026-10-14",
