@@ -745,6 +745,11 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   animation: pop-in 0.35s var(--spring);
 }
 @keyframes pop-in { from { transform: translateY(14px) scale(0.94); opacity: 0; } }
+/* Closing plays the opening backwards. */
+.modal.closing { animation: fade-away 0.2s ease-in forwards; }
+@keyframes fade-away { to { opacity: 0; } }
+.modal.closing > * { animation: pop-out 0.2s ease-in forwards; }
+@keyframes pop-out { to { transform: translateY(14px) scale(0.94); opacity: 0; } }
 :is(#overlay, #lobby) .card { max-width: 440px; padding: 26px 28px; text-align: center; }
 :is(#overlay, #lobby) h1 { font-size: 34px; margin-bottom: 8px; }
 :is(#overlay, #lobby) h1.win { color: var(--good); text-shadow: 0 0 24px #3ddc8466; animation: title-pop 0.6s var(--spring); }
@@ -798,7 +803,14 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .dex-panel h1 { font-size: 24px; margin-bottom: 2px; }
 .dex-sub { margin: 0 0 14px; }
 #dex-entry { z-index: 61; backdrop-filter: none; background: #070a1499; } /* one blur (under the grid) is enough */
-.entry-panel { max-width: 580px; margin: min(8vh, 64px) auto auto; } /* top-anchored: no jump when the height changes */
+.entry-panel {
+  /* A wash of the Pokémon's type colour from the corner it stands in. */
+  background:
+    radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--type) 30%, transparent), transparent 60%),
+    linear-gradient(180deg, #1b2136, var(--panel));
+  transition: background 0.3s;
+}
+.entry-panel { max-width: 600px; margin: min(8vh, 64px) auto auto; } /* top-anchored: no jump when the height changes */
 #entry-close { position: absolute; top: 12px; right: 12px; padding: 4px 10px; }
 .dex-detail.refresh { animation: none; }
 .dex-detail.refresh :is(.dex-title, .dex-chips, .dex-power, .dex-foot) { animation: fade-in 0.35s ease-out; }
@@ -840,9 +852,10 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .dex-rels { position: absolute; right: -34px; bottom: 4px; display: flex; flex-direction: column; gap: 2px; }
 /* Related Pokémon (form, summon, summoner): a small sprite by the big one, no frame. */
 .dex-rel { padding: 0; border: 0; background: none; min-width: 0; border-radius: 50%; }
-.dex-rel:hover { background: none; }
-.dex-rel-sprite { width: 56px; height: 56px; filter: drop-shadow(0 3px 4px #000a); transition: transform 0.15s var(--spring); }
-.dex-rel:hover .dex-rel-sprite { transform: scale(1.12); }
+.dex-rel:hover:not(:disabled), .dex-rel:active:not(:disabled) { background: none; }
+.dex-rel-sprite { width: 56px; height: 56px; filter: drop-shadow(0 3px 4px #000a); transition: transform 0.15s var(--spring), filter 0.2s; }
+/* Hover: a glow around the sprite's own outline, in its type colour. */
+.dex-rel:hover .dex-rel-sprite { transform: scale(1.1); filter: drop-shadow(0 0 2px var(--type)) drop-shadow(0 0 7px var(--type)); }
 .dex-rel:hover .sprite { animation: walk 0.7s steps(4) infinite; }
 /* The level chip under the sprite: tap to step through the levels. */
 .dex-level {
@@ -858,12 +871,24 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .linkish { padding: 0; border: 0; background: none; color: var(--mana); font-size: 13px; font-weight: 700; min-width: 0; }
 .linkish:hover { text-decoration: underline; background: none; }
 
-.dex-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.dex-statbox { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 14px; align-items: center; margin-bottom: 14px; }
+.dex-statbox:not(:has(.dex-radar)) { grid-template-columns: 1fr; }
+.dex-chips { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .dex-chip {
-  display: inline-flex; align-items: baseline; gap: 8px; padding: 6px 14px; border-radius: 99px;
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 6px 14px; border-radius: 99px;
   background: var(--panel-2); border: 1px solid color-mix(in srgb, var(--type) 30%, var(--line));
   transition: border-color 0.3s, background-color 0.3s;
 }
+.dex-chip b { text-align: right; white-space: nowrap; }
+.dex-radar { width: 100%; height: auto; overflow: visible; }
+.dex-radar .ring { fill: none; stroke: var(--line-2); stroke-width: 1; }
+.dex-radar .ring:first-child { fill: #ffffff05; }
+.dex-radar .axes line { stroke: var(--line); stroke-width: 1; }
+.dex-radar .shape {
+  fill: color-mix(in srgb, var(--type) 40%, transparent); stroke: var(--type); stroke-width: 2.5; stroke-linejoin: round;
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--type) 60%, transparent));
+}
+.dex-radar text { fill: var(--muted); font-size: 11px; font-weight: 800; text-anchor: middle; }
 .dex-chip small { color: var(--muted); font-size: 12px; font-weight: 700; }
 .dex-chip b { font-size: 16px; font-variant-numeric: tabular-nums; }
 .dex-chip.changing { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 10%, var(--panel-2)); }
@@ -953,6 +978,8 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   .dex-hero { gap: 10px; padding: 10px; }
   .dex-portrait { width: 84px; height: 84px; }
   .dex-rel-sprite { width: 44px; height: 44px; }
+  .dex-statbox { grid-template-columns: 1fr; }
+  .dex-radar { max-width: 230px; margin: 0 auto; }
   .dex-rels { right: -26px; }
   .dex-hero h2 { font-size: 22px; }
   .dex-panel { padding: 16px; }
