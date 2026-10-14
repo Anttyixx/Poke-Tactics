@@ -1,5 +1,18 @@
 [
   {
+    "id": "2026-10-14-bot-layout",
+    "version": "0.18.0",
+    "date": "2026-10-14",
+    "title": "Smarter bots: they rearrange their team",
+    "intro": "Training bots now rearrange their Pokémon before every fight, following a set of rules instead of leaving each one where it was bought. In testing, the new bot beats the old one about 66% of the time.",
+    "changes": [
+      { "kind": "change", "text": "Tanks hold the middle of the front row; other melee Pokémon, Ditto, Hoopa and Tapu Koko fill the rest of the front." },
+      { "kind": "change", "text": "Ranged Pokémon stand as far back as they can while still reaching your front row, behind one of their tanks." },
+      { "kind": "change", "text": "Lilligant stands right behind the busiest part of their front line." },
+      { "kind": "change", "text": "Bots react to your last lineup: they leave Beheeyem's Psywave column empty and lean toward the side where you have the most HP." }
+    ]
+  },
+  {
     "id": "2026-10-14-lilligant-heal",
     "version": "0.17.0",
     "date": "2026-10-14",

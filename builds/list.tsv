@@ -1,3 +1,4 @@
+d9ee80b	dev	2026-10-14 05:13 UTC	Bot: rearrange the board before every fight by explained layout rules
 46d787b	dev	2026-10-14 04:59 UTC	Lilligant: Aromatherapy heals the 3x3 around its target for 60%, damage +10%
 45bf21b	dev	2026-10-14 04:46 UTC	Track healing: heal events credit each healer; focus studies report HP healed per fight
 3a92dce	dev	2026-10-14 04:39 UTC	Match replay: write an HTML report with HP chart, boards per round and suggested layouts
@@ -27,4 +28,3 @@ aa11be7	dev	2026-10-13 23:20 UTC	Online: rejoin after a reload; host can reopen 
 c200ba6	dev	2026-10-13 22:14 UTC	Online: a quiet player is locked in, not kicked; guests reconnect
 53acc65	dev	2026-10-13 21:55 UTC	Fix guest stuck on 'Waiting for the game to start'
 13ca1c7	dev	2026-10-13 21:35 UTC	Profile: stats, friends list, picture picker behind a Change button
-73e2a1e	dev	2026-10-13 21:30 UTC	Profile chip is a rounded rectangle; pictures centred
