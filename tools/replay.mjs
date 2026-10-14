@@ -1,7 +1,10 @@
 // Rebuild a real match from its match log (Menu → Match log → Copy, in the
 // game) and analyse it with the real rules and battle engine.
 //
-//   node tools/replay.mjs <log.json> [--patch=patch.json] [--catalog=units.json] [--seeds=60]
+//   node tools/replay.mjs <log.json> [--patch=patch.json] [--catalog=units.json] [--seeds=60] [--summary=notes.html]
+//
+// Writes tools/out/replay-<seed>.txt / .json and an easy-to-read web page,
+// tools/out/replay-<seed>.html (--summary adds hand-written takeaways at the top).
 //
 // The log holds the game's seed and every move both players made, so the
 // replay reproduces every shop, board and fight exactly. Then, for each fight:
@@ -22,11 +25,12 @@ import { simulate } from '../src/combat.js';
 import { hashSeed } from '../src/rng.js';
 import { summarizeFight, applyPatch } from './balance.mjs';
 import { bestLayout } from './placer.mjs';
+import { replayReport } from './replay-html.mjs';
 
 const args = process.argv.slice(2);
 const flags = Object.fromEntries(args.filter((a) => a.startsWith('--')).map((a) => { const [k, v] = a.slice(2).split('='); return [k, v ?? true]; }));
 const file = args.find((a) => !a.startsWith('--'));
-if (!file) { console.error('Usage: node tools/replay.mjs <log.json> [--patch=patch.json] [--catalog=units.json] [--seeds=60]'); process.exit(1); }
+if (!file) { console.error('Usage: node tools/replay.mjs <log.json> [--patch=patch.json] [--catalog=units.json] [--seeds=60] [--summary=notes.html]'); process.exit(1); }
 const log = JSON.parse(readFileSync(file, 'utf8'));
 if (log.format !== 'poke-tactics-match') { console.error('That file is not a Poke Tactics match log.'); process.exit(1); }
 const SEEDS = Number(flags.seeds ?? 60);
@@ -38,7 +42,7 @@ function loadCatalogText() {
   if (/^[0-9a-f]{7,40}$/.test(log.build)) tries.push(() => execFileSync('git', ['show', `${log.build}:data/units.json`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }));
   tries.push(() => readFileSync(new URL('../data/units.json', import.meta.url), 'utf8'));
   for (const t of tries) {
-    try { const text = t(); if (hashSeed(text) === log.catalogHash) return text; } catch {}
+    try { const text = t(); if (!log.catalogHash || hashSeed(text) === log.catalogHash) return text; } catch {}
   }
   console.error(`Couldn't find the Pokémon stats this match was played with (build ${log.build}). Pass them with --catalog=<units.json from that build>.`);
   process.exit(1);
@@ -138,3 +142,11 @@ const outDir = new URL('./out/', import.meta.url).pathname;
 mkdirSync(outDir, { recursive: true });
 writeFileSync(`${outDir}replay-${log.seed}.txt`, text);
 writeFileSync(`${outDir}replay-${log.seed}.json`, JSON.stringify({ log: { ...log, intents: undefined }, rounds: rounds.map(({ result, ...r }) => ({ ...r, winner: result.winner, ticks: result.ticks })), totals }, null, 1));
+writeFileSync(`${outDir}replay-${log.seed}.html`, replayReport({
+  log, catalog, totals,
+  rounds: rounds.map(({ result, ...r }) => ({ ...r, winner: result.winner, ticks: result.ticks })),
+  winner: state.phase === 'gameover' ? state.winner : null,
+  finalHp: state.players.map((p) => p.hp),
+  summary: flags.summary ? readFileSync(flags.summary, 'utf8') : '',
+}));
+console.log(`\nReport: ${outDir}replay-${log.seed}.html`);
