@@ -219,8 +219,9 @@ test a set of changes together. Team styles to pit against each other live in `A
   - Decidueye, **Phantom Force**: after 8 attacks, invisible for 3s and attacks 30% faster. Enemies can't
     target or follow an invisible unit.
   - Infernape, **Blaze**: after 7 attacks, attacks 50% faster for 3s.
-  - Hoopa, **Hyperspace Hole**: after 6 attacks, the next teleports beside the farthest enemy (if it's out
-    of reach), hits for 130% and heals 10% of the damage dealt. (The old Greninja's stats and power.)
+  - Hoopa (cost 3, mage, range 2, attacks every 1.11s), **Binding Ring**: after 4 attacks its power is
+    full and stays full until an enemy tries to move (walk, zip or dash). That Pokémon is bound in place
+    for 5s: it can't move, but it still attacks anything in range. Then Hoopa starts charging again.
   - Greninja, **Battle Bond**: after 5 attacks, becomes Ash-Greninja for the rest of the fight: fast
     movement, attacks every 0.8s, more damage, range 3 (same HP).
   - Torterra, **Earthquake**: with every 5th attack, every enemy on the board takes 30% and is stunned 1s.
@@ -258,7 +259,7 @@ test a set of changes together. Team styles to pit against each other live in `A
     (not its power or movement). It keeps its share of HP across the change, shows the copied sprite in
     Ditto's colours, and doesn't move while transformed. When the copied Pokémon faints or no enemy is in
     range, it turns back into Ditto and walks to the next nearest.
-- **Healing** (Lilligant, Hoopa) lands at the end of each tick, like stuns, so it never depends on who
+- **Healing** (Lilligant, Alcremie) lands at the end of each tick, like stuns, so it never depends on who
   acted first; a Pokémon knocked out that tick stays knocked out.
 - **Stuns:** a stunned Pokémon can't move or attack. When a stun (or a Psywave ride) ends, it picks the
   nearest enemy as its target again rather than going back to its old one.
