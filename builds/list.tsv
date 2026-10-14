@@ -1,3 +1,4 @@
+dde5c5a	dev	2026-10-14 01:07 UTC	Battle goes straight to the queue; Battle a friend by friend code
 271d960	dev	2026-10-14 00:51 UTC	Friends: friend codes, online status, battle requests
 bd99db0	dev	2026-10-14 00:36 UTC	Online play on a Cloudflare game server; Find a match queue
 34fba29	dev	2026-10-13 23:31 UTC	Online: keep the screen on; match log reachable after a drop
@@ -27,4 +28,3 @@ e106d6e	stable	2026-10-12 04:55 UTC	Walking: wait the movement speed, then a 0.5
 03b4835	dev	2026-10-12 04:33 UTC	Start screen: Battle (online) is the main button, Training plays the bot
 be57b68	dev	2026-10-12 04:30 UTC	Attack range is a square radius around the Pokemon
 a393b25	dev	2026-10-12 04:23 UTC	Online: use a Metered TURN username/password instead of an API key
-c530611	dev	2026-10-12 02:27 UTC	Online: keep the game code alive while waiting; add a connection check

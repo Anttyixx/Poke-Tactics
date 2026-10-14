@@ -5,13 +5,13 @@ then watch the fight play out by itself. Plain HTML/CSS/JS with ES modules. Ther
 no build step, and it deploys to GitHub Pages as static files. Online play runs on a small
 Cloudflare Worker (`server/`), deployed by the same workflow.
 
-**Status:** play against the bot, a friend online with a game code, or a random opponent.
+**Status:** play against the bot, a random opponent online, or a friend by their friend code.
 
 ## Online play
 
-**Battle** on the start screen: **Find a match** pairs you with the next player looking, or
-play a friend: one taps **Create game** and gets a 5-character code (and an invite link,
-`?join=CODE`); the other enters it under **Join**.
+The start screen has **Battle** (straight into the matchmaking queue: "Waiting for opponent"
+until the next player looking is found), **Battle a friend** (enter a friend code to send that
+player a battle request) and **Training** (the bot).
 
 - **The match runs on a server**, not in either player's browser: a Cloudflare Worker
   (`server/worker.js`) with one Durable Object per match, found by its code. It runs the
@@ -42,10 +42,11 @@ play a friend: one taps **Create game** and gets a 5-character code (and an invi
   (`poke-tactics-last-log`): **Copy match log** on the "Match ended" screen, or **Menu → Last
   online match log** on the start screen.
 - **Battle → Check my connection** checks the server can be reached and is on your version.
-- **Friends** (menu → Friends, or the shortcut on the Battle screen): every player has a 6-character
+- **Friends** (menu → Friends): every player has a 6-character
   friend code. Enter a friend's code to send a request; they accept or decline. The list shows who's
-  online, in a battle or offline, live. **⚔ Battle** on an online friend sends a battle request
-  (they have 45 seconds to accept); accepting starts a match for the two of you. A player already in
+  online, in a battle or offline, live. **⚔ Battle** on an online friend, or **Battle a friend** on
+  the start screen with any player's friend code (no need to be friends first), sends a battle
+  request (they have 45 seconds to accept); accepting starts a match for the two of you. A player already in
   an online match automatically turns requests down. Friends are kept on the server (the `Presence`
   Durable Object), tied to the browser's player id: another browser or device, or cleared site data,
   is a new player with a new code. Friend codes are the only id players see of each other.
