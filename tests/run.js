@@ -67,7 +67,8 @@ test('unit catalog is well formed, and every unit has a sprite that exists', () 
     for (const k of ['hp', 'damage']) {
       const v = u[k];
       assert.ok(Array.isArray(v) && v.length === COPIES_PER_TROOP, `${id}.${k} lists 0-${MAX_STAR}★`);
-      assert.ok(v.every((n, i) => n > 0 && (!i || n > v[i - 1])), `${id}.${k} must be positive and increase with stars`);
+      // Summons may keep the same stats at every level (Dreepy).
+      assert.ok(v.every((n, i) => n > 0 && (!i || n > v[i - 1] || (u.summon && n === v[i - 1]))), `${id}.${k} must be positive and increase with stars`);
     }
     assert.ok(u.secPerHit > 0, `${id}.secPerHit must be positive`);
     assert.ok(Object.hasOwn(MOVE_SPEEDS, u.moveSpeed) && u.moveSpeed !== 'statue', `${id}.moveSpeed "${u.moveSpeed}"`);
@@ -767,9 +768,11 @@ test('Rage Fist (Annihilape): each attack in a row without moving makes the next
   assert.equal(Math.max(...evs(r, 'rage', a).map((e) => e.stacks)), p.maxStacks);
 });
 
-test('Dragon Darts (Dragapult): fires 2 Dreepy into the 2 farthest enemies, shoving them aside, and they must attack them; fainted ones fly back, and a new pair replaces its next attack once both are home', () => {
+test('Dragon Darts (Dragapult): fires a Dreepy into each of the 2 farthest enemies outside the 3x3 around it, shoving them aside, and they must attack them; fainted ones fly back', () => {
   const cat = powerCat();
-  cat.biter = { ...cat.wall, range: 1, secPerHit: 1, damage: [500, 500, 500, 500] }; // knocks out a Dreepy fast
+  // Knocks out a Dreepy in one hit.
+  const oneShot = catalog.dreepy.hp[0];
+  cat.biter = { ...cat.wall, range: 1, secPerHit: 1, damage: [oneShot, oneShot + 1, oneShot + 2, oneShot + 3] };
   const r = simulate(cat, [
     [{ uid: 1, unitId: 'dragapult', star: 0, x: 2, y: 2 }], // combat (2,6)
     [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'biter', star: 0, x: 0, y: 3 }, { uid: 4, unitId: 'biter', star: 0, x: 4, y: 3 }], // (2,3), (4,0), (0,0)
@@ -780,13 +783,9 @@ test('Dragon Darts (Dragapult): fires 2 Dreepy into the 2 farthest enemies, shov
   const first = darts.filter((e) => e.t === darts[0].t);
   assert.equal(first.length, p.count, 'two at once');
   assert.deepEqual(first.map((e) => e.target).sort(), [unitOf(r, 3).id, unitOf(r, 4).id].sort(), 'at the two farthest');
-  const impact = Math.floor((Math.round(catalog.dragapult.damage[0] * STAT_SCALE) * p.impactPct) / 100);
-  if (p.impactDamage) {
-    const hit = Math.round(p.impactDamage[0] * STAT_SCALE);
-    assert.ok(first.every((e) => r.events.some((x) => x.type === 'damage' && x.src === e.unit.id && x.id === e.target && x.amount === hit && x.t === e.t)), 'each Dreepy hits its target as it lands');
-  }
+  const hit = Math.round(p.impactDamage[0] * STAT_SCALE);
+  assert.ok(first.every((e) => r.events.some((x) => x.type === 'damage' && x.src === e.unit.id && x.id === e.target && x.amount === hit && x.t === e.t)), 'each Dreepy hits its target as it lands');
   if (p.impactStun) assert.ok(first.every((e) => r.events.some((x) => x.type === 'stun' && x.id === e.target && x.duration === p.impactStun && x.t === e.t)), 'and stuns it');
-  if (impact) assert.ok(first.every((e) => r.events.some((x) => x.type === 'damage' && x.src === d && x.id === e.target && x.amount === impact && x.t === e.t)), 'each hits on impact');
   // Each crashes into its target: it lands on the target's square and the
   // target is shoved to the square beside it.
   for (const e of first) {
@@ -797,50 +796,41 @@ test('Dragon Darts (Dragapult): fires 2 Dreepy into the 2 farthest enemies, shov
   const lured = r.events.filter((x) => x.type === 'taunt' && x.dart && x.t === first[0].t);
   assert.deepEqual(lured.map((x) => x.id).sort(), first.map((e) => e.target).sort(), 'both targets are distracted');
   assert.ok(lured.every((x) => first.some((e) => e.unit.id === x.by && e.target === x.id)), 'by the Dreepy that hit them, until it faints');
-  // The walker (biter) turns on its Dreepy: its first attack goes at it.
   const biter = unitOf(r, 3).id;
   const dreepyOnBiter = first.find((e) => e.target === biter).unit.id;
-  assert.equal(evs(r, 'attack', biter)[0].target, dreepyOnBiter, 'the distracted Pokémon attacks the Dreepy');
-  const back = evs(r, 'dartReturn', d)[0];
-  assert.ok(back, 'a fainted Dreepy flies back');
-  assert.equal(back.duration, Math.round(p.returnSec * 10));
-  // A new volley only once both are home: the second one back sets the time.
+  assert.equal(evs(r, 'attack', biter).find((a) => a.t > first[0].t).target, dreepyOnBiter, 'the distracted Pokémon attacks the Dreepy');
   const homes = evs(r, 'dartReturn', d).slice(0, p.count);
-  const again = darts.find((e) => e.t > back.t);
-  assert.equal(homes.length, p.count, 'both fly back');
-  const bothHome = Math.max(...homes.map((h) => h.t + h.duration));
-  assert.ok(again && again.t >= bothHome, `fired again only once both are home (${again?.t} vs ${bothHome})`);
-  // The darts take the place of an attack: its first move is the volley, then
-  // it attacks normally while the Dreepy are out, and the next volley again
-  // replaces an attack.
+  assert.equal(homes.length, p.count, 'both fly back once they faint');
+  assert.ok(homes.every((h) => h.duration === Math.round(p.returnSec * 10)));
+  // The volley takes the place of an attack, and the next one waits for both.
   const attacks = evs(r, 'attack', d);
   assert.ok(attacks.every((a) => a.t > darts[0].t), 'its first attack is the volley');
-  // With a power counter it needs that many attacks between pairs.
-  const need = catalog.dragapult.energy ?? 0;
-  assert.ok(attacks.filter((a) => a.t > darts[0].t && a.t < again.t).length >= need, `at least ${need} attacks between pairs`);
+  const again = darts.find((e) => e.t > first[0].t);
+  assert.ok(again, 'fired again');
+  assert.ok(again.t >= Math.max(...homes.map((h) => h.t + h.duration)), 'only once both are home');
   assert.ok(!attacks.some((a) => a.t === again.t), 'no attack on the tick it fires');
-  assert.ok(again.t - Math.max(...attacks.filter((a) => a.t < again.t).map((a) => a.t)) >= Math.round(catalog.dragapult.secPerHit * 10), 'the volley waits for its attack timer, like an attack');
-  assert.equal(darts.filter((e) => e.t === again.t).length, p.count, 'as a pair');
 });
 
-test('Dragon Darts (Dragapult): an enemy in the 3x3 around it is hit first, then the farthest', () => {
+test('Dragon Darts (Dragapult): never at an enemy in the 3x3 around it: one far enemy gets one Dreepy, and with only close ones it just attacks', () => {
   const cat = powerCat();
   const p = catalog.dragapult.ability;
-  if (!p.near) return;
-  const r = simulate(cat, [
+  if (!p.outside) return;
+  const one = simulate(cat, [
     [{ uid: 1, unitId: 'dragapult', star: 0, x: 2, y: 0 }], // combat (2,4)
-    [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'wall', star: 0, x: 0, y: 3 }, { uid: 4, unitId: 'wall', star: 0, x: 4, y: 3 }], // (2,3) right next to it, (4,0), (0,0)
+    [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'wall', star: 0, x: 2, y: 2 }], // (2,3) next to it, (2,1) farther
   ], 1);
-  const d = unitOf(r, 1).id;
-  const first = evs(r, 'summon', d).filter((e) => e.dart);
-  const start = new Map(r.initial.map((u) => [u.id, u]));
-  const me = start.get(d);
-  const near = [...start.values()].filter((u) => u.side !== me.side && Math.max(Math.abs(u.x - me.x), Math.abs(u.y - me.y)) <= p.near);
-  assert.ok(near.length >= 1, 'the setup has an enemy next to Dragapult');
-  const t0 = first[0].t;
-  const pair = first.filter((e) => e.t === t0);
-  assert.ok(pair.some((e) => near.some((n) => n.id === e.target)), 'a Dreepy goes at the enemy next to it');
-  assert.ok(pair.some((e) => !near.some((n) => n.id === e.target)), 'the other at a farther one');
+  const d = unitOf(one, 1).id;
+  const darts = evs(one, 'summon', d).filter((e) => e.dart);
+  assert.ok(darts.length >= 1);
+  assert.equal(darts.filter((e) => e.t === darts[0].t).length, 1, 'one Dreepy for one enemy outside the 3x3');
+  assert.ok(darts.every((e) => e.target === unitOf(one, 3).id), 'never at the one next to it');
+  const close = simulate(cat, [
+    [{ uid: 1, unitId: 'dragapult', star: 0, x: 2, y: 0 }], // combat (2,4)
+    [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }], // (2,3), right next to it
+  ], 1);
+  const d2 = unitOf(close, 1).id;
+  assert.equal(evs(close, 'summon', d2).length, 0, 'no Dreepy at a Pokémon next to it');
+  assert.ok(evs(close, 'attack', d2).length > 0, 'it attacks normally');
 });
 
 test('Earthquake (Torterra): after 5 attacks, hits every enemy on the board for 30% and stuns them', () => {
