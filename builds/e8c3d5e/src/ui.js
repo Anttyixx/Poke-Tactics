@@ -2,14 +2,17 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=53acc65';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=e8c3d5e';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=53acc65';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=53acc65';
+} from './game.js?v=e8c3d5e';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=e8c3d5e';
 
-const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
+const TICK_MS = 100;
+// Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
+const TREAT_COLOR = { heal: '#6fe08a', haste: '#ff7fae', guard: '#8fd2ff' };
+const TREAT_TEXT = { heal: 'Sweet heal', haste: 'Attack speed up', guard: 'Shielded' }; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
 // Attack-effect colour when a unit doesn't set its own "fx" colour in units.json.
 const TYPE_FX = { warrior: '#ffb36b', ranger: '#a6e37f', mage: '#b994ff', rogue: '#e0a3ff', cleric: '#ffe28a' };
 
@@ -25,77 +28,89 @@ const dps = (stats) => (show(stats.atk) / attackTime(stats)).toFixed(1);
 const SPEED_NAME = { 'very fast': 'Very fast', fast: 'Fast', medium: 'Medium', slow: 'Slow', 'very slow': 'Very slow', 'super slow': 'Super slow' };
 const moveText = (def) => `${SPEED_NAME[def.moveSpeed]} (waits ${MOVE_SPEEDS[def.moveSpeed]}s between 0.5s steps)`;
 
+// Level marks: ★, ★★, ★★★, then the shiny star for a full set of copies.
+// `star` is the internal level (0-3).
+export const LEVEL_NAMES = ['1 star', '2 stars', '3 stars', 'Shiny'];
+export const levelMark = (star) => (star >= 3 ? '<span class="star-max" title="Shiny">✦</span>' : '★'.repeat(star + 1));
+const levelSpan = (star) => `<span class="stars s${star}" aria-label="${LEVEL_NAMES[star]}">${levelMark(star)}</span>`;
+
 // Internal combat numbers -> the design sheet's units.
 const show = (v) => +(v / STAT_SCALE).toFixed(1);
 
-// What a Pokémon's power does, in plain words, with numbers for this star level.
-export function describePower(def, star, catalog) {
+// What a Pokémon's power does, in plain words, with numbers for this star
+// level (no star given: the first level). Every power reads the same way: when
+// it goes off, then what it does, with the important values coloured.
+const vDmg = (x) => `<span class="v v-dmg">${x}</span>`;
+const vTime = (ticks) => `<span class="v v-time">${secs(ticks)}s</span>`;
+const vNum = (x) => `<span class="v">${x}</span>`;
+const vHeal = (x) => `<span class="v v-heal">${x}</span>`;
+const area = (r) => vNum(`${2 * r + 1}x${2 * r + 1}`);
+
+export function powerText(def, star, catalog) {
   const p = def.ability;
-  if (!p) return '';
-  const every = `After every ${def.energy} attacks`;
-  const dmg = powerDamage(def, star ?? 0); // no star given (the Pokédex): quote 0★
+  if (!p) return null;
+  const lvl = star ?? 0;
+  const dmg = powerDamage(def, lvl);
+  const hit = p.damagePct ? `${vDmg(`${p.damagePct}%`)} damage (${vDmg(show(dmg))})` : '';
+  const every = `Every ${def.energy} attacks`;
   switch (p.kind) {
     case 'empower': {
-      const extras = [
-        p.teleport && 'teleports next to the farthest enemy and',
-        p.dash && 'dashes in a straight line next to the farthest enemy (immune to everything on the way) and',
-        `hits for ${p.damagePct}% damage (${show(dmg)})`,
-        p.knockback && `, knocking the target back ${p.knockback} squares`,
-        p.stun && `${p.knockback ? 'and stunning it' : p.dash ? ', stunning the target and every enemy it dashes through' : 'and stuns the target'} for ${secs(p.stun)}s`,
-        p.lifestealPct && `, healing for ${p.lifestealPct}% of the damage dealt`,
-      ].filter(Boolean).join(' ').replace(/ ,/g, ',');
-      return `${every}, its next attack ${extras}.`;
+      if (p.dash) return { when: every, text: `Dashes in a straight line to the farthest enemy, immune to everything on the way, and hits it for ${hit}. The target and every enemy it passes through are stunned for ${vTime(p.stun)}.` };
+      if (p.teleport) return { when: every, text: `Teleports next to the farthest enemy and hits it for ${hit}${p.lifestealPct ? `, healing for ${vHeal(`${p.lifestealPct}%`)} of the damage dealt` : ''}.` };
+      const extra = [
+        p.knockback && `knocks the target back ${vNum(p.knockback)} squares`,
+        p.stun && `stuns ${p.knockback ? 'it' : 'the target'} for ${vTime(p.stun)}`,
+        p.lifestealPct && `heals it for ${vHeal(`${p.lifestealPct}%`)} of the damage dealt`,
+      ].filter(Boolean);
+      return { when: every, text: `Its next attack hits for ${hit}${extra.length ? `${extra.length === 1 ? ' and ' : ', '}${extra.join(' and ')}` : ''}.` };
     }
-    case 'snipe': return `Every ${def.energy}th attack also zaps the farthest enemy for ${p.damagePct}% damage (${show(dmg)}).`;
+    case 'snipe': return { when: every, text: `The attack also zaps the farthest enemy for ${hit}.` };
     case 'summon': {
       const name = catalog?.[p.unit]?.name ?? p.unit;
-      // With no star given (the Pokédex), list the count at every star level.
-      const counts = p.countByStar ?? [1, 1, 1, 1];
-      const n = star === null ? (counts.every((c) => c === counts[0]) ? counts[0] : null) : counts[star];
-      const what = n === null
-        ? `${counts.join(' / ')} ${name} (0★ / ★ / ★★ / ★★★)`
-        : n === 1 ? `a ${name}` : `${n} ${name}`;
-      return `${every}, it summons ${what} beside it (sides first, then behind, in front, and the diagonals).${p.summonStar !== undefined ? ` ${name} ${n === 1 ? 'is' : 'are'} always ${p.summonStar ? '★'.repeat(p.summonStar) : '0★'}.` : ` ${n === 1 ? 'It comes' : 'They come'} at ${def.name}'s star level.`}`;
+      const n = (p.countByStar ?? [1, 1, 1, 1])[lvl];
+      const level = p.summonStar !== undefined ? `They are always ${levelMark(p.summonStar)}.` : `They come at ${def.name}'s level.`;
+      return { when: every, text: `Summons ${vNum(n)} ${name} beside it. ${level}` };
     }
-    case 'stealth': return `${every}, it turns invisible for ${secs(p.duration)}s${p.hastePct ? ` and attacks ${p.hastePct}% faster` : ''}. Enemies can't target or follow it while it's invisible.`;
-    case 'haste': return `${every}, it's enraged: ${p.hastePct}% faster attacks for ${secs(p.duration)}s.`;
-    case 'quake': return `With every ${def.energy}th attack, it shakes the whole board: every enemy takes ${p.damagePct}% damage (${show(dmg)})${p.stun ? ` and is stunned for ${secs(p.stun)}s` : ''}.`;
-    case 'splashHeal': return `Every attack also heals your Pokémon directly left, right, above and below the square it hits, for ${p.healPct}% of its damage (${show(Math.floor((def.damage[star ?? 0] * STAT_SCALE * p.healPct) / 100))}).`;
-    case 'selfdestruct': return `When it's knocked out, it stays on its square for ${secs(p.delay)}s, then explodes: enemies in the ${2 * p.radius + 1}x${2 * p.radius + 1} square around it take ${p.damagePct}% damage (${show(dmg)}).`;
-    case 'copy': return `It walks toward the nearest enemy until it's within that enemy's range, then takes ${secs(p.morph)}s to transform into it: it copies its max HP, damage, attack speed, range and crit (not its power or movement) and keeps the same share of HP it had. Transformed, it doesn't move. When that Pokémon faints or nothing is in range, it turns back and walks to the next nearest.`;
+    case 'stealth': return { when: every, text: `Turns invisible for ${vTime(p.duration)}${p.hastePct ? ` and attacks ${vNum(`${p.hastePct}%`)} faster` : ''}. Enemies can't target or follow it while it's invisible.` };
+    case 'haste': return { when: every, text: `Attacks ${vNum(`${p.hastePct}%`)} faster for ${vTime(p.duration)}.` };
+    case 'quake': return { when: every, text: `Shakes the whole board: every enemy takes ${hit}${p.stun ? ` and is stunned for ${vTime(p.stun)}` : ''}.` };
+    case 'chill': return { when: 'Every attack', text: `Chills the target for ${vTime(p.duration)}: it attacks and moves ${vNum(`${p.slowPct}%`)} slower. Another hit restarts the timer.` };
+    case 'splashHeal': {
+      const where = p.radius ? `in the ${area(p.radius)} around its target` : 'directly left, right, above and below its target';
+      return { when: 'Every attack', text: `Heals your Pokémon ${where} for ${vHeal(`${p.healPct}%`)} of its damage (${vHeal(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.healPct) / 100)))}).` };
+    }
+    case 'selfdestruct': return { when: 'When knocked out', text: `Stays on its square for ${vTime(p.delay)}, then explodes: enemies in the ${area(p.radius)} around it take ${hit}.` };
+    case 'copy': return { when: 'Always', text: `Walks to the nearest enemy and takes ${vTime(p.morph)} to transform into it, copying its HP, damage, attack speed, range and crit (not its power or movement). It keeps its share of HP and stands still while transformed. When that Pokémon faints, it turns back and walks to the next one.` };
     case 'transform': {
       const f = p.form;
-      const fs = `${f.hp ? `${show(Math.round(f.hp[star ?? 0] * STAT_SCALE))} HP, ` : ''}${SPEED_NAME[f.moveSpeed].toLowerCase()} movement, attacks every ${f.secPerHit}s for ${show(Math.round(f.damage[star ?? 0] * STAT_SCALE))} damage, range ${f.range}`;
-      const morph = p.morph ? ` It takes ${secs(p.morph)}s to transform and can't be hurt, stunned or moved while it does.` : '';
-      const wave = f.shockwave ? ` As it changes, a shock wave stuns every enemy in the ${2 * f.shockwave.radius + 1}x${2 * f.shockwave.radius + 1} around it for ${secs(f.shockwave.stun)}s.` : '';
-      const zip = f.blink ? ' In Star Form it doesn\'t walk: it zips straight to the square beside its target.' : '';
-      const hop = f.hop ? ` Every ${f.energy} attacks it picks a different enemy and zips beside it (if there's no free square, it stays).` : '';
-      const when = p.trigger === 'knockedOut' ? 'When it would be knocked out' : p.trigger === 'lowHp' ? `When its HP drops to ${p.hpPct}% or less` : every;
-      const hpNote = f.hp ? 'with its own HP' : 'HP stays the same';
-      return `${when}, it transforms into ${f.name} for the rest of the fight (${fs}; ${hpNote}).${morph}${wave}${zip}${hop}`;
+      const when = p.trigger === 'knockedOut' ? 'When knocked out' : p.trigger === 'lowHp' ? `At ${p.hpPct}% HP` : every;
+      const into = p.trigger === 'knockedOut' ? 'Instead of fainting, it transforms' : 'Transforms';
+      const stats = `${f.hp ? `${vNum(show(Math.round(f.hp[lvl] * STAT_SCALE)))} HP, ` : ''}${vDmg(show(Math.round(f.damage[lvl] * STAT_SCALE)))} damage every ${vNum(`${f.secPerHit}s`)}, range ${vNum(f.range)}`;
+      const morph = p.morph ? ` It takes ${vTime(p.morph)} and can't be hurt while it does.` : '';
+      const wave = f.shockwave ? ` A shock wave stuns every enemy in the ${area(f.shockwave.radius)} around it for ${vTime(f.shockwave.stun)}.` : '';
+      return { when, text: `${into} into ${f.name} for the rest of the fight: ${stats}${f.hp ? '' : ' (HP stays the same)'}.${morph}${wave}` };
     }
-    case 'opening': return `When the battle starts, it fires a wave down its column. The first enemy hit takes ${p.damagePct}% damage (${show(dmg)}) and is carried all the way to the other end of the board${p.stun ? `, stunned for ${secs(p.stun)}s when it lands` : ''}. Anyone already there is pushed to the side.`;
-    default: return '';
+    case 'treat': {
+      const fl = Object.fromEntries(p.flavors.map((f) => [f.flavor, f]));
+      const heal = fl.heal && `<b>${esc(fl.heal.name.replace(/.*\((.*)\)/, '$1'))}</b> heals the ally with the lowest share of HP for ${vHeal(`${fl.heal.healPct}%`)} of its damage (${vHeal(show(Math.floor((def.damage[lvl] * STAT_SCALE * fl.heal.healPct) / 100)))}) over ${vTime(p.duration)}`;
+      const haste = fl.haste && `<b>${esc(fl.haste.name.replace(/.*\((.*)\)/, '$1'))}</b> makes the hardest-hitting ally attack ${vNum(`${fl.haste.hastePct}%`)} faster for ${vTime(p.duration)}`;
+      const guard = fl.guard && `<b>${esc(fl.guard.name.replace(/.*\((.*)\)/, '$1'))}</b> shields the ally most enemies are attacking for ${vTime(p.duration)}: ${vNum(`${fl.guard.guardPct}%`)} less damage, and the first stun or knockback only breaks the shield`;
+      return { when: every, text: `Changes into a random flavour and treats one ally. ${[heal, haste, guard].filter(Boolean).join('. ')}.` };
+    }
+    case 'opening': return { when: 'At battle start', text: `Fires a wave down its column. The first enemy hit takes ${hit}, is carried to the far end of the board${p.stun ? ` and is stunned for ${vTime(p.stun)}` : ''}.` };
+    default: return null;
   }
+}
+
+export function describePower(def, star, catalog) {
+  const pt = powerText(def, star, catalog);
+  return pt ? `<span class="pw-when">${pt.when}</span> ${pt.text}` : '';
 }
 
 // Ditto has no fighting stats of its own: it copies the nearest enemy's.
 const isCopycat = (def) => def.ability?.kind === 'copy';
 
-// When a power goes off, as a short tag.
-export const powerCadence = (def) => {
-  const p = def.ability;
-  if (!p) return 'No power';
-  if (p.kind === 'opening') return 'Power at battle start';
-  if (p.kind === 'splashHeal') return 'Heals with every attack';
-  if (p.kind === 'selfdestruct') return 'Power when knocked out';
-  if (p.kind === 'copy') return 'Copies the nearest enemy';
-  if (p.trigger === 'lowHp') return `Power at ${p.hpPct}% HP`;
-  if (p.trigger === 'knockedOut') return 'Power when knocked out';
-  return `Power every ${def.energy} attacks`;
-};
-
-export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProfile = () => {}, onRemoveFriend = () => {}, getProfile = () => ({ name: '', avatar: null, saved: false }), getLog, changelog = [], version = null, build = null }) {
+export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProfile = () => {}, onFriends = () => {}, getFriends = () => null, getLastLog = () => null, getProfile = () => ({ name: '', avatar: null, saved: false }), getLog, changelog = [], version = null, build = null }) {
   const $ = (id) => document.getElementById(id);
   const arena = $('arena');
   const layer = $('units');
@@ -108,7 +123,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   const readyBtn = $('ready');
   const toastEl = $('toast');
   const dexEl = $('dex');
-  let dexPick = null; // unit id shown in the Pokédex
+  let dexPick = null; // unit id shown in the Pokédex entry
   const clockEl = $('clock');
 
   let state = null;
@@ -193,6 +208,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   // A profile picture: the front-facing frame of a sprite sheet.
   const avatar = (id, cls = '') => `<span class="avatar ${cls}" style="background-image:url('${avatarUrl(id)}')" aria-hidden="true"></span>`;
   let profileDraft = null; // the profile screen's unsaved choices
+  let menuView = null; // which menu screen is open
+  let confirmRemove = null; // friend code whose Remove was tapped once
 
   function unitEl(unitId, star, side = 'ally', facing = 'down') {
     const def = catalog[unitId];
@@ -200,7 +217,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     el.className = `unit ${side}${def.sprite ? ' sprite-unit' : ''}${def.summon ? ' summon' : ''}`;
     el.dataset.type = def.type;
     const bars = '<div class="bars"><div class="hp"><i></i><b></b></div><div class="mana"><i></i></div></div>';
-    const stars = `<div class="stars s${star}">${'★'.repeat(star)}</div>`;
+    const stars = `<div class="stars s${star}">${levelMark(star)}</div>`;
     if (def.sprite) {
       el.dataset.facing = facing;
       el.style.setProperty('--fx', fxColor(unitId));
@@ -210,7 +227,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     } else {
       el.innerHTML = `
         <div class="token"><span>${def.emoji}</span></div>
-        <div class="stars s${star}">${'★'.repeat(star)}</div>${bars}`;
+        <div class="stars s${star}">${levelMark(star)}</div>${bars}`;
     }
     return el;
   }
@@ -223,7 +240,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   }
 
   function showOverlay(html) {
-    lobbyView = null;
+    closeLobby();
     overlay.classList.remove('start-screen', 'lobby');
     overlay.querySelector('.card').innerHTML = html;
     overlay.hidden = false;
@@ -327,6 +344,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     if (btn?.id === 'open-dex') openDex();
     if (btn?.id === 'open-menu') openMenu();
   });
+  menuEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.target.id === 'friend-code') { onFriends('add', e.target.value); e.target.value = ''; }
+  });
   menuEl.addEventListener('click', (e) => {
     if (e.target === menuEl) return closeMenu();
     const pic = e.target.closest('button[data-avatar]');
@@ -345,20 +365,44 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     else if (action === 'new-confirmed') { closeMenu(); onNewGame(); }
     else if (action === 'leave-confirmed') { closeMenu(); onLobby('leave'); }
     else if (action === 'copy-log') copyLog(btn);
+    else if (action === 'download-log') copyLog(btn, { download: true });
+    else if (action === 'copy-text') copyText(btn.dataset.copy, btn);
     else if (action === 'profile-save') saveProfileForm();
     else if (action === 'profile-pick') togglePicker();
-    else if (action === 'friend-remove') {
-      const p = onRemoveFriend(btn.dataset.id);
-      menuEl.querySelector('.friend-section').outerHTML = friendsHTML(p.friends);
+    else if (action === 'friend-add') {
+      const input = menuEl.querySelector('#friend-code');
+      onFriends('add', input?.value ?? '');
+      if (input) input.value = '';
+    } else if (action === 'friend') {
+      // Removing a friend takes a second tap ("Remove?") so it's never by accident.
+      if (btn.dataset.action === 'remove' && confirmRemove !== btn.dataset.code) { confirmRemove = btn.dataset.code; return showFriends(); }
+      confirmRemove = null;
+      onFriends(btn.dataset.action, btn.dataset.code);
     }
     else if (action === 'start-battle') { closeMenu(); onLobby('open'); }
+    else if (action === 'start-friend') { closeMenu(); onLobby('friend'); }
     else if (action === 'start-training') { closeMenu(); started = true; overlay.classList.remove('start-screen'); showTeamBuilder(); }
     else openMenu(action); // 'main', 'help', 'new'
   });
-  overlay.addEventListener('click', (e) => {
+  // Online pop-ups get their own layer over the start screen (see showLobby).
+  const lobbyEl = document.createElement('div');
+  lobbyEl.id = 'lobby';
+  lobbyEl.className = 'lobby';
+  lobbyEl.hidden = true;
+  lobbyEl.setAttribute('role', 'dialog');
+  lobbyEl.innerHTML = '<div class="card"></div>';
+  document.body.append(lobbyEl);
+  function closeLobby() {
+    lobbyEl.hidden = true;
+    lobbyView = null;
+  }
+
+  const overlayClick = (e) => {
     const btn = e.target.closest('button, [data-dex-info]');
     if (btn?.id === 'battle') { started = true; overlay.classList.remove('start-screen'); return showTeamBuilder(); }
     if (btn?.id === 'friend') return onLobby('open');
+    if (btn?.id === 'vs-friend') return onLobby('friend');
+    if (btn?.dataset.lobby === 'friends') return openMenu('friends');
     if (btn?.dataset.lobby) return onLobby(btn.dataset.lobby, lobbyValues());
     if (btn?.dataset.copy) return copyText(btn.dataset.copy, btn);
     if (btn?.id === 'share-link') return navigator.share?.({ title: 'Poke Tactics', text: `Battle me in Poke Tactics! Code: ${btn.dataset.code}`, url: btn.dataset.url }).catch(() => {});
@@ -369,7 +413,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     if (e.target.id === 'open-dex') return openDex();
     if (e.target.id === 'continue') { e.target.disabled = true; onIntent({ type: 'continue' }); }
     if (e.target.id === 'play-again') { started = true; if (online) { e.target.disabled = true; e.target.textContent = 'Waiting for the host…'; } onNewGame(); }
-    if (e.target.id === 'leave-match') return onLobby('leave');
+    if (e.target.id === 'to-menu') return onLobby(online ? 'leave' : 'home');
     if (e.target.id === 'game-log') return openMenu('log');
     if (state?.phase !== 'team' || me().ready) return;
     const troop = e.target.closest('[data-pick-troop]');
@@ -384,7 +428,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       if (res?.ok) return;
     }
     if (troop) showTeamBuilder();
-  });
+  };
+  overlay.addEventListener('click', overlayClick);
+  lobbyEl.addEventListener('click', overlayClick);
   controls.addEventListener('click', (e) => {
     if (e.target.id === 'skip') return playback?.skip();
     const s = +e.target.dataset.speed;
@@ -396,7 +442,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   document.addEventListener('keydown', (e) => {
     if (!state || e.ctrlKey || e.metaKey || e.altKey || e.target.matches('input, textarea')) return;
     const key = e.key.toLowerCase();
-    if (!dexEl.hidden) { if (key === 'escape' || key === 'p') closeDex(); return; }
+    if (!dexEl.hidden || !entryEl.hidden) { dexKey(key); return; }
     if (!menuEl.hidden) { if (key === 'escape' || key === 'm') closeMenu(); return; }
     if (peek && key === 'escape') return closeInfo();
     if (key === 'p') openDex();
@@ -411,6 +457,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   // ---- rendering -----------------------------------------------------------
 
   function render(next) {
+    // An online match is showing: any "connecting…" pop-up is done.
+    if (online) closeLobby();
     // Compare by content, not object identity: in multiplayer every update
     // arrives as a fresh state object deserialized from the network.
     if (!state || next.seed !== state.seed || next.round < state.round) {
@@ -468,6 +516,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   // ---- menu ------------------------------------------------------------------
 
   function openMenu(view = 'main') {
+    menuView = view;
     const panel = menuEl.querySelector('.menu-panel');
     panel.classList.toggle('help', view === 'help');
     const close = '<button class="menu-close ghost" data-menu="close" aria-label="Close">✕</button>';
@@ -477,7 +526,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         <ul class="help-list">
           <li><b>Build a team</b> of ${teamSize(catalog)} Pokémon. Each puts ${COPIES_PER_TROOP} copies into your own pool, and your shop draws from it. Your board starts empty.</li>
           <li><b>Buy</b>: tap a shop card, then a square on your half (or drag the card onto the board).</li>
-          <li><b>Level up</b>: each Pokémon can be on the board only once. Buying another copy levels it up: 2 copies = ★, 3 = ★★, 4 = ★★★.</li>
+          <li><b>Level up</b>: each Pokémon can be on the board only once. Buying another copy levels it up: 1 copy = ★, 2 = ★★, 3 = ★★★, 4 = ${levelMark(3)} (shiny).</li>
           <li><b>Position</b>: the row nearest the middle is your front line. Tap a Pokémon, then a square, to move it (onto another Pokémon swaps them).</li>
           <li><b>Sell</b>: drag a Pokémon onto the shop, or tap it and press Sell. Its copies go back to your pool.</li>
           <li><b>Fight</b>: the battle plays out by itself. After 30 seconds, sudden death drains everyone until one side falls.</li>
@@ -498,7 +547,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         <p class="muted">Every move both players made this match. Paste it to Claude to analyse the match or test stat changes.</p>
         <label class="field log-notes" for="log-notes">Your notes (optional)
           <textarea id="log-notes" rows="4" placeholder="e.g. Mawile felt useless; Tapu Koko's dash won round 6"></textarea></label>
-        <button class="primary" data-menu="copy-log">Copy match log</button>
+        <div class="log-actions"><button class="primary" data-menu="copy-log">Copy match log</button>
+        <button data-menu="download-log">Download as a file</button></div>
         <p class="muted" id="log-status" aria-live="polite"></p>
         <textarea id="log-text" class="log-text" rows="6" readonly hidden></textarea>`;
     } else if (view === 'profile') {
@@ -517,11 +567,23 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         </div>
         <button class="primary profile-save" data-menu="profile-save">Save</button>
         ${statsHTML(p.stats)}
-        ${friendsHTML(p.friends)}
-        <p class="muted small">Your profile, stats and friends are saved in this browser, so they're here next time you play. Clearing your browser's site data resets them.</p>`;
+        ${friendsSummaryHTML()}
+        <p class="muted small">Your profile and stats are saved in this browser, so they're here next time you play. Clearing your browser's site data resets them.</p>`;
       menuEl.hidden = false;
       panel.querySelector('#profile-name').focus();
       return;
+    } else if (view === 'friends') {
+      confirmRemove = null;
+      panel.innerHTML = `${close}${back}<h1>Friends</h1><div class="friends-body">${friendsViewHTML()}</div>`;
+      menuEl.hidden = false;
+      return;
+    } else if (view === 'lastlog') {
+      const text = getLastLog() ?? '';
+      panel.innerHTML = `${close}${back}<h1>Last online match log</h1>
+        <p class="muted">Every move of your last online match, and what happened to the connection. Copy it and paste it to Claude to look into a drop.</p>
+        <div class="log-actions"><button class="primary" data-menu="copy-text" data-copy="${esc(text)}">Copy match log</button>
+        <button data-download="${esc(text)}">Download as a file</button></div>
+        <textarea class="log-text" rows="6" readonly>${esc(text)}</textarea>`;
     } else if (view === 'leave') {
       panel.innerHTML = `${close}<h1>Leave the match?</h1>
         <p class="muted">Your friend will be told you left, and the match ends.</p>
@@ -534,12 +596,15 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       // From the start screen: everything a player can start from here.
       panel.innerHTML = `${close}<h1>Menu</h1>
         <div class="menu-list">
-          <button data-menu="start-battle"><span>⚔</span><div>Battle<small>Play a friend online</small></div></button>
+          <button data-menu="start-battle"><span>⚔</span><div>Battle<small>Play the next player looking for a battle</small></div></button>
+          <button data-menu="start-friend"><span>✉</span><div>Battle a friend<small>Send a battle request with their friend code</small></div></button>
           <button data-menu="start-training"><span>▶</span><div>Training<small>Play against the bot</small></div></button>
-          <button data-menu="profile"><span>☺</span><div>Profile<small>Your name, picture, stats and friends</small></div></button>
+          <button data-menu="friends" class="${getFriends()?.incoming.length ? 'unread' : ''}"><span>♥</span><div>Friends<small>${friendsSub()}</small></div></button>
+          <button data-menu="profile"><span>☺</span><div>Profile<small>Your name, picture and stats</small></div></button>
           <button data-menu="news" class="${hasUnread() ? 'unread' : ''}"><span>★</span><div>What's new<small>${esc(changelog[0]?.title ?? 'Updates to the game')}</small></div></button>
           <button data-menu="help"><span>?</span><div>How to play<small>Rules, controls and keys</small></div></button>
           <button data-menu="dex"><span>◎</span><div>Pokédex<small>Every Pokémon's stats and power</small></div></button>
+          ${getLastLog() ? '<button data-menu="lastlog"><span>⧉</span><div>Last online match log<small>Copy it to look into a dropped connection</small></div></button>' : ''}
         </div>
         ${versionText ? `<p class="menu-version">${esc(versionText)}</p>` : ''}`;
     } else {
@@ -550,7 +615,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
           <button data-menu="help"><span>?</span><div>How to play<small>Rules, controls and keys</small></div></button>
           <button data-menu="dex"><span>◎</span><div>Pokédex<small>Every Pokémon's stats and power</small></div></button>
           <button data-menu="log"><span>⧉</span><div>Match log<small>Copy every move this match, with notes</small></div></button>
-          <button data-menu="profile"><span>☺</span><div>Profile<small>Your name, picture, stats and friends</small></div></button>
+          <button data-menu="friends" class="${getFriends()?.incoming.length ? 'unread' : ''}"><span>♥</span><div>Friends<small>${friendsSub()}</small></div></button>
+          <button data-menu="profile"><span>☺</span><div>Profile<small>Your name, picture and stats</small></div></button>
           ${online
             ? '<button data-menu="leave"><span>⏏</span><div>Leave match<small>Disconnect from your friend</small></div></button>'
             : '<button data-menu="new"><span>↻</span><div>New game<small>Start over with a new team</small></div></button>'}
@@ -577,7 +643,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       </section>`).join('')}</div>`;
   }
 
-  async function copyLog(btn) {
+  async function copyLog(btn, { download = false } = {}) {
     const status = menuEl.querySelector('#log-status');
     btn.disabled = true;
     status.textContent = 'Getting the match log…';
@@ -586,6 +652,11 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     if (!log?.intents?.length) { status.textContent = 'No moves recorded yet. Start a match first.'; return; }
     const notes = menuEl.querySelector('#log-notes').value.trim();
     const text = JSON.stringify({ ...log, notes, viewer: log.names[viewer], copied: new Date().toISOString() });
+    if (download) {
+      downloadText(text, logFileName(log));
+      status.textContent = `Downloaded ${logFileName(log)} (${log.intents.length} moves).`;
+      return;
+    }
     try {
       await navigator.clipboard.writeText(text);
       status.textContent = `Copied ${log.intents.length} moves. Paste them into your chat with Claude.`;
@@ -598,6 +669,29 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       status.textContent = 'Copying was blocked here. The log is selected below: copy it yourself.';
     }
   }
+
+  // Save text as a file (the match log), e.g. poke-tactics-2026-10-14-1530-vs-Sean.json.
+  function logFileName(log) {
+    const d = new Date(log.started ?? Date.now());
+    const pad = (n) => String(n).padStart(2, '0');
+    const foe = log.names?.[1 - viewer] ?? 'match';
+    return `poke-tactics-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}-vs-${String(foe).replace(/[^\w-]+/g, '_')}.json`;
+  }
+  function downloadText(text, name) {
+    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    const link = Object.assign(document.createElement('a'), { href: url, download: name });
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-download]');
+    if (!btn) return;
+    let log = null;
+    try { log = JSON.parse(btn.dataset.download); } catch {}
+    downloadText(btn.dataset.download, logFileName(log ?? {}));
+  });
 
   function closeMenu() {
     menuEl.hidden = true;
@@ -639,15 +733,101 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       </section>`;
   }
 
-  function friendsHTML(friends) {
-    return `<section class="profile-section friend-section">
-        <h2>Friends <span class="count">${friends.length}</span></h2>
-        ${friends.length
-          ? `<ul class="friend-list">${friends.map((f) => `<li>${avatar(f.avatar)}<span>${esc(f.name)}</span>
-              <button type="button" class="ghost danger-text" data-menu="friend-remove" data-id="${esc(f.id)}" aria-label="Remove ${esc(f.name)}">Remove</button></li>`).join('')}</ul>`
-          : '<p class="muted">No friends yet.</p>'}
-        <button type="button" class="add-friend" disabled>+ Add friend <small>coming soon</small></button>
+  const onlineCount = () => (getFriends()?.friends ?? []).filter((f) => f.status !== 'offline').length;
+  const friendsSub = () => {
+    const f = getFriends();
+    if (!f?.available) return 'Add friends and battle them';
+    const n = onlineCount();
+    return f.incoming.length ? `${f.incoming.length} friend request${f.incoming.length === 1 ? '' : 's'}` : n ? `${n} online now` : 'Add friends and battle them';
+  };
+
+  function friendsSummaryHTML() {
+    const f = getFriends();
+    return `<section class="profile-section">
+        <h2>Friends <span class="count">${f?.friends.length ?? 0}</span></h2>
+        <p class="muted">${f?.available ? `${onlineCount()} online now.` : 'Friends need online play.'}</p>
+        <button type="button" data-menu="friends">Open friends</button>
       </section>`;
+  }
+
+  const STATUS_TEXT = { online: 'Online', battling: 'In a battle', offline: 'Offline' };
+  const ORDER = { online: 0, battling: 1, offline: 2 };
+
+  // The Friends screen: your code, adding friends, requests, and the friends
+  // list with who's online and a Battle button.
+  function friendsViewHTML() {
+    const f = getFriends();
+    if (!f?.available) return '<p class="muted">Friends need online play, which isn\'t available in this copy of the game.</p>';
+    const person = (p, actions) => `<li>${avatar(p.avatar)}<div class="who"><b>${esc(p.name)}</b>${p.status ? `<small class="status ${p.status}"><i></i>${STATUS_TEXT[p.status]}</small>` : ''}</div>${actions}</li>`;
+    const act = (action, p, label, cls = '') => `<button type="button" class="${cls}" data-menu="friend" data-action="${action}" data-code="${esc(p.code)}">${label}</button>`;
+    const list = [...f.friends].sort((a, b) => ORDER[a.status] - ORDER[b.status] || a.name.localeCompare(b.name));
+    return `
+      <div class="friend-code"><span>Your friend code</span><b>${esc(f.code ?? '······')}</b>
+        ${f.code ? `<button type="button" data-menu="copy-text" data-copy="${esc(f.code)}">Copy</button>` : ''}</div>
+      <div class="add-friend-row">
+        <input id="friend-code" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Friend's code" aria-label="Friend's code">
+        <button type="button" class="primary" data-menu="friend-add">Add friend</button>
+      </div>
+      ${f.incoming.length ? `<h2>Friend requests</h2><ul class="friend-list">${f.incoming.map((p) => person({ ...p, status: null },
+        `${act('accept', p, 'Accept', 'primary small-btn')}${act('decline', p, 'Decline', 'ghost small-btn')}`)).join('')}</ul>` : ''}
+      ${f.outgoing.length ? `<h2>Sent requests</h2><ul class="friend-list">${f.outgoing.map((p) => person({ ...p, status: null },
+        `<small class="muted">Waiting</small>${act('cancel', p, 'Cancel', 'ghost small-btn')}`)).join('')}</ul>` : ''}
+      <h2>Friends <span class="count">${f.friends.length}</span></h2>
+      ${list.length ? `<ul class="friend-list">${list.map((p) => person(p,
+        `${p.status === 'online'
+          ? (f.waiting?.code === p.code ? '<small class="muted">Asking…</small>' : act('challenge', p, '⚔ Battle', 'primary small-btn'))
+          : ''}${act('remove', p, confirmRemove === p.code ? 'Remove?' : '✕', `ghost small-btn danger-text${confirmRemove === p.code ? ' confirm' : ''}`)}`)).join('')}</ul>`
+        : '<p class="muted">No friends yet. Send a friend your code, or add theirs.</p>'}
+      <p class="muted small">Friends are saved on the game server and linked to this browser. Another browser or device, or clearing this site's data, starts a new friends list with a new code.</p>`;
+  }
+
+  // Battle requests, shown over whatever screen is up.
+  let challengeEl = null;
+  let challengeTimer = 0;
+  function renderChallenge() {
+    const f = getFriends();
+    const ch = f?.challenge;
+    const w = f?.waiting;
+    clearInterval(challengeTimer);
+    if (!ch && !w) { challengeEl?.remove(); challengeEl = null; return; }
+    if (!challengeEl) {
+      challengeEl = document.createElement('div');
+      challengeEl.className = 'challenge-card';
+      challengeEl.setAttribute('role', 'alertdialog');
+      challengeEl.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-challenge]');
+        if (btn) onFriends(btn.dataset.challenge);
+      });
+      document.body.append(challengeEl);
+    }
+    const p = ch ?? w;
+    const left = () => Math.max(0, Math.ceil((p.until - Date.now()) / 1000));
+    challengeEl.innerHTML = ch
+      ? `${avatar(ch.avatar, 'big')}<div class="text"><b>${esc(ch.name)} wants to battle!</b><small><span class="left">${left()}</span>s to answer</small></div>
+         <div class="buttons"><button class="primary" data-challenge="accept-battle">Accept</button><button class="ghost" data-challenge="decline-battle">Decline</button></div>`
+      : `${avatar(w.avatar, 'big')}<div class="text"><b>Asking ${esc(w.name)} to battle…</b><small><span class="left">${left()}</span>s for them to answer</small></div>
+         <div class="buttons"><button class="ghost" data-challenge="withdraw">Cancel</button></div>`;
+    challengeTimer = setInterval(() => { const el = challengeEl?.querySelector('.left'); if (el) el.textContent = left(); }, 1000);
+  }
+
+  // Friends data changed: refresh whatever shows it.
+  function showFriends() {
+    renderChallenge();
+    const mine = lobbyEl.querySelector('#my-friend-code');
+    const code = getFriends()?.code;
+    if (mine && code) {
+      mine.textContent = code;
+      const copy = mine.parentElement.querySelector('[data-copy]');
+      if (copy) { copy.dataset.copy = code; copy.hidden = false; }
+    }
+    if (menuEl.hidden || menuView !== 'friends') return;
+    const panel = menuEl.querySelector('.menu-panel');
+    const input = panel.querySelector('#friend-code');
+    const typed = input?.value ?? '';
+    const focused = document.activeElement === input;
+    panel.querySelector('.friends-body').innerHTML = friendsViewHTML();
+    const fresh = panel.querySelector('#friend-code');
+    if (fresh) { fresh.value = typed; if (focused) fresh.focus(); }
   }
 
   function saveProfileForm() {
@@ -743,7 +923,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         <span class="type">${def.type}</span>
         <span class="cost c${def.cost}" title="${def.cost} coins">${def.cost}</span>
         <span class="info-btn" data-info="${slot}" role="button" aria-label="${esc(def.name)} info">i</span>
-        ${fielded(p, id) ? `<span class="levelup">Level up ${'★'.repeat(fielded(p, id).star) || '0★'}→${'★'.repeat(fielded(p, id).star + 1)}</span>` : ''}
+        ${fielded(p, id) ? `<span class="levelup">Level up ${levelMark(fielded(p, id).star)} → ${levelMark(fielded(p, id).star + 1)}</span>` : ''}
         <span class="left">${p.pool[id]} left in pool</span>
       </button>`;
     }).join('');
@@ -790,13 +970,13 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     const onBoard = shopId && !inst ? fielded(me(), shopId) : null;
     const hint = !shopId || inst || peek ? ''
       : onBoard
-        ? `<p class="hint">You already have a ${esc(def.name)} on the board. Click anywhere on your side to level it up to ${'★'.repeat(onBoard.star + 1)}.</p>`
+        ? `<p class="hint">You already have a ${esc(def.name)} on the board. Click anywhere on your side to level it up to ${levelSpan(onBoard.star + 1)}.</p>`
         : '<p class="hint">Click an empty square on your side to place it.</p>';
     infoEl.innerHTML = `
       <button id="info-close" class="ghost" aria-label="Close">✕</button>
       <div class="info-head" data-type="${def.type}">
         ${portrait(def)}
-        <div><h2>${esc(def.name)} <span class="stars s${star}">${'★'.repeat(star)}</span></h2>
+        <div><h2>${esc(def.name)} ${levelSpan(star)}</h2>
         <span class="sub">${def.type} · ${def.cost} coins · ${copies}/${COPIES_PER_TROOP} copies</span></div>
       </div>
       ${hint}
@@ -871,8 +1051,11 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       while (next < events.length && events[next].t <= tick) { applyEvent(ctx, events[next], next, animate); next++; }
       for (const a of actors.values()) {
         if (a.stunUntil && tick >= a.stunUntil) { a.stunUntil = 0; a.el.classList.remove('stunned'); }
+        if (a.chillUntil && tick >= a.chillUntil) { a.chillUntil = 0; a.el.classList.remove('chilled'); }
         if (a.stealthUntil && tick >= a.stealthUntil) { a.stealthUntil = 0; a.el.classList.remove('stealthed'); }
         if (a.hasteUntil && tick >= a.hasteUntil) { a.hasteUntil = 0; a.el.classList.remove('hasted'); }
+        if (a.guardUntil && tick > a.guardUntil) { a.guardUntil = 0; a.el.classList.remove('guarded'); }
+        if (a.treatUntil && tick > a.treatUntil) { a.treatUntil = 0; a.el.classList.remove('treated'); delete a.el.dataset.treat; }
       }
     };
     const finish = () => {
@@ -1306,6 +1489,45 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         bars(a);
         if (animate) { floatText(a, `+${show(ev.amount)}`, 'shield'); fx(at().x, at().y, 'shield', '#ffffff', 1.3); }
         break;
+      case 'guard': // Alcremie's Mint Cream: a shield bubble for a while
+        a.guardUntil = ev.t + ev.duration;
+        a.el.classList.add('guarded');
+        break;
+      case 'guardBreak':
+        a.guardUntil = 0;
+        a.el.classList.remove('guarded');
+        if (a.el.dataset.treat === 'guard') { a.treatUntil = 0; a.el.classList.remove('treated'); delete a.el.dataset.treat; }
+        if (animate) { floatText(a, 'Shield broke', 'guard'); fx(at().x, at().y, 'burst', '#9fd8ff', 1.2); }
+        break;
+      case 'treat': { // Alcremie: the treat flies to the ally it picked, which wears it for the duration
+        const to = actors.get(ev.target);
+        if (!to) break;
+        const color = TREAT_COLOR[ev.flavor];
+        const wear = () => {
+          to.treatUntil = ev.t + ev.duration;
+          to.el.dataset.treat = ev.flavor;
+          to.el.style.setProperty('--treat', color);
+          to.el.classList.add('treated');
+        };
+        if (!animate) { wear(); break; }
+        const ms = to === a ? 0 : projectile(at(), viewPos(to.x, to.y), color, true);
+        later(ms, () => {
+          wear();
+          const p = viewPos(to.x, to.y);
+          fx(p.x, p.y, 'burst', color, 1.4);
+          floatText(to, TREAT_TEXT[ev.flavor], ev.flavor === 'heal' ? 'heal' : ev.flavor === 'guard' ? 'guard' : 'cast');
+        });
+        break;
+      }
+      case 'chill': { // Frosmoth: slower for a while (each hit restarts it)
+        const fresh = !(a.chillUntil && ev.t < a.chillUntil);
+        a.chillUntil = ev.t + ev.duration + 1;
+        later(ctx.hitDelay.get(a.id) ?? 0, () => {
+          a.el.classList.add('chilled');
+          if (animate && fresh) floatText(a, 'Chilled', 'chill');
+        });
+        break;
+      }
       case 'stun':
         a.stunUntil = ev.t + ev.duration;
         later(ctx.hitDelay.get(a.id) ?? 0, () => {
@@ -1346,17 +1568,16 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     overlay.querySelector('#continue')?.focus();
   }
 
-  // Team cards look like the shop's: portrait, name, type and the cost in the
-  // corner. Stats live behind the ⓘ button (the Pokédex entry).
+  // Team cards look like the Pokédex's: sprite in a glow, name, cost and type.
+  // A picked card gets a green border and its Pokémon walks. Stats live
+  // behind the ⓘ button (the Pokédex entry).
   function teamCard(id, picked, i) {
     const def = catalog[id];
-    return `<button class="team-card${picked ? ' chosen' : ''}" style="--i:${i}" data-pick-troop="${id}" data-type="${def.type}" ${me().ready ? 'disabled' : ''} aria-pressed="${picked}">
-      <span class="cost c${def.cost}" title="${def.cost} coins">${def.cost}</span>
+    return `<button class="dex-card team-card${picked ? ' chosen' : ''}" style="--i:${i}" data-pick-troop="${id}" data-type="${def.type}" ${me().ready ? 'disabled' : ''} aria-pressed="${picked}">
       <span class="info-btn" data-dex-info="${id}" role="button" aria-label="${esc(def.name)} info">i</span>
-      ${portrait(def)}
-      <span class="check" aria-hidden="true">✓</span>
-      <span class="name">${esc(def.name)}</span>
-      <span class="type">${def.type}</span>
+      <span class="dex-card-art">${portrait(def)}</span>
+      <b>${esc(def.name)}</b>
+      <small>${def.cost} 🪙 · ${def.type[0].toUpperCase() + def.type.slice(1)}</small>
     </button>`;
   }
 
@@ -1375,6 +1596,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         <div class="parade" aria-hidden="true">${parade}</div>
         <div class="start-modes">
           <button id="friend" class="primary battle-btn">Battle</button>
+          <button id="vs-friend" class="battle-btn training-btn">Battle a friend</button>
           <button id="battle" class="battle-btn training-btn">Training</button>
         </div>
         <button id="start-menu" class="icon-btn start-menu${hasUnread() ? ' unread' : ''}" title="Menu (M)" aria-label="Menu">${ICON_MENU}</button>
@@ -1389,15 +1611,31 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     const need = teamSize(catalog);
     const waiting = me().ready;
     const ready = draft.troops.length === need;
-    const fresh = !overlay.querySelector('.team-grid');
+    const count = `${Array.from({ length: need }, (_, k) => `<i class="${k < draft.troops.length ? 'on' : ''}"></i>`).join('')}<span>${draft.troops.length}/${need}</span>`;
+    const actions = waiting
+      ? '<p class="muted">Waiting for opponent…</p>'
+      : `<button id="start-team" class="primary" ${ready ? '' : 'disabled'}>${ready ? 'Start battle' : `Pick ${need - draft.troops.length} more`}</button>`;
+    const grid = overlay.hidden ? null : overlay.querySelector('.team-grid');
+    if (grid) {
+      // Already on screen: update in place, so only the card that changed
+      // animates (redrawing would replay every picked card's animation).
+      for (const card of grid.querySelectorAll('[data-pick-troop]')) {
+        const picked = draft.troops.includes(card.dataset.pickTroop);
+        card.classList.toggle('chosen', picked);
+        card.setAttribute('aria-pressed', picked);
+        card.disabled = Boolean(waiting);
+      }
+      overlay.querySelector('.team-count').innerHTML = count;
+      const box = overlay.querySelector('.team-actions');
+      if (box.innerHTML !== actions) box.innerHTML = actions;
+      return;
+    }
     showOverlay(`
       <h1>Choose your team</h1>
       <p class="muted">Pick ${need} Pokémon. Each puts ${COPIES_PER_TROOP} copies in your pool for the shop. Tap <span class="info-btn inline">i</span> for a Pokémon's stats.</p>
-      <div class="team-count">${Array.from({ length: need }, (_, k) => `<i class="${k < draft.troops.length ? 'on' : ''}"></i>`).join('')}<span>${draft.troops.length}/${need}</span></div>
-      <div class="team-grid${fresh ? ' fresh' : ''}">${troopIds(catalog).map((id, i) => teamCard(id, draft.troops.includes(id), i)).join('')}</div>
-      ${waiting
-        ? '<p class="muted">Waiting for opponent…</p>'
-        : `<button id="start-team" class="primary" ${ready ? '' : 'disabled'}>${ready ? 'Start battle' : `Pick ${need - draft.troops.length} more`}</button>`}`);
+      <div class="team-count">${count}</div>
+      <div class="team-grid fresh">${troopIds(catalog).map((id, i) => teamCard(id, draft.troops.includes(id), i)).join('')}</div>
+      <div class="team-actions">${actions}</div>`);
   }
 
   function showGameOver() {
@@ -1408,15 +1646,14 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       ${online && viewer === 1
         ? '<button id="play-again" class="primary">Ask for a rematch</button>'
         : `<button id="play-again" class="primary">${online ? 'Rematch' : 'Play again'}</button>`}
-      <button id="game-log" class="ghost">Copy match log</button>
-      ${online ? '<button id="leave-match" class="ghost">Leave</button>' : ''}`);
+      <button id="to-menu">Main menu</button>
+      <button id="game-log" class="ghost">Match log (copy or download)</button>`);
   }
 
   // ---- online lobby ----------------------------------------------------------
 
   const lobbyValues = () => ({
-    name: overlay.querySelector('#lobby-name')?.value ?? '',
-    code: overlay.querySelector('#lobby-code')?.value ?? '',
+    friendCode: lobbyEl.querySelector('#lobby-friend-code')?.value ?? '',
   });
 
   async function copyText(text, btn) {
@@ -1428,71 +1665,56 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     } catch { toast('Copy blocked here. Select the text and copy it yourself.'); }
   }
 
-  // Screens: 'menu' (name, create or join), 'connecting', 'hosting' (show the
-  // code), 'error' and 'disconnected'. main.js decides which one to show.
+  // Screens: 'queue' (waiting for an opponent), 'friend' (battle request by
+  // friend code), 'connecting', 'resume', 'error', 'disconnected' and the
+  // connection check. main.js decides which one to show.
   function showLobby(view, data = {}) {
     const back = '<button class="ghost" data-lobby="home">Back</button>';
     const html = {
-      menu: () => `
-        <h1>Battle a Friend</h1>
-        <label class="field">Your name<input id="lobby-name" maxlength="16" autocomplete="nickname" placeholder="Trainer" value="${esc(data.name ?? '')}"></label>
-        <div class="lobby-split">
-          <section>
-            <h2>Create a game</h2>
-            <p class="muted">Get a code to send your friend.</p>
-            <button class="primary" data-lobby="host">Create game</button>
-          </section>
-          <section>
-            <h2>Join a game</h2>
-            <p class="muted">Enter the code your friend sent you.</p>
-            <input id="lobby-code" class="code-input" maxlength="7" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCDE" value="${esc(data.code ?? '')}" aria-label="Game code">
-            <button class="primary" data-lobby="join">Join</button>
-          </section>
-        </div>
-        <div class="lobby-actions">${back}<button class="ghost" data-lobby="check">Check my connection</button></div>`,
+      friend: () => `
+        <h1>Battle a friend</h1>
+        <p class="muted">Enter your friend's code to send them a battle request. They need to have the game open.</p>
+        <input id="lobby-friend-code" class="code-input" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABC123" aria-label="Friend code">
+        <button class="primary" data-lobby="challenge">Send battle request</button>
+        <div class="my-code">Your friend code: <b id="my-friend-code">${esc(data.myCode ?? '······')}</b>
+          <button class="ghost small-btn" data-copy="${esc(data.myCode ?? '')}" ${data.myCode ? '' : 'hidden'}>Copy</button></div>
+        <div class="lobby-actions">${back}<button class="ghost" data-lobby="friends">Friends list</button></div>`,
+      resume: () => `
+        <h1>Match in progress</h1>
+        <p>You were in a match${data.opponent ? ` with <b>${esc(data.opponent)}</b>` : ''} (game <b>${esc(data.code)}</b>) when the page closed.</p>
+        <p class="muted">It's still going on the server: rejoin and you're straight back in.</p>
+        <button class="primary" data-lobby="resume">Rejoin the match</button>
+        <div class="lobby-actions"><button class="ghost" data-lobby="discard">Start fresh</button></div>`,
+      queue: () => `
+        <h1>Waiting for opponent</h1>
+        <div class="spinner" aria-hidden="true"></div>
+        <p class="muted">The battle starts as soon as another player is looking too. Keep this screen open.</p>
+        <button class="ghost" data-lobby="cancel">Cancel</button>`,
       checking: () => `
         <h1>Checking your connection</h1>
         <div class="spinner" aria-hidden="true"></div>
         <p class="muted">This takes a few seconds.</p>`,
       check: () => {
         const c = data;
-        const keyText = {
-          ok: [true, 'Relay login is set'],
-          missing: [false, 'No relay login in this version of the game'],
-          unreachable: [false, 'Couldn\'t reach Metered to check the relay key'],
-        }[c.key] ?? [false, `Metered refused the relay key (${esc(c.key.replace('rejected', '').trim() || 'error')})`];
         const row = ([ok, text]) => `<li class="${ok ? 'ok' : 'bad'}"><span aria-hidden="true">${ok ? '✓' : '✗'}</span>${text}</li>`;
-        const verdict = c.relay
-          ? 'Online play should work from anywhere: if a direct connection is blocked, the relay takes over.'
-          : c.direct
-            ? 'Direct connections work, but the relay doesn\'t. Friends on some networks (many phone carriers, some home routers) won\'t be able to connect to you.'
-            : 'Only same-network connections will work from here. Try a different network.';
+        const verdict = !c.configured ? 'Online play isn\'t set up in this copy of the game.'
+          : !c.ok ? 'Couldn\'t reach the game server. Check your internet connection; if other sites work, the server may be down for a moment.'
+          : !c.sameVersion ? 'The game has been updated: refresh the page to play online.'
+          : 'Online play should work from here.';
         return `
         <h1>Connection check</h1>
         <ul class="check-list">
-          ${row(keyText)}
-          ${row([c.direct, c.direct ? 'Direct connections through your router work' : 'Direct connections are blocked on this network'])}
-          ${row([c.relay, c.relay ? 'Relay connection works' : 'Relay connection not available'])}
+          ${row([c.ok, c.ok ? 'The game server is reachable' : 'The game server can\'t be reached'])}
+          ${c.ok ? row([c.sameVersion, c.sameVersion ? 'You have the latest version' : 'A newer version is out: refresh the page']) : ''}
         </ul>
         <p>${verdict}</p>
-        <button class="primary" data-lobby="open">Back</button>`;
+        <button class="primary" data-lobby="home">Back</button>`;
       },
       connecting: () => `
-        <h1>Battle a Friend</h1>
+        <h1>Battle</h1>
         <div class="spinner" aria-hidden="true"></div>
         <p>${esc(data.text ?? 'Connecting…')}</p>
         ${data.cancel ? '<button class="ghost" data-lobby="home">Cancel</button>' : ''}`,
-      hosting: () => `
-        <h1>Your game code</h1>
-        <p class="muted">Send this code to your friend. They open Poke Tactics, tap <b>Battle</b> and enter it.</p>
-        <div class="code-box" aria-label="Game code ${data.code.split('').join(' ')}">${data.code}</div>
-        <div class="lobby-actions">
-          <button data-copy="${esc(data.code)}">Copy code</button>
-          <button data-copy="${esc(data.link)}">Copy invite link</button>
-          ${navigator.share ? `<button id="share-link" data-code="${esc(data.code)}" data-url="${esc(data.link)}">Share…</button>` : ''}
-        </div>
-        <p class="waiting"><span class="spinner small" aria-hidden="true"></span> Waiting for your friend to join…</p>
-        <button class="ghost" data-lobby="cancel">Cancel</button>`,
       error: () => `
         <h1>Couldn't connect</h1>
         <p>${esc(data.error)}</p>
@@ -1500,23 +1722,34 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       disconnected: () => `
         <h1>Match ended</h1>
         <p>${esc(data.error)}</p>
-        <button class="primary" data-lobby="home">Back to start</button>`,
+        <button class="primary" data-lobby="home">Back to start</button>
+        ${data.log ? `<p class="muted small">Did the connection drop? Copy the match log and send it in: it shows what happened to the connection.</p>
+        <button class="ghost" data-copy="${esc(data.log)}">Copy match log</button>
+        <button class="ghost" data-download="${esc(data.log)}">Download match log</button>` : ''}`,
     }[view]();
-    showOverlay(html);
-    overlay.classList.add('lobby');
+    // No match has started for this player yet: the start screen stays behind
+    // the pop-up (never an empty board).
+    if (!overlay.classList.contains('start-screen') || overlay.hidden) {
+      started = false;
+      playback?.cancel();
+      playback = null;
+      showStart();
+    }
+    lobbyEl.querySelector('.card').innerHTML = html;
+    lobbyEl.hidden = false;
     lobbyView = view;
-    const focus = view === 'menu' ? (data.code ? '[data-lobby="join"]' : '#lobby-name') : 'button.primary, button';
-    overlay.querySelector(focus)?.focus();
+    const focus = view === 'friend' ? '#lobby-friend-code' : 'button.primary, button';
+    lobbyEl.querySelector(focus)?.focus();
   }
 
-  overlay.addEventListener('input', (e) => {
-    if (e.target.id !== 'lobby-code') return;
+  lobbyEl.addEventListener('input', (e) => {
+    if (e.target.id !== 'lobby-friend-code') return;
     const v = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (v !== e.target.value) e.target.value = v;
   });
-  overlay.addEventListener('keydown', (e) => {
+  lobbyEl.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
-    if (e.target.id === 'lobby-code') onLobby('join', lobbyValues());
+    if (e.target.id === 'lobby-friend-code') onLobby('challenge', lobbyValues());
   });
 
   // ---- online: planning countdown and the battle intro ----------------------
@@ -1574,79 +1807,349 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
 
   // ---- Pokédex ---------------------------------------------------------------
   // Every Pokémon's stats, read straight from units.json, so new Pokémon and
-  // stat changes show up here automatically.
+  // stat changes show up here automatically. The Pokédex pop-up is a grid of
+  // cards (summons too); a card opens that Pokémon's entry in a second pop-up
+  // on top. In an entry the level chip steps through ★, ★★, ★★★ and shiny, and
+  // related Pokémon (its transformation, its summon, who summons it) sit as
+  // small sprites by the big one: tapping one swaps the two places.
+
+  const entryEl = $('dex-entry');
+  const reduceMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  let dexForm = null; // index of dexPick's form the entry shows (null: the Pokémon itself)
+  let dexStar = 0; // level shown in the entry
 
   dexEl.addEventListener('click', (e) => {
     if (e.target === dexEl || e.target.closest('#dex-close')) return closeDex();
     const pick = e.target.closest('[data-dex]');
-    if (pick) { dexPick = pick.dataset.dex; renderDex(); }
+    if (pick) openEntry(pick.dataset.dex);
+  });
+  entryEl.addEventListener('click', (e) => {
+    if (e.target === entryEl || e.target.closest('#entry-close')) return closeEntry();
+    if (e.target.closest('#dex-level')) return setDexLevel((dexStar + 1) % 4);
+    const form = e.target.closest('[data-dex-form]');
+    if (form) { const [id, i] = form.dataset.dexForm.split(':'); return swapEntry(id, Number(i)); }
+    const pick = e.target.closest('[data-dex]');
+    if (pick) swapEntry(pick.dataset.dex, null);
   });
 
+  // The Pokédex grid; with an id (a team card's ⓘ), just that Pokémon's entry.
   function openDex(id) {
-    dexPick = id ?? dexPick ?? troopIds(catalog)[0];
-    renderDex();
+    if (id) return openEntry(id);
+    renderDexGrid();
+    dexEl.classList.remove('closing');
     dexEl.hidden = false;
   }
-
+  function openEntry(id) {
+    dexPick = id;
+    dexForm = null;
+    dexStar = 0;
+    renderEntry();
+    entryEl.classList.remove('closing');
+    entryEl.hidden = false;
+    entryEl.scrollTop = 0;
+  }
+  // Close a pop-up with the opening animation played backwards.
+  function closeAnimated(el) {
+    if (el.hidden || el.classList.contains('closing')) return;
+    if (reduceMotion()) { el.hidden = true; return; }
+    el.classList.add('closing');
+    setTimeout(() => { el.hidden = true; el.classList.remove('closing'); }, 200);
+  }
+  function closeEntry() {
+    closeAnimated(entryEl);
+  }
   function closeDex() {
-    dexEl.hidden = true;
+    closeEntry();
+    closeAnimated(dexEl);
   }
 
-  function renderDex() {
-    const list = (ids, title) => `<h3>${title}</h3><div class="dex-list">${ids.map((id) => {
-      const def = catalog[id];
-      return `<button class="dex-entry${id === dexPick ? ' active' : ''}" data-dex="${id}" data-type="${def.type}">
-        ${portrait(def)}<span>${esc(def.name)}</span><small>${def.summon ? 'summon' : `${def.cost} 🪙`}</small></button>`;
-    }).join('')}</div>`;
-    const summons = Object.keys(catalog).filter((id) => catalog[id].summon).sort();
-    const def = catalog[dexPick];
-    const form = def.ability?.form;
-    const rows = [0, 1, 2, 3].map((star) => {
-      const st = unitStats(def, star);
-      return {
-        star, hp: show(st.hp), dmg: show(st.atk), crit: show(Math.floor((st.atk * CRIT_PCT) / 100)), dps: dps(st),
-        sup: powerDamage(def, star) === null ? '—' : show(powerDamage(def, star)),
-        form: form ? show(Math.round(form.damage[star] * STAT_SCALE)) : '',
-      };
-    });
-    const col = (label, key) => `<tr><th>${label}</th>${rows.map((r) => `<td>${r[key]}</td>`).join('')}</tr>`;
-    const stats0 = unitStats(def, 0);
+  // Keys while the Pokédex is open: ←/→ change the entry's level, Escape
+  // closes the top pop-up.
+  function dexKey(key) {
+    const entryOpen = !entryEl.hidden;
+    if (entryOpen && (key === 'arrowright' || key === 'arrowleft')) {
+      return setDexLevel((dexStar + (key === 'arrowright' ? 1 : 3)) % 4);
+    }
+    if (key === 'escape' && entryOpen) return closeEntry();
+    if (key === 'escape' || key === 'p') closeDex();
+  }
+
+  const typeName = (type) => type[0].toUpperCase() + type.slice(1);
+  const summonIds = () => Object.keys(catalog).filter((id) => catalog[id].summon).sort();
+  // A transformed form as a Pokémon of its own (HP carries over when the form has none).
+  // A Pokémon's forms: Greninja's or Minior's one transformation, Alcremie's flavours.
+  const formsOf = (def) => (def.ability?.form ? [def.ability.form] : def.ability?.flavors ?? []);
+  const formDef = (def, i = 0) => {
+    const f = formsOf(def)[i];
+    return { ...def, ...f, hp: f.hp ?? def.hp, energy: f.energy ?? 0, ability: null, form: true };
+  };
+  const formKey = (id, i) => `form:${id}:${i}`;
+  // Who summons this Pokémon.
+  const summonersOf = (id) => troopIds(catalog).filter((t) => catalog[t].ability?.kind === 'summon' && catalog[t].ability.unit === id);
+
+  function dexCard(id) {
+    const def = catalog[id];
+    return `<button class="dex-card" data-dex="${id}" data-type="${def.type}">
+      <span class="dex-card-art">${portrait(def)}</span>
+      <b>${esc(def.name)}</b>
+      <small>${def.summon ? 'Summon' : `${def.cost} 🪙`} · ${typeName(def.type)}</small>
+    </button>`;
+  }
+
+  function renderDexGrid() {
+    const summons = summonIds();
     dexEl.querySelector('.dex-panel').innerHTML = `
       <button id="dex-close" class="ghost" aria-label="Close">✕</button>
       <h1>Pokédex</h1>
-      <div class="dex-body">
-        <nav class="dex-nav">${list(troopIds(catalog), 'Pokémon')}${summons.length ? list(summons, 'Summoned in battle') : ''}</nav>
-        <section class="dex-detail" data-type="${def.type}">
-          <div class="dex-hero">
-            <span class="portrait dex-portrait" data-facing="down"><span class="sprite" ${spriteStyle(def)}></span></span>
-            <div>
-              <h2>${esc(def.name)}</h2>
-              <p class="dex-tags">
-                <span>${def.summon ? 'Summoned' : `${def.cost} coins`}</span>
-                ${isCopycat(def) ? `<span>Moves: ${moveText(def)}</span><span>Copies the nearest enemy's stats</span>` : `
-                <span>${def.range > 1 ? `Ranged · ${def.range} tiles` : 'Melee · 1 tile'}</span>
-                <span>Moves: ${moveText(def)}</span>
-                <span>Attacks every ${attackTime(stats0)}s</span>
-                <span>Crit ${stats0.crit}%</span>`}
-                <span>${powerCadence(def)}</span>
-              </p>
-            </div>
-          </div>
-          <table class="dex-table">
-            <thead><tr><th></th>${rows.map((r) => `<th>${r.star ? '★'.repeat(r.star) : '0★'}</th>`).join('')}</tr></thead>
-            <tbody>
-              ${col('HP', 'hp')}
-              ${isCopycat(def) ? '' : `${col('Damage per hit', 'dmg')}${col('Crit damage', 'crit')}${col('DPS', 'dps')}`}
-              ${form ? col(`${esc(form.name)} damage`, 'form') : ''}
-              ${def.ability && powerDamage(def, 0) !== null ? col(`${esc(def.ability.name)} damage`, 'sup') : ''}
-            </tbody>
-          </table>
-          <p class="muted">Copies on the board: 1 = 0★, 2 = ★, 3 = ★★, 4 = ★★★. A crit deals 50% more damage.</p>
-          ${def.ability ? `<h3>Power: ${esc(def.ability.name)}</h3>
-          <p>${describePower(def, null, catalog)}</p>` : `<p>${esc(def.name)} can't be picked: it's summoned in battle.</p>`}
-        </section>
-      </div>`;
+      <p class="muted dex-sub">Tap a Pokémon to see its stats and power.</p>
+      <div class="dex-grid">${troopIds(catalog).map(dexCard).join('')}</div>
+      ${summons.length ? `<h3 class="dex-section">Summoned in battle</h3><div class="dex-grid">${summons.map(dexCard).join('')}</div>` : ''}`;
   }
 
-  return { render, toast, showLobby, setOnline, setDeadline, playIntro, lobbyView: () => lobbyView };
+  // The stat shape: four stats as a diamond. Each point is the stat divided
+  // by the highest value any Pokémon (or form) has at the same level, plus a
+  // little headroom (RADAR_HEADROOM), so even the best stops short of the edge
+  // and shapes compare directly.
+  const RADAR_HEADROOM = 1.12; // the best reaches ~89% of the way out
+  const RADAR = [['hp', 'HP'], ['atk', 'Damage'], ['spd', 'Atk speed'], ['move', 'Speed']];
+  const radarRaw = (def, star) => {
+    const st = unitStats(def, star);
+    return {
+      hp: st.hp, atk: st.atk, spd: 1 / attackTime(st),
+      move: 1 / (MOVE_SPEEDS[def.moveSpeed] + STEP_TICKS * TICK_SECONDS),
+    };
+  };
+  const radarTop = [];
+  function radarValues(def, star) {
+    if (!radarTop[star]) {
+      const defs = Object.values(catalog).flatMap((d) => [d, ...formsOf(d).map((_, i) => formDef(d, i))]);
+      const raws = defs.map((d) => radarRaw(d, star));
+      radarTop[star] = Object.fromEntries(RADAR.map(([k]) => [k, Math.max(...raws.map((r) => r[k]))]));
+    }
+    const raw = radarRaw(def, star);
+    return RADAR.map(([k]) => Math.min(1, raw[k] / (radarTop[star][k] * RADAR_HEADROOM)));
+  }
+  const RADAR_R = 70;
+  const radarPoint = (i, v) => {
+    const a = ((2 * Math.PI) / RADAR.length) * i - Math.PI / 2;
+    return [100 + Math.cos(a) * RADAR_R * v, 100 + Math.sin(a) * RADAR_R * v];
+  };
+  const radarPoints = (vals) => vals.map((v, i) => radarPoint(i, Math.max(0.04, v)).map((n) => n.toFixed(1)).join(',')).join(' ');
+  function radarSvg(vals) {
+    const ring = (f) => `<polygon class="ring" points="${radarPoints(RADAR.map(() => f))}"/>`;
+    const axes = RADAR.map((_, i) => { const [x, y] = radarPoint(i, 1); return `<line x1="100" y1="100" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}"/>`; }).join('');
+    const labels = RADAR.map(([, label], i) => {
+      const [x, y] = radarPoint(i, i % 2 ? 1.36 : 1.2);
+      return `<text x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}">${label}</text>`;
+    }).join('');
+    return `<svg class="dex-radar" viewBox="-12 -2 224 204" role="img" aria-label="Stat shape">
+      ${ring(1)}${ring(2 / 3)}${ring(1 / 3)}<g class="axes">${axes}</g>
+      <polygon class="shape" points="${radarPoints(vals)}" data-vals="${vals.join(',')}"/>${labels}</svg>`;
+  }
+  function tweenRadar(poly, to) {
+    const from = poly.dataset.vals.split(',').map(Number);
+    poly.dataset.vals = to.join(',');
+    if (reduceMotion()) { poly.setAttribute('points', radarPoints(to)); return; }
+    const start = performance.now();
+    cancelAnimationFrame(poly._tween);
+    const step = (now) => {
+      const k = Math.min(1, (now - start) / 320);
+      const e = 1 - (1 - k) ** 3;
+      poly.setAttribute('points', radarPoints(from.map((f, i) => f + (to[i] - f) * e)));
+      if (k < 1) poly._tween = requestAnimationFrame(step);
+    };
+    poly._tween = requestAnimationFrame(step);
+  }
+
+  // The parts of an entry that change with the level.
+  function dexLevelValues(def, star, formOf, formIndex = 0) {
+    const st = unitStats(def, star);
+    let power = '';
+    const f = formOf && formsOf(formOf)[formIndex];
+    if (f?.flavor) {
+      // An Alcremie flavour: what its treat does.
+      const p = formOf.ability;
+      const amount = (pct) => show(Math.floor((formOf.damage[star] * STAT_SCALE * pct) / 100));
+      power = {
+        heal: `Heals the ally with the lowest share of HP for ${vHeal(`${f.healPct}%`)} of ${esc(formOf.name)}'s damage (${vHeal(amount(f.healPct))}), spread over ${vTime(p.duration)}.`,
+        haste: `The hardest-hitting ally attacks ${vNum(`${f.hastePct}%`)} faster for ${vTime(p.duration)}.`,
+        guard: `Shields the ally most enemies are attacking for ${vTime(p.duration)}: it takes ${vNum(`${f.guardPct}%`)} less damage, and the first stun or knockback only breaks the shield.`,
+      }[f.flavor] + ` ${esc(formOf.name)} keeps this form until its next Sweet Treat.`;
+    } else if (f) {
+      power = [
+        `${esc(formOf.name)} stays in this form for the rest of the fight.`,
+        !f.hp && `It keeps ${esc(formOf.name)}'s HP.`,
+        f.shockwave && `As it changes, a shock wave stuns every enemy in the ${area(f.shockwave.radius)} around it for ${vTime(f.shockwave.stun)}.`,
+        f.blink && 'It doesn\'t walk: it zips straight to the square beside its target.',
+        f.hop && `Every ${vNum(f.energy)} attacks it zips to a different enemy.`,
+      ].filter(Boolean).join(' ');
+    } else if (def.ability) power = powerText(def, star, catalog)?.text ?? '';
+    // Numbers in the text get their own spans so a level change can count them.
+    power = power.split(/(<[^>]+>)/).map((part) => (part.startsWith('<') ? part : part.replace(/\d+(?:\.\d+)?/g, '<span class="pn">$&</span>'))).join('');
+    return {
+      hp: String(show(st.hp)), dmg: String(show(st.atk)), power,
+    };
+  }
+
+  // Change the level in the open entry without redrawing it: numbers count to
+  // their new values and the power text cross-fades.
+  function setDexLevel(star) {
+    dexStar = star;
+    const detail = entryEl.querySelector('.dex-detail');
+    if (!detail) return renderEntry();
+    const base = catalog[dexPick];
+    const isForm = dexForm !== null && Boolean(formsOf(base)[dexForm]);
+    const shown = isForm ? formDef(base, dexForm) : base;
+    const v = dexLevelValues(shown, star, isForm ? base : null, dexForm ?? 0);
+    const poly = detail.querySelector('.dex-radar .shape');
+    if (poly) tweenRadar(poly, radarValues(shown, star));
+    const lvl = detail.querySelector('#dex-level');
+    lvl.innerHTML = `<span class="stars s${star}">${levelMark(star)}</span>`;
+    lvl.setAttribute('aria-label', `Level: ${LEVEL_NAMES[star]}. Tap for the next level.`);
+    lvl.classList.remove('bump'); void lvl.offsetWidth; lvl.classList.add('bump');
+    for (const el of detail.querySelectorAll('[data-k]')) {
+      const next = v[el.dataset.k];
+      if (next == null) continue;
+      if (el.dataset.k === 'power') {
+        // Same sentence with different numbers (the usual case): only the
+        // numbers count to their new values. Otherwise swap the text in place.
+        const nums = [...el.querySelectorAll('.pn')];
+        const tmp = document.createElement('p');
+        tmp.innerHTML = next;
+        const nextNums = [...tmp.querySelectorAll('.pn')];
+        const shape = (root) => root.innerHTML.replace(/<span class="pn">[^<]*<\/span>/g, '#');
+        if (nums.length === nextNums.length && shape(el) === shape(tmp)) {
+          nums.forEach((n, i) => { if (n.textContent !== nextNums[i].textContent) tweenNumber(n, nextNums[i].textContent); });
+        } else el.innerHTML = next;
+        continue;
+      }
+      const b = el.querySelector('b');
+      if (b.textContent !== next) tweenNumber(b, next);
+    }
+  }
+  function tweenNumber(el, to) {
+    const from = parseFloat(el.textContent) || 0;
+    const target = parseFloat(to);
+    const places = (to.split('.')[1] ?? '').length;
+    const start = performance.now();
+    const ms = 280;
+    const chip = el.closest('.dex-chip');
+    chip?.classList.add('changing');
+    cancelAnimationFrame(el._tween);
+    const step = (now) => {
+      const k = Math.min(1, (now - start) / ms);
+      const e = 1 - (1 - k) ** 3;
+      el.textContent = k < 1 ? (from + (target - from) * e).toFixed(places) : to;
+      if (k < 1) el._tween = requestAnimationFrame(step);
+      else chip?.classList.remove('changing');
+    };
+    el._tween = requestAnimationFrame(step);
+  }
+
+  // Tapping a related Pokémon: it grows into the big spot while the current one
+  // shrinks into the small spot (FLIP: measure, redraw, play from the old places).
+  function swapEntry(id, form) {
+    const oldKey = dexForm !== null ? formKey(dexPick, dexForm) : dexPick;
+    const newKey = form !== null ? formKey(id, form) : id;
+    const was = (key) => entryEl.querySelector(`[data-key="${key}"]`)?.getBoundingClientRect();
+    const fromMain = was(oldKey); // the big sprite now
+    const fromSmall = was(newKey); // the small sprite that was tapped
+    dexPick = id;
+    dexForm = form;
+    renderEntry({ fade: true });
+    if (!fromMain || !fromSmall || reduceMotion()) return;
+    const play = (key, from) => {
+      const el = entryEl.querySelector(`[data-key="${key}"]`);
+      if (!el) return;
+      const to = el.getBoundingClientRect();
+      const dx = from.left + from.width / 2 - (to.left + to.width / 2);
+      const dy = from.top + from.height / 2 - (to.top + to.height / 2);
+      el.animate([
+        { transform: `translate(${dx}px, ${dy}px) scale(${from.width / to.width})` },
+        { transform: 'none' },
+      ], { duration: 420, easing: 'cubic-bezier(0.34, 1.3, 0.64, 1)' });
+    };
+    play(newKey, fromSmall); // grows from the small spot
+    play(oldKey, fromMain); // shrinks from the big spot
+  }
+
+  function renderEntry({ fade = false } = {}) {
+    const base = catalog[dexPick];
+    if (!base) return closeEntry();
+    const isForm = dexForm !== null && Boolean(formsOf(base)[dexForm]);
+    const def = isForm ? formDef(base, dexForm) : base;
+    const star = dexStar;
+    const copycat = isCopycat(def);
+    const v = dexLevelValues(def, star, isForm ? base : null, dexForm ?? 0);
+    const st = unitStats(def, star);
+    // Each number gets room for its widest value at any level, so chips keep
+    // their size as the level changes.
+    const all = [0, 1, 2, 3].map((s2) => dexLevelValues(def, s2, isForm ? base : null, dexForm ?? 0));
+    const width = (k) => Math.max(...all.map((x) => String(x[k] ?? '').length));
+    const chip = (k, label, value) => `<span class="dex-chip"${k ? ` data-k="${k}"` : ''}><small>${label}</small><b${k ? ` style="min-width:${width(k)}ch"` : ''}>${value}</b></span>`;
+    const chips = [
+      chip('hp', 'HP', v.hp),
+      !copycat && chip('dmg', 'Damage', v.dmg),
+      !copycat && chip('', 'Attacks every', `${attackTime(st)}s`),
+      !copycat && chip('', 'Range', def.range > 1 ? `${def.range} tiles` : 'Melee'),
+      chip('', 'Speed', SPEED_NAME[def.moveSpeed]),
+    ].filter(Boolean).join('');
+    const power = isForm
+      ? `<div class="dex-power"><h3>${esc(base.ability.name)} ${formsOf(base)[dexForm].flavor ? 'flavour' : 'form'}</h3><p data-k="power">${v.power}</p></div>`
+      : def.ability ? `<div class="dex-power"><h3>${esc(def.ability.name)} <span class="pw-when">${powerText(def, star, catalog).when}</span></h3><p data-k="power">${v.power}</p></div>` : '';
+
+    // Related Pokémon: [def, attributes, label, key].
+    const related = [];
+    const forms = formsOf(base);
+    if (isForm) related.push([base, `data-dex="${dexPick}"`, `Transforms from ${base.name}`, dexPick]);
+    forms.forEach((f, i) => {
+      if (isForm && i === dexForm) return;
+      related.push([formDef(base, i), `data-dex-form="${dexPick}:${i}"`, `${isForm ? 'Also becomes' : forms.length > 1 ? 'Can become' : 'Transforms into'} ${f.name}`, formKey(dexPick, i)]);
+    });
+    if (!isForm && def.ability?.kind === 'summon' && catalog[def.ability.unit]) related.push([catalog[def.ability.unit], `data-dex="${def.ability.unit}"`, `Summons ${catalog[def.ability.unit].name}`, def.ability.unit]);
+    if (def.summon) for (const t of summonersOf(dexPick)) related.push([catalog[t], `data-dex="${t}"`, `Summoned by ${catalog[t].name}`, t]);
+    const sprite = (d, cls, key) => `<span class="portrait ${cls}" data-facing="down" data-key="${key}"><span class="sprite" ${spriteStyle(d)}></span></span>`;
+    const relatedHtml = related.map(([d, attrs, label, key]) => `<button class="dex-rel" ${attrs} title="${esc(label)}" aria-label="${esc(label)}">${sprite(d, 'dex-rel-sprite', key)}</button>`).join('');
+
+    const tag = isForm ? 'Transformed form' : def.summon ? 'Summoned in battle' : `${def.cost} coins`;
+    entryEl.querySelector('.dex-panel').dataset.type = def.type;
+    entryEl.querySelector('.dex-panel').innerHTML = `
+      <button id="entry-close" class="ghost" aria-label="Close">✕</button>
+      <section class="dex-detail${fade ? ' refresh' : ''}" data-type="${def.type}">
+        <div class="dex-hero">
+          <div class="dex-figure">
+            <div class="dex-art">
+              ${sprite(def, 'dex-portrait', isForm ? formKey(dexPick, dexForm) : dexPick)}
+              ${relatedHtml ? `<div class="dex-rels">${relatedHtml}</div>` : ''}
+            </div>
+            <button id="dex-level" class="dex-level" title="Tap for the next level (→)" aria-label="Level: ${LEVEL_NAMES[star]}. Tap for the next level."><span class="stars s${star}">${levelMark(star)}</span></button>
+          </div>
+          <div class="dex-title">
+            <h2>${esc(def.name)}</h2>
+            <p class="dex-tags"><span class="dex-type">${typeName(def.type)}</span><span>${tag}</span></p>
+            ${related.length ? `<p class="dex-rel-names">${related.map(([, attrs, label]) => `<button class="linkish" ${attrs}>${esc(label)}</button>`).join('')}</p>` : ''}
+          </div>
+        </div>
+        <div class="dex-statbox">
+          ${copycat ? '' : radarSvg(radarValues(def, star))}
+          <div class="dex-chips">${chips}</div>
+        </div>
+        ${power}
+      </section>`;
+  }
+
+  // A standing notice about the online connection (null hides it).
+  let netEl = null;
+  function setNetStatus(text) {
+    if (!text) { netEl?.remove(); netEl = null; return; }
+    if (!netEl) {
+      netEl = document.createElement('div');
+      netEl.className = 'net-status';
+      netEl.setAttribute('role', 'status');
+      document.body.append(netEl);
+    }
+    netEl.textContent = text;
+  }
+
+  return { render, toast, showLobby, showFriends, setOnline, setDeadline, setNetStatus, netStatus: () => netEl?.textContent ?? null, playIntro, lobbyView: () => lobbyView };
 }

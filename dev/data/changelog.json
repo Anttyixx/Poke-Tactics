@@ -1,5 +1,17 @@
 [
   {
+    "id": "2026-10-14-treat-effects-log",
+    "version": "0.19.1",
+    "date": "2026-10-14",
+    "title": "See Alcremie's treats, and save your match log",
+    "changes": [
+      { "pokemon": "alcremie", "kind": "change", "text": "Sweet Treat now flies from Alcremie to the Pokémon it treats. That Pokémon glows in the treat's colour for 3 seconds and wears a badge: a green heart for healing, pink chevrons for attack speed, a blue shield for the shield." },
+      { "kind": "new", "text": "After a match there's a Main menu button." },
+      { "kind": "new", "text": "The match log can be downloaded as a file, as well as copied." },
+      { "kind": "new", "text": "The match log lists every fight's seed and what happened by chance: which flavour Alcremie rolled and who got it, Minior's hops, and each side's crits." }
+    ]
+  },
+  {
     "id": "2026-10-14-alcremie",
     "version": "0.19.0",
     "date": "2026-10-14",

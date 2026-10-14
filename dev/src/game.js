@@ -24,8 +24,8 @@
 //   { type: 'ready' }                         lock in planning; combat starts when all are ready
 //   { type: 'continue' }                      done watching combat; next round starts when all continue
 
-import { randInt } from './rng.js?v=305a902';
-import { simulate, COLS, HALF } from './combat.js?v=305a902';
+import { randInt } from './rng.js?v=e8c3d5e';
+import { simulate, COLS, HALF } from './combat.js?v=e8c3d5e';
 
 export const TEAM_SIZE = 6;
 export const COPIES_PER_TROOP = 4;
@@ -236,8 +236,9 @@ export function lostCount(result, side) {
 
 function beginCombat(state, catalog) {
   // Per-round combat seed derived from the match seed, so fights replay exactly.
-  const result = simulate(catalog, state.players.map((p) => p.board), (state.seed + Math.imul(state.round, 0x9e3779b9)) >>> 0);
-  state.combat = { round: state.round, result, damage: roundDamage(result, state.round) };
+  const seed = (state.seed + Math.imul(state.round, 0x9e3779b9)) >>> 0;
+  const result = simulate(catalog, state.players.map((p) => p.board), seed);
+  state.combat = { round: state.round, seed, result, damage: roundDamage(result, state.round) };
   for (const p of state.players) p.lastBoard = p.board.map(({ unitId, star, x, y }) => ({ unitId, star, x, y }));
   state.phase = 'combat';
   for (const p of state.players) p.ready = false;

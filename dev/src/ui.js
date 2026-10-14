@@ -2,14 +2,17 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=305a902';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=e8c3d5e';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=305a902';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=305a902';
+} from './game.js?v=e8c3d5e';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=e8c3d5e';
 
-const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
+const TICK_MS = 100;
+// Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
+const TREAT_COLOR = { heal: '#6fe08a', haste: '#ff7fae', guard: '#8fd2ff' };
+const TREAT_TEXT = { heal: 'Sweet heal', haste: 'Attack speed up', guard: 'Shielded' }; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
 // Attack-effect colour when a unit doesn't set its own "fx" colour in units.json.
 const TYPE_FX = { warrior: '#ffb36b', ranger: '#a6e37f', mage: '#b994ff', rogue: '#e0a3ff', cleric: '#ffe28a' };
 
@@ -362,6 +365,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     else if (action === 'new-confirmed') { closeMenu(); onNewGame(); }
     else if (action === 'leave-confirmed') { closeMenu(); onLobby('leave'); }
     else if (action === 'copy-log') copyLog(btn);
+    else if (action === 'download-log') copyLog(btn, { download: true });
     else if (action === 'copy-text') copyText(btn.dataset.copy, btn);
     else if (action === 'profile-save') saveProfileForm();
     else if (action === 'profile-pick') togglePicker();
@@ -409,7 +413,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     if (e.target.id === 'open-dex') return openDex();
     if (e.target.id === 'continue') { e.target.disabled = true; onIntent({ type: 'continue' }); }
     if (e.target.id === 'play-again') { started = true; if (online) { e.target.disabled = true; e.target.textContent = 'Waiting for the host…'; } onNewGame(); }
-    if (e.target.id === 'leave-match') return onLobby('leave');
+    if (e.target.id === 'to-menu') return onLobby(online ? 'leave' : 'home');
     if (e.target.id === 'game-log') return openMenu('log');
     if (state?.phase !== 'team' || me().ready) return;
     const troop = e.target.closest('[data-pick-troop]');
@@ -543,7 +547,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         <p class="muted">Every move both players made this match. Paste it to Claude to analyse the match or test stat changes.</p>
         <label class="field log-notes" for="log-notes">Your notes (optional)
           <textarea id="log-notes" rows="4" placeholder="e.g. Mawile felt useless; Tapu Koko's dash won round 6"></textarea></label>
-        <button class="primary" data-menu="copy-log">Copy match log</button>
+        <div class="log-actions"><button class="primary" data-menu="copy-log">Copy match log</button>
+        <button data-menu="download-log">Download as a file</button></div>
         <p class="muted" id="log-status" aria-live="polite"></p>
         <textarea id="log-text" class="log-text" rows="6" readonly hidden></textarea>`;
     } else if (view === 'profile') {
@@ -576,7 +581,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       const text = getLastLog() ?? '';
       panel.innerHTML = `${close}${back}<h1>Last online match log</h1>
         <p class="muted">Every move of your last online match, and what happened to the connection. Copy it and paste it to Claude to look into a drop.</p>
-        <button class="primary" data-menu="copy-text" data-copy="${esc(text)}">Copy match log</button>
+        <div class="log-actions"><button class="primary" data-menu="copy-text" data-copy="${esc(text)}">Copy match log</button>
+        <button data-download="${esc(text)}">Download as a file</button></div>
         <textarea class="log-text" rows="6" readonly>${esc(text)}</textarea>`;
     } else if (view === 'leave') {
       panel.innerHTML = `${close}<h1>Leave the match?</h1>
@@ -637,7 +643,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       </section>`).join('')}</div>`;
   }
 
-  async function copyLog(btn) {
+  async function copyLog(btn, { download = false } = {}) {
     const status = menuEl.querySelector('#log-status');
     btn.disabled = true;
     status.textContent = 'Getting the match log…';
@@ -646,6 +652,11 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     if (!log?.intents?.length) { status.textContent = 'No moves recorded yet. Start a match first.'; return; }
     const notes = menuEl.querySelector('#log-notes').value.trim();
     const text = JSON.stringify({ ...log, notes, viewer: log.names[viewer], copied: new Date().toISOString() });
+    if (download) {
+      downloadText(text, logFileName(log));
+      status.textContent = `Downloaded ${logFileName(log)} (${log.intents.length} moves).`;
+      return;
+    }
     try {
       await navigator.clipboard.writeText(text);
       status.textContent = `Copied ${log.intents.length} moves. Paste them into your chat with Claude.`;
@@ -658,6 +669,29 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       status.textContent = 'Copying was blocked here. The log is selected below: copy it yourself.';
     }
   }
+
+  // Save text as a file (the match log), e.g. poke-tactics-2026-10-14-1530-vs-Sean.json.
+  function logFileName(log) {
+    const d = new Date(log.started ?? Date.now());
+    const pad = (n) => String(n).padStart(2, '0');
+    const foe = log.names?.[1 - viewer] ?? 'match';
+    return `poke-tactics-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}-vs-${String(foe).replace(/[^\w-]+/g, '_')}.json`;
+  }
+  function downloadText(text, name) {
+    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    const link = Object.assign(document.createElement('a'), { href: url, download: name });
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-download]');
+    if (!btn) return;
+    let log = null;
+    try { log = JSON.parse(btn.dataset.download); } catch {}
+    downloadText(btn.dataset.download, logFileName(log ?? {}));
+  });
 
   function closeMenu() {
     menuEl.hidden = true;
@@ -1021,6 +1055,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         if (a.stealthUntil && tick >= a.stealthUntil) { a.stealthUntil = 0; a.el.classList.remove('stealthed'); }
         if (a.hasteUntil && tick >= a.hasteUntil) { a.hasteUntil = 0; a.el.classList.remove('hasted'); }
         if (a.guardUntil && tick > a.guardUntil) { a.guardUntil = 0; a.el.classList.remove('guarded'); }
+        if (a.treatUntil && tick > a.treatUntil) { a.treatUntil = 0; a.el.classList.remove('treated'); delete a.el.dataset.treat; }
       }
     };
     const finish = () => {
@@ -1457,22 +1492,31 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       case 'guard': // Alcremie's Mint Cream: a shield bubble for a while
         a.guardUntil = ev.t + ev.duration;
         a.el.classList.add('guarded');
-        if (animate) floatText(a, 'Shielded', 'guard');
         break;
       case 'guardBreak':
         a.guardUntil = 0;
         a.el.classList.remove('guarded');
+        if (a.el.dataset.treat === 'guard') { a.treatUntil = 0; a.el.classList.remove('treated'); delete a.el.dataset.treat; }
         if (animate) { floatText(a, 'Shield broke', 'guard'); fx(at().x, at().y, 'burst', '#9fd8ff', 1.2); }
         break;
-      case 'treat': { // Alcremie: who got the treat
+      case 'treat': { // Alcremie: the treat flies to the ally it picked, which wears it for the duration
         const to = actors.get(ev.target);
-        if (to && animate) {
-          const color = { heal: '#7fe08a', haste: '#ff8fb0', guard: '#9fd8ff' }[ev.flavor];
+        if (!to) break;
+        const color = TREAT_COLOR[ev.flavor];
+        const wear = () => {
+          to.treatUntil = ev.t + ev.duration;
+          to.el.dataset.treat = ev.flavor;
+          to.el.style.setProperty('--treat', color);
+          to.el.classList.add('treated');
+        };
+        if (!animate) { wear(); break; }
+        const ms = to === a ? 0 : projectile(at(), viewPos(to.x, to.y), color, true);
+        later(ms, () => {
+          wear();
           const p = viewPos(to.x, to.y);
           fx(p.x, p.y, 'burst', color, 1.4);
-          if (ev.flavor === 'heal') floatText(to, 'Sweet heal', 'heal');
-          if (ev.flavor === 'haste') floatText(to, 'Faster!', 'cast');
-        }
+          floatText(to, TREAT_TEXT[ev.flavor], ev.flavor === 'heal' ? 'heal' : ev.flavor === 'guard' ? 'guard' : 'cast');
+        });
         break;
       }
       case 'chill': { // Frosmoth: slower for a while (each hit restarts it)
@@ -1602,8 +1646,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       ${online && viewer === 1
         ? '<button id="play-again" class="primary">Ask for a rematch</button>'
         : `<button id="play-again" class="primary">${online ? 'Rematch' : 'Play again'}</button>`}
-      <button id="game-log" class="ghost">Copy match log</button>
-      ${online ? '<button id="leave-match" class="ghost">Leave</button>' : ''}`);
+      <button id="to-menu">Main menu</button>
+      <button id="game-log" class="ghost">Match log (copy or download)</button>`);
   }
 
   // ---- online lobby ----------------------------------------------------------
@@ -1680,7 +1724,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         <p>${esc(data.error)}</p>
         <button class="primary" data-lobby="home">Back to start</button>
         ${data.log ? `<p class="muted small">Did the connection drop? Copy the match log and send it in: it shows what happened to the connection.</p>
-        <button class="ghost" data-copy="${esc(data.log)}">Copy match log</button>` : ''}`,
+        <button class="ghost" data-copy="${esc(data.log)}">Copy match log</button>
+        <button class="ghost" data-download="${esc(data.log)}">Download match log</button>` : ''}`,
     }[view]();
     // No match has started for this player yet: the start screen stays behind
     // the pop-up (never an empty board).
