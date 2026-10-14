@@ -208,7 +208,9 @@ test a set of changes together. Team styles to pit against each other live in `A
   - Beheeyem, **Psywave**: at the start of battle, a wave flies down its column to the other end of the
     board. The first enemy it hits takes 50% and is carried to that end, then is stunned for 1s; anyone
     already there is pushed to the side. Both sit out until the wave lands.
-  - Toxtricity, **Thunderbolt**: every 8th attack also zaps the farthest enemy for 80%.
+  - Toxtricity (cost 3, ranger, range 2, attacks every 1.25s), **Overdrive**: every 3 attacks, each ally
+    directly left, right, in front of and behind it that has a power counter gains +2 toward its power
+    (never past full; at the end of the tick, like all power progress).
   - Vespiquen, **Attack Order**: every 6 attacks, summons 2 Combee beside it: its sides first, then
     behind, in front, and the diagonals from back to front. Combee come at Vespiquen's star level. They fight but never count as survivors for round damage. With no free square,
     the power stays charged and tries again after the next attack.

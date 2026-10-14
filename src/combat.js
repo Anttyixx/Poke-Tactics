@@ -498,6 +498,21 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
       case 'treat':
         sweetTreat(u);
         break;
+      case 'boost': {
+        // Toxtricity's Overdrive: allies in the plus around it (left, right, front,
+        // back) that have a power counter gain `charges` toward their power (never
+        // past full). Like all power progress, they land at the end of the tick.
+        emit('cast', { id: u.id, target: null });
+        for (const [dx, dy] of NEIGHBORS) {
+          const o = unitAt(u.x + dx, u.y + dy);
+          if (!o || o.side !== u.side || !standing(o) || !(o.maxMana > 0)) continue;
+          const gain = Math.min(p.charges, o.maxMana - shownMana(o));
+          if (gain <= 0) continue;
+          o.pendingMana += gain;
+          emit('boost', { id: o.id, by: u.id, amount: gain, mana: shownMana(o) });
+        }
+        break;
+      }
       case 'transform':
         if (u.form) { hop(u, target); break; } // Star Form's own power
         emit('cast', { id: u.id, target: null });

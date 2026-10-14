@@ -73,7 +73,7 @@ const agg = (rows) => {
   return {
     fights: n, fightWinRate: rows.filter((r) => r.win).length / n,
     dmg: sum('dmg') / n, taken: sum('taken') / n, kills: sum('kills') / n, casts: sum('casts') / n,
-    attacks: sum('attacks') / n, healed: sum('healed') / n, healOffered: sum('healOffered') / n, healHits: sum('healHits') / n,
+    attacks: sum('attacks') / n, boosts: sum('boosts') / n, boosted: sum('boosted') / n, healed: sum('healed') / n, healOffered: sum('healOffered') / n, healHits: sum('healHits') / n,
     survival: rows.filter((r) => r.me.survived).length / n,
   };
 };
@@ -120,6 +120,7 @@ writeFileSync(`${outDir}focus-${focus}.html`, report(summary));
 const pct = (x) => (x === null || x === undefined ? '  –  ' : `${(x * 100).toFixed(1)}%`);
 console.log(`${name(focus)}: ${games} games in ${secs.toFixed(0)}s (placement ${place})`);
 console.log(`Teams with it win ${pct(overall.winRate)} ±${(overall.margin * 100).toFixed(1)}  ·  fights won ${pct(stats.fightWinRate)}  ·  survives ${pct(stats.survival)}  ·  ${stats.dmg.toFixed(0)} damage, ${stats.kills.toFixed(2)} KOs, ${stats.casts.toFixed(2)} powers per fight`);
+if (stats.boosts) console.log(`Boost: ${stats.boosts.toFixed(1)} allies boosted, ${stats.boosted.toFixed(1)} charges given per fight · ${stats.casts.toFixed(2)} casts`);
 if (stats.healOffered) console.log(`Healing: ${stats.healed.toFixed(0)} HP restored per fight (${pct(stats.healed / stats.healOffered)} of ${stats.healOffered.toFixed(0)} offered) · ${stats.healHits.toFixed(1)} heals landed · ${stats.attacks.toFixed(1)} attacks per fight`);
 console.log('\nBy star:', byStar.map((s) => `★${s.star}: wins ${pct(s.fightWinRate)} of ${s.fights} fights`).join(' · '));
 console.log('\nFight win rate by square (random placement; front row first, as its player sees it):');

@@ -10,9 +10,9 @@
     "ability": {"name": "Psywave", "kind": "opening", "damagePct": 50, "stun": 10}
   },
   "toxtricity": {
-    "name": "Toxtricity", "sprite": "assets/sprites/toxtricity.png", "fx": "#ffe14d", "type": "ranger", "cost": 4,
-    "hp": [1000, 1700, 2890, 4900], "damage": [110, 187, 319, 539], "range": 1, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 8,
-    "ability": {"name": "Thunderbolt", "kind": "snipe", "damagePct": 80}
+    "name": "Toxtricity", "sprite": "assets/sprites/toxtricity.png", "fx": "#ffe14d", "type": "ranger", "cost": 3,
+    "hp": [950,  1615,  2746,  4655], "damage": [70,  119,  202,  343], "range": 2, "moveSpeed": "medium", "secPerHit": 1.25, "critChance": 15, "energy": 3,
+    "ability": {"name": "Overdrive", "kind": "boost", "charges": 2}
   },
   "vespiquen": {
     "name": "Vespiquen", "sprite": "assets/sprites/vespiquen.png", "fx": "#ffc23d", "type": "ranger", "cost": 3,

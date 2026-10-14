@@ -59,10 +59,10 @@ function assertCopiesConserved(player) {
 // ---- catalog --------------------------------------------------------------
 
 test('unit catalog is well formed, and every unit has a sprite that exists', () => {
-  const kinds = new Set(['empower', 'snipe', 'summon', 'stealth', 'haste', 'opening', 'quake', 'transform', 'splashHeal', 'selfdestruct', 'copy', 'chill', 'treat']);
+  const kinds = new Set(['empower', 'snipe', 'summon', 'stealth', 'haste', 'opening', 'quake', 'transform', 'splashHeal', 'selfdestruct', 'copy', 'chill', 'treat', 'boost']);
   // Powers that fire on a counter of attacks need `energy`; the rest (battle
   // start, passives, knockout or low-HP triggers) have none.
-  const counted = (a) => ['empower', 'snipe', 'summon', 'stealth', 'haste', 'quake', 'treat'].includes(a.kind) || (a.kind === 'transform' && !a.trigger);
+  const counted = (a) => ['empower', 'snipe', 'summon', 'stealth', 'haste', 'quake', 'treat', 'boost'].includes(a.kind) || (a.kind === 'transform' && !a.trigger);
   for (const [id, u] of Object.entries(catalog)) {
     for (const k of ['hp', 'damage']) {
       const v = u[k];
@@ -541,18 +541,43 @@ test('Psywave (Beheeyem): at the start, the first enemy in its column is knocked
   assert.ok(!r.events.some((e) => e.id === first && ['move', 'attack'].includes(e.type) && e.t <= st.t + st.duration), 'stays put while stunned');
 });
 
-test('Thunderbolt (Toxtricity): every 8th attack also zaps the farthest enemy for 80%', () => {
-  const r = simulate(powerCat(), [
-    [{ uid: 1, unitId: 'toxtricity', star: 0, x: 2, y: 0 }],
+test('snipe powers (no Pokémon uses one right now): every 8th attack also zaps the farthest enemy for 80%', () => {
+  const cat = powerCat();
+  cat.zapper = { ...cat.wall, range: 1, secPerHit: 1.42, damage: [110, 187, 319, 539], critChance: 0, energy: 8, ability: { name: 'Thunderbolt', kind: 'snipe', damagePct: 80 } };
+  const r = simulate(cat, [
+    [{ uid: 1, unitId: 'zapper', star: 0, x: 2, y: 0 }],
     [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'wall', star: 0, x: 0, y: 3 }],
   ], 1);
   const tx = unitOf(r, 1).id;
   const far = unitOf(r, 3).id;
   const cast = evs(r, 'cast', tx)[0];
   assert.equal(cast.target, far);
-  assert.equal(evs(r, 'attack', tx).filter((e) => e.t <= cast.t).length, catalog.toxtricity.energy, 'fires with the 8th attack');
-  assert.equal(r.events.find((e) => e.type === 'damage' && e.id === far).amount, Math.floor((catalog.toxtricity.damage[0] * 80) / 100));
+  assert.equal(evs(r, 'attack', tx).filter((e) => e.t <= cast.t).length, 8, 'fires with the 8th attack');
+  assert.equal(r.events.find((e) => e.type === 'damage' && e.id === far).amount, Math.floor((Math.round(110 * STAT_SCALE) * 80) / 100));
 });
+
+test('Overdrive (Toxtricity): every 3 attacks, allies left, right, in front and behind gain +2 power charges; diagonals and Pokémon without a counter do not', () => {
+  const cat = powerCat();
+  // Allies with a long power counter that never fills during the test.
+  cat.charger = { ...cat.wall, energy: 50, ability: { name: 'Big', kind: 'haste', hastePct: 10, duration: 10 } };
+  cat.plain = { ...cat.wall }; // no power counter
+  // Toxtricity at combat (2,5) shoots the wall at (2,3); allies at (2,4) front, (1,5) side,
+  // (2,6) behind, (1,4) diagonal, and a counter-less one at (3,5).
+  const r = simulate(cat, [
+    [{ uid: 1, unitId: 'toxtricity', star: 0, x: 2, y: 1 },
+      { uid: 2, unitId: 'charger', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'charger', star: 0, x: 1, y: 1 },
+      { uid: 4, unitId: 'charger', star: 0, x: 2, y: 2 }, { uid: 5, unitId: 'charger', star: 0, x: 1, y: 0 },
+      { uid: 6, unitId: 'plain', star: 0, x: 3, y: 1 }],
+    [{ uid: 9, unitId: 'wall', star: 0, x: 2, y: 0 }],
+  ], 1);
+  const tx = unitOf(r, 1).id;
+  const cast = evs(r, 'cast', tx)[0];
+  assert.equal(evs(r, 'attack', tx).filter((e) => e.t <= cast.t).length, catalog.toxtricity.energy, 'every 3 attacks');
+  const boosted = evs(r, 'boost').filter((e) => e.t === cast.t && e.by === tx);
+  assert.deepEqual(boosted.map((e) => e.id).sort(), [2, 3, 4].map((uid) => unitOf(r, uid).id).sort(), 'the plus, not the diagonal or a Pokémon without a counter');
+  assert.ok(boosted.every((e) => e.amount === catalog.toxtricity.ability.charges && e.mana === catalog.toxtricity.ability.charges), '+2 each, from empty');
+});
+
 
 test('Attack Order (Vespiquen): always summons 2 Combee at its own star, sides first; they never count as survivors', () => {
   const cat = powerCat();

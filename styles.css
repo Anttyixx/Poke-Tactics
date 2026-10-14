@@ -1402,6 +1402,7 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 @keyframes chill-spin { to { rotate: 360deg; } }
 .float.chill { color: #a8ecff; }
 .float.guard { color: #9fd8ff; }
+.float.boost { color: #ffe14d; }
 /* Treated by Alcremie: a glow in the treat's colour and a badge saying which
    treat it is (heart = healing, chevrons = attack speed, shield = shield). */
 .unit.sprite-unit.treated .sprite { filter: var(--tint) drop-shadow(0 0 2px var(--treat)) drop-shadow(0 0 6px var(--treat)); animation: treat-glow 1s ease-in-out infinite; }

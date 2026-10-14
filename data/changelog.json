@@ -1,5 +1,19 @@
 [
   {
+    "id": "2026-10-14-toxtricity-overdrive",
+    "version": "0.20.0",
+    "date": "2026-10-14",
+    "title": "Toxtricity rework: Overdrive",
+    "intro": "Toxtricity is now a supporter that charges up the Pokémon around it, instead of a melee fighter with a long-range zap.",
+    "changes": [
+      { "pokemon": "toxtricity", "kind": "change", "text": "New power, Overdrive: every 3 attacks, your Pokémon directly left, right, in front of and behind Toxtricity gain +2 toward their power. Pokémon without a power counter don't benefit." },
+      { "pokemon": "toxtricity", "kind": "change", "text": "Thunderbolt is gone." },
+      { "pokemon": "toxtricity", "kind": "change", "text": "Cost 4 → 3. Range 1 → 2. Attacks every 1.25s (was 1.42s)." },
+      { "pokemon": "toxtricity", "kind": "change", "text": "HP 1000 → 950 and damage 110 → 70 at ★, to make up for the cheaper cost and the new power." },
+      { "kind": "new", "text": "Charged Pokémon show \"+2 charge\" and their power bar fills." }
+    ]
+  },
+  {
     "id": "2026-10-14-treat-effects-log",
     "version": "0.19.1",
     "date": "2026-10-14",
