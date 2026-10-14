@@ -51,8 +51,8 @@
   },
   "lilligant": {
     "name": "Lilligant", "sprite": "assets/sprites/lilligant.png", "fx": "#9be07a", "type": "cleric", "cost": 3,
-    "hp": [700, 1190, 2025, 3430], "damage": [60, 102, 173, 294], "range": 2, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 0,
-    "ability": {"name": "Aromatherapy", "kind": "splashHeal", "healPct": 50}
+    "hp": [700, 1190, 2025, 3430], "damage": [66, 112, 190, 323], "range": 2, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 0,
+    "ability": {"name": "Aromatherapy", "kind": "splashHeal", "healPct": 60, "radius": 1}
   },
   "golem": {
     "name": "Golem", "sprite": "assets/sprites/golem.png", "fx": "#d8b16a", "type": "warrior", "cost": 4,

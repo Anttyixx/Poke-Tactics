@@ -605,15 +605,15 @@ test('Earthquake (Torterra): after 5 attacks, hits every enemy on the board for 
   }
 });
 
-test('Aromatherapy (Lilligant): each attack heals allies next to the square it hits', () => {
+test('Aromatherapy (Lilligant): each attack heals allies in the 3x3 around the square it hits', () => {
   const cat = powerCat();
   cat.hurt = { ...cat.wall, hp: [1e5, 1e5, 1e5, 1e5] }; // never knocked out during the test
   cat.brute = { ...cat.wall, range: 1, secPerHit: 1, damage: [200, 200, 200, 200] };
   // Lilligant at combat (2,5) shoots the brute at (2,3) (2 squares). The brute is
-  // hitting an ally at (2,4), right next to the square Lilligant hits; another
-  // hurt ally at (0,7) is nowhere near it.
+  // hitting an ally at (2,4), right next to the square Lilligant hits; an ally
+  // at (1,4) is diagonal to it (inside the 3x3); another at (0,7) is nowhere near.
   const r = simulate(cat, [
-    [{ uid: 1, unitId: 'lilligant', star: 0, x: 2, y: 1 }, { uid: 2, unitId: 'hurt', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'hurt', star: 0, x: 0, y: 3 }],
+    [{ uid: 1, unitId: 'lilligant', star: 0, x: 2, y: 1 }, { uid: 2, unitId: 'hurt', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'hurt', star: 0, x: 0, y: 3 }, { uid: 4, unitId: 'hurt', star: 0, x: 1, y: 0 }],
     [{ uid: 5, unitId: 'brute', star: 0, x: 2, y: 0 }],
   ], 1);
   const l = unitOf(r, 1).id;
@@ -622,6 +622,10 @@ test('Aromatherapy (Lilligant): each attack heals allies next to the square it h
   const amount = Math.floor((catalog.lilligant.damage[0] * catalog.lilligant.ability.healPct) / 100);
   const healed = (id) => shots.filter((s) => evs(r, 'heal', id).some((h) => h.t === s.t && h.amount === amount)).length;
   assert.ok(healed(unitOf(r, 2).id) >= shots.length - 1, 'the ally next to the hit square is healed each time');
+  assert.equal(catalog.lilligant.ability.radius, 1, 'the heal covers the 3x3');
+  // The diagonal ally is at full HP, so nothing lands, but it is offered the heal.
+  const offered = evs(r, 'heal', unitOf(r, 4).id).filter((h) => h.from?.[l]?.[1] === amount);
+  assert.ok(offered.length >= shots.length - 1, 'the diagonal ally is in the heal too');
   assert.equal(evs(r, 'heal', unitOf(r, 3).id).length, 0, 'an ally elsewhere is not');
 });
 

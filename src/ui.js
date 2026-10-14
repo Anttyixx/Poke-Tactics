@@ -72,7 +72,10 @@ export function powerText(def, star, catalog) {
     case 'haste': return { when: every, text: `Attacks ${vNum(`${p.hastePct}%`)} faster for ${vTime(p.duration)}.` };
     case 'quake': return { when: every, text: `Shakes the whole board: every enemy takes ${hit}${p.stun ? ` and is stunned for ${vTime(p.stun)}` : ''}.` };
     case 'chill': return { when: 'Every attack', text: `Chills the target for ${vTime(p.duration)}: it attacks and moves ${vNum(`${p.slowPct}%`)} slower. Another hit restarts the timer.` };
-    case 'splashHeal': return { when: 'Every attack', text: `Heals your Pokémon directly left, right, above and below its target for ${vHeal(`${p.healPct}%`)} of its damage (${vHeal(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.healPct) / 100)))}).` };
+    case 'splashHeal': {
+      const where = p.radius ? `in the ${area(p.radius)} around its target` : 'directly left, right, above and below its target';
+      return { when: 'Every attack', text: `Heals your Pokémon ${where} for ${vHeal(`${p.healPct}%`)} of its damage (${vHeal(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.healPct) / 100)))}).` };
+    }
     case 'selfdestruct': return { when: 'When knocked out', text: `Stays on its square for ${vTime(p.delay)}, then explodes: enemies in the ${area(p.radius)} around it take ${hit}.` };
     case 'copy': return { when: 'Always', text: `Walks to the nearest enemy and takes ${vTime(p.morph)} to transform into it, copying its HP, damage, attack speed, range and crit (not its power or movement). It keeps its share of HP and stands still while transformed. When that Pokémon faints, it turns back and walks to the next one.` };
     case 'transform': {
