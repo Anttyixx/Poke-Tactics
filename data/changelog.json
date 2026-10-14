@@ -1,5 +1,16 @@
 [
   {
+    "id": "2026-10-14-team-cards",
+    "version": "0.16.11",
+    "date": "2026-10-14",
+    "title": "New team selection cards",
+    "changes": [
+      { "kind": "change", "text": "Team selection cards now look like the Pokédex cards: the Pokémon in a glow of its type colour, its name, cost and type." },
+      { "kind": "change", "text": "Picked Pokémon get a green border and walk on the spot, instead of showing a check mark." },
+      { "kind": "fix", "text": "Picking a Pokémon no longer makes every picked card shake." }
+    ]
+  },
+  {
     "id": "2026-10-14-dex-shape-headroom",
     "version": "0.16.10",
     "date": "2026-10-14",
