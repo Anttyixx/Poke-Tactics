@@ -1,3 +1,4 @@
+0868dc9	dev	2026-10-14 16:39 UTC	Dreepy crash into their target: take its square and shove it aside (shields break instead); Dragapult damage 55 -&gt; 45 (0.27.0)
 b2dbf54	dev	2026-10-14 15:30 UTC	Dreepy damage 6 -&gt; 20, Dragapult damage 65 -&gt; 55 (option N, 0.26.0)
 0f0b43a	dev	2026-10-14 15:23 UTC	Dragapult: fires both Dreepy in place of an attack, only when both are home; attacks normally otherwise; damage 25 -&gt; 65 (0.25.0)
 ec880a5	dev	2026-10-14 15:13 UTC	Dragapult: Dreepy hold their target until they faint; fly back in 1.5s; new pair only once both are home; no impact damage, Dragapult damage 40 -&gt; 25 (0.24.0)
@@ -27,4 +28,3 @@ a4c8199	dev	2026-10-14 03:38 UTC	Pokédex entry: stat hexagon, fixed-size chips,
 fbb6cd7	dev	2026-10-14 02:45 UTC	Level marks: ★, ★★, ★★★ and a shiny star for the max level
 e26c195	dev	2026-10-14 02:34 UTC	New Pokédex: card grid, entries with a level cycler, form and summon links
 5109c12	dev	2026-10-14 02:19 UTC	Ditto: cost 3, 1s transform, 600 base HP
-1f3efcd	dev	2026-10-14 01:33 UTC	New Pokemon: Frosmoth (Frostbite chills on every hit)

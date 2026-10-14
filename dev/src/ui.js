@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=b2dbf54';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=0868dc9';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=b2dbf54';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=b2dbf54';
+} from './game.js?v=0868dc9';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=0868dc9';
 
 const TICK_MS = 100;
 // Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
@@ -72,7 +72,7 @@ export function powerText(def, star, catalog) {
     case 'rage': return { when: 'Every attack', text: `Each attack in a row without moving makes it attack ${vNum(`${p.stackPct}%`)} faster, up to ${vNum(`${p.stackPct * p.maxStacks}%`)} after ${vNum(p.maxStacks)} attacks. Moving resets it.` };
     case 'darts': {
       const name = catalog?.[p.unit]?.name ?? p.unit;
-      return { when: 'Both home', text: `When it attacks with both ${name} at home, it fires them instead: one at each of the ${vNum(p.count)} farthest enemies${p.impactPct ? `, each hitting for ${vDmg(`${p.impactPct}%`)} damage (${vDmg(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.impactPct) / 100)))})` : ''}. Each lands beside its target and fights.${p.lure ? ` Its target stops attacking whoever it was and must attack the ${name} until it faints.` : ''} A ${name} that faints flies back (${vTime(Math.round(p.returnSec * 10))}). Until both are home, ${esc(def.name)} attacks normally. They come at ${esc(def.name)}'s level.` };
+      return { when: 'Both home', text: `When it attacks with both ${name} at home, it fires them instead: one at each of the ${vNum(p.count)} farthest enemies${p.impactPct ? `, each hitting for ${vDmg(`${p.impactPct}%`)} damage (${vDmg(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.impactPct) / 100)))})` : ''}. Each ${p.displace ? 'crashes into its target, shoving it aside onto a square next to it, then stays' : 'lands beside its target'} and fights.${p.lure ? ` Its target stops attacking whoever it was and must attack the ${name} until it faints.` : ''} A ${name} that faints flies back (${vTime(Math.round(p.returnSec * 10))}). Until both are home, ${esc(def.name)} attacks normally. They come at ${esc(def.name)}'s level.` };
     }
     case 'boost': return { when: every, text: `Charges up the allies directly left, right, in front of and behind it: each gains ${vNum(`+${p.charges}`)} toward its power (Pokémon without a power counter don't benefit).` };
     case 'snipe': return { when: every, text: `The attack also zaps the farthest enemy for ${hit}.` };
@@ -1317,10 +1317,11 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         if (!animate) break;
         const p = viewPos(pal.x, pal.y);
         if (ev.dart) {
-          // Dragapult's Dreepy: flies from Dragapult to its target, then lands.
+          // Dragapult's Dreepy: flies from Dragapult to where it lands (onto its
+          // target, which is shoved aside when it arrives).
           pal.el.style.visibility = 'hidden';
-          const to = actors.get(ev.target);
-          const ms = projectile(at(), to ? viewPos(to.x, to.y) : p, fxColor(pal.unitId), true);
+          const ms = projectile(at(), p, fxColor(pal.unitId), true);
+          ctx.hitDelay.set(pal.id, ms);
           later(ms, () => { pal.el.style.visibility = ''; play(pal.el, 'spawned', 300); fx(p.x, p.y, 'burst', fxColor(pal.unitId), 1.2); });
         } else { play(pal.el, 'spawned', 400); fx(p.x, p.y, 'ring', fxColor(pal.unitId), 1.3); }
         break;
@@ -1343,7 +1344,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         a.tauntBy = ev.by;
         a.el.classList.add('taunted');
         if (animate && ev.dart) {
-          later(ctx.hitDelay.get(a.id) ?? 0, () => floatText(a, 'Distracted', 'taunt'));
+          later(ctx.hitDelay.get(ev.by) ?? 0, () => floatText(a, 'Distracted', 'taunt'));
         } else if (animate) {
           const from = actors.get(ev.by);
           const ms = from ? projectile(viewPos(from.x, from.y), at(), '#ff6fa8', false) : 0;

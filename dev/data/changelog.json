@@ -1,5 +1,16 @@
 [
   {
+    "id": "2026-10-14-dreepy-missile",
+    "version": "0.27.0",
+    "date": "2026-10-14",
+    "title": "Dreepy crash into their targets",
+    "intro": "Dragapult's Dreepy now fly like missiles and hit the Pokémon they're aimed at.",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "change", "text": "Each Dreepy crashes into its target: it lands on the target's square and shoves the target to a square next to it. A shielded Pokémon isn't moved (its shield breaks instead), and if there's no room the Dreepy lands beside it as before." },
+      { "pokemon": "dragapult", "kind": "nerf", "text": "Damage 55 → 45 at ★, to make up for the shove." }
+    ]
+  },
+  {
     "id": "2026-10-14-dreepy-20",
     "version": "0.26.0",
     "date": "2026-10-14",
