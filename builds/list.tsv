@@ -1,3 +1,4 @@
+692f749	dev	2026-10-14 18:45 UTC	Dreepy grow slowly with level (HP 150-260, dmg 20-38, landing 50-86); Dragapult attacks every 1.5s for 55 (0.32.0)
 0b65480	dev	2026-10-14 17:30 UTC	Dragapult: Dreepy only at enemies outside the 3x3 around it (one per far enemy, none -&gt; attacks); Dreepy 150 HP / 25 dmg and 50 landing hit at every level; attacks every 1.8s for 65 (0.31.0)
 795ba6e	dev	2026-10-14 17:06 UTC	Dragapult: fires Dreepy whenever both are home (no attack counter); Dreepy go at enemies in the 3x3 around it first, then the farthest; attacks every 2.5s for 70 (0.30.0)
 910da92	dev	2026-10-14 16:56 UTC	Dreepy damage 15 -&gt; 10 (0.29.1)
@@ -27,4 +28,3 @@ b43e1f1	dev	2026-10-14 04:05 UTC	Stat shape: each stat scaled linearly to the hi
 7ccbc60	dev	2026-10-14 04:01 UTC	Standard power descriptions with coloured values; trim Pokédex chips; 4-stat shape
 caff0c0	dev	2026-10-14 03:42 UTC	Pokédex entry: level changes count the power text's numbers instead of refreshing it; drop the footer note
 a4c8199	dev	2026-10-14 03:38 UTC	Pokédex entry: stat hexagon, fixed-size chips, sprite glow on hover, type-colour wash, animated close
-5522fe9	dev	2026-10-14 03:30 UTC	Pokédex: entries open in their own pop-up; related Pokémon swap places with an animation

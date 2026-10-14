@@ -637,14 +637,15 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     // Enemies its other Dreepy were fired at (not whoever they fight now: a
     // lure from the other side's darts this same tick may have changed that).
     const busy = new Set(u.darts.filter((s) => s.unit).map((s) => s.aim));
+    // Distances are from where everyone stood when the tick began, so a shove
+    // from a dart that landed earlier this tick (either side's) changes nothing.
+    const me = { x: at(u).x, y: at(u).y, side: u.side };
     const foes = units.filter((e) => e.side !== u.side && visible(e) && e.bornAt !== t)
-      .sort((a, b) => Math.max(Math.abs(b.x - u.x), Math.abs(b.y - u.y)) - Math.max(Math.abs(a.x - u.x), Math.abs(a.y - u.y)) || dist(u, b) - dist(u, a) || a.slot - b.slot);
+      .sort((a, b) => reach(me, at(b)) - reach(me, at(a)) || dist(me, at(b)) - dist(me, at(a)) || a.slot - b.slot);
     // `outside`: only enemies farther than that many squares away (1 = not in
     // the 3x3 around it), farthest first, one Dreepy each; with nobody that far,
     // no Dreepy at all.
-    // (Judged from where everyone stood when the tick began, like the attack
-    // that fired them, so a shove by the other side's darts changes nothing.)
-    const pool = p.outside ? foes.filter((e) => reach(at(u), at(e)) > p.outside) : foes;
+    const pool = p.outside ? foes.filter((e) => reach(me, at(e)) > p.outside) : foes;
     const target = pool.find((e) => !busy.has(e.id)) ?? (p.outside ? null : pool[0]);
     if (!target) return;
     // `displace`: it crashes into its target, landing on its square and
@@ -652,7 +653,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     // room, or a target nothing can affect, it lands beside it).
     const kin = units.length;
     const shove = p.displace && !immune(target) ? (blocks(target) ? null : displaceSpot(target)) : null;
-    const cell = shove ? { x: target.x, y: target.y } : dashSpot(u, target) ?? closestFree(at(target), u, null, u.side);
+    const cell = shove ? { x: target.x, y: target.y } : dashSpot(me, target) ?? closestFree(at(target), me, null, u.side);
     if (!cell) return;
     record && emit('cast', { id: u.id, target: target.id });
     if (p.displace && !immune(target) && blocks(target)) breakGuard(target);
