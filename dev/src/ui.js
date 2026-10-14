@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=3fbe35c';
+import { COLS, CRIT_PCT, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=5522fe9';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=3fbe35c';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=3fbe35c';
+} from './game.js?v=5522fe9';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=5522fe9';
 
 const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
 // Attack-effect colour when a unit doesn't set its own "fx" colour in units.json.
@@ -116,7 +116,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   const readyBtn = $('ready');
   const toastEl = $('toast');
   const dexEl = $('dex');
-  let dexPick = null; // unit id shown in the Pokédex
+  let dexPick = null; // unit id shown in the Pokédex entry
   const clockEl = $('clock');
 
   let state = null;
@@ -434,7 +434,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   document.addEventListener('keydown', (e) => {
     if (!state || e.ctrlKey || e.metaKey || e.altKey || e.target.matches('input, textarea')) return;
     const key = e.key.toLowerCase();
-    if (!dexEl.hidden) { dexKey(key); return; }
+    if (!dexEl.hidden || !entryEl.hidden) { dexKey(key); return; }
     if (!menuEl.hidden) { if (key === 'escape' || key === 'm') closeMenu(); return; }
     if (peek && key === 'escape') return closeInfo();
     if (key === 'p') openDex();
@@ -1721,54 +1721,60 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
 
   // ---- Pokédex ---------------------------------------------------------------
   // Every Pokémon's stats, read straight from units.json, so new Pokémon and
-  // stat changes show up here automatically. The grid shows a card per
-  // Pokémon (summons too); a card opens its entry, where a button steps through
-  // the levels (★, ★★, ★★★, shiny). A transformation is its own entry, opened
-  // from the Pokémon that transforms.
+  // stat changes show up here automatically. The Pokédex pop-up is a grid of
+  // cards (summons too); a card opens that Pokémon's entry in a second pop-up
+  // on top. In an entry the level chip steps through ★, ★★, ★★★ and shiny, and
+  // related Pokémon (its transformation, its summon, who summons it) sit as
+  // small sprites by the big one: tapping one swaps the two places.
 
-  let dexForm = false; // showing dexPick's transformed form
-  let dexStar = 0; // level shown in an entry
+  const entryEl = $('dex-entry');
+  let dexForm = false; // the entry shows dexPick's transformed form
+  let dexStar = 0; // level shown in the entry
 
   dexEl.addEventListener('click', (e) => {
     if (e.target === dexEl || e.target.closest('#dex-close')) return closeDex();
-    if (e.target.closest('#dex-back')) { dexStar = 0; return showDexEntry(null); }
+    const pick = e.target.closest('[data-dex]');
+    if (pick) openEntry(pick.dataset.dex);
+  });
+  entryEl.addEventListener('click', (e) => {
+    if (e.target === entryEl || e.target.closest('#entry-close')) return closeEntry();
     if (e.target.closest('#dex-level')) return setDexLevel((dexStar + 1) % 4);
     const form = e.target.closest('[data-dex-form]');
-    if (form) return showDexEntry(form.dataset.dexForm, true);
+    if (form) return swapEntry(form.dataset.dexForm, true);
     const pick = e.target.closest('[data-dex]');
-    if (pick) showDexEntry(pick.dataset.dex);
+    if (pick) swapEntry(pick.dataset.dex, false);
   });
 
-  function showDexEntry(id, form = false) {
-    dexPick = id;
-    dexForm = form;
-    renderDex();
-    dexEl.scrollTop = 0;
-  }
-
+  // The Pokédex grid; with an id (a team card's ⓘ), just that Pokémon's entry.
   function openDex(id) {
-    dexPick = id ?? null;
-    dexForm = false;
-    dexStar = 0;
-    renderDex();
+    if (id) return openEntry(id);
+    renderDexGrid();
     dexEl.hidden = false;
   }
-
+  function openEntry(id) {
+    dexPick = id;
+    dexForm = false;
+    dexStar = 0;
+    renderEntry();
+    entryEl.hidden = false;
+    entryEl.scrollTop = 0;
+  }
+  function closeEntry() {
+    entryEl.hidden = true;
+  }
   function closeDex() {
+    closeEntry();
     dexEl.hidden = true;
   }
 
-  // Keys while the Pokédex is open: ←/→ change the level, Escape goes back to
-  // the grid (or closes it from the grid).
+  // Keys while the Pokédex is open: ←/→ change the entry's level, Escape
+  // closes the top pop-up.
   function dexKey(key) {
-    if (dexPick && (key === 'arrowright' || key === 'arrowleft')) {
+    const entryOpen = !entryEl.hidden;
+    if (entryOpen && (key === 'arrowright' || key === 'arrowleft')) {
       return setDexLevel((dexStar + (key === 'arrowright' ? 1 : 3)) % 4);
     }
-    if (key === 'escape' && dexPick) {
-      if (dexForm) return showDexEntry(dexPick);
-      dexStar = 0;
-      return showDexEntry(null);
-    }
+    if (key === 'escape' && entryOpen) return closeEntry();
     if (key === 'escape' || key === 'p') closeDex();
   }
 
@@ -1789,6 +1795,16 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       <b>${esc(def.name)}</b>
       <small>${def.summon ? 'Summon' : `${def.cost} 🪙`} · ${typeName(def.type)}</small>
     </button>`;
+  }
+
+  function renderDexGrid() {
+    const summons = summonIds();
+    dexEl.querySelector('.dex-panel').innerHTML = `
+      <button id="dex-close" class="ghost" aria-label="Close">✕</button>
+      <h1>Pokédex</h1>
+      <p class="muted dex-sub">Tap a Pokémon to see its stats and power.</p>
+      <div class="dex-grid">${troopIds(catalog).map(dexCard).join('')}</div>
+      ${summons.length ? `<h3 class="dex-section">Summoned in battle</h3><div class="dex-grid">${summons.map(dexCard).join('')}</div>` : ''}`;
   }
 
   // The parts of an entry that change with the level.
@@ -1812,12 +1828,12 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     };
   }
 
-  // Change the level in an open entry without redrawing it: numbers count to
+  // Change the level in the open entry without redrawing it: numbers count to
   // their new values and the power text cross-fades.
   function setDexLevel(star) {
     dexStar = star;
-    const detail = dexEl.querySelector('.dex-detail');
-    if (!detail) return renderDex();
+    const detail = entryEl.querySelector('.dex-detail');
+    if (!detail) return renderEntry();
     const base = catalog[dexPick];
     const isForm = dexForm && base.ability?.form;
     const v = dexLevelValues(isForm ? formDef(base) : base, star, isForm ? base : null);
@@ -1856,26 +1872,44 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     el._tween = requestAnimationFrame(step);
   }
 
-  function renderDex() {
-    const panel = dexEl.querySelector('.dex-panel');
-    if (!dexPick || !catalog[dexPick]) {
-      const summons = summonIds();
-      panel.innerHTML = `
-        <button id="dex-close" class="ghost" aria-label="Close">✕</button>
-        <h1>Pokédex</h1>
-        <p class="muted dex-sub">Tap a Pokémon to see its stats and power.</p>
-        <div class="dex-grid">${troopIds(catalog).map(dexCard).join('')}</div>
-        ${summons.length ? `<h3 class="dex-section">Summoned in battle</h3><div class="dex-grid">${summons.map(dexCard).join('')}</div>` : ''}`;
-      return;
-    }
+  const reduceMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  // Tapping a related Pokémon: it grows into the big spot while the current one
+  // shrinks into the small spot (FLIP: measure, redraw, play from the old places).
+  function swapEntry(id, form) {
+    const oldKey = dexForm ? `form:${dexPick}` : dexPick;
+    const newKey = form ? `form:${id}` : id;
+    const was = (key) => entryEl.querySelector(`[data-key="${key}"]`)?.getBoundingClientRect();
+    const fromMain = was(oldKey); // the big sprite now
+    const fromSmall = was(newKey); // the small sprite that was tapped
+    dexPick = id;
+    dexForm = form;
+    renderEntry({ fade: true });
+    if (!fromMain || !fromSmall || reduceMotion()) return;
+    const play = (key, from) => {
+      const el = entryEl.querySelector(`[data-key="${key}"]`);
+      if (!el) return;
+      const to = el.getBoundingClientRect();
+      const dx = from.left + from.width / 2 - (to.left + to.width / 2);
+      const dy = from.top + from.height / 2 - (to.top + to.height / 2);
+      el.animate([
+        { transform: `translate(${dx}px, ${dy}px) scale(${from.width / to.width})` },
+        { transform: 'none' },
+      ], { duration: 420, easing: 'cubic-bezier(0.34, 1.3, 0.64, 1)' });
+    };
+    play(newKey, fromSmall); // grows from the small spot
+    play(oldKey, fromMain); // shrinks from the big spot
+  }
+
+  function renderEntry({ fade = false } = {}) {
     const base = catalog[dexPick];
-    const isForm = dexForm && base.ability?.form;
+    if (!base) return closeEntry();
+    const isForm = Boolean(dexForm && base.ability?.form);
     const def = isForm ? formDef(base) : base;
     const star = dexStar;
     const copycat = isCopycat(def);
     const v = dexLevelValues(def, star, isForm ? base : null);
-    const chip = (k, label, value) => `<span class="dex-chip"${k ? ` data-k="${k}"` : ''}><small>${label}</small><b>${value}</b></span>`;
     const st = unitStats(def, star);
+    const chip = (k, label, value) => `<span class="dex-chip"${k ? ` data-k="${k}"` : ''}><small>${label}</small><b>${value}</b></span>`;
     const chips = [
       chip('hp', 'HP', v.hp),
       !copycat && chip('dmg', 'Damage', v.dmg),
@@ -1884,31 +1918,29 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       !copycat && chip('', 'Attacks every', `${attackTime(st)}s`),
       !copycat && chip('', 'Range', def.range > 1 ? `${def.range} tiles` : 'Melee'),
       chip('', 'Movement', SPEED_NAME[def.moveSpeed]),
-      v.pdmg !== null && chip('pdmg', `${esc(def.ability.name)}`, v.pdmg),
+      v.pdmg !== null && chip('pdmg', esc(def.ability.name), v.pdmg),
     ].filter(Boolean).join('');
     const power = isForm
       ? `<div class="dex-power"><h3>${esc(base.ability.name)} form</h3><p data-k="power">${v.power}</p></div>`
       : def.ability ? `<div class="dex-power"><h3>${esc(def.ability.name)} <small>${powerCadence(def)}</small></h3><p data-k="power">${v.power}</p></div>` : '';
 
-    // Related Pokémon (its form, what it summons, who summons it) as small
-    // sprites beside the big one; tapping one opens that entry.
+    // Related Pokémon: [def, attributes, label, key].
     const related = [];
-    if (isForm) related.push([base, `data-dex="${dexPick}"`, `Transforms from ${base.name}`]);
-    else if (def.ability?.form) related.push([formDef(def), `data-dex-form="${dexPick}"`, `Transforms into ${def.ability.form.name}`]);
-    if (!isForm && def.ability?.kind === 'summon' && catalog[def.ability.unit]) related.push([catalog[def.ability.unit], `data-dex="${def.ability.unit}"`, `Summons ${catalog[def.ability.unit].name}`]);
-    if (def.summon) for (const t of summonersOf(dexPick)) related.push([catalog[t], `data-dex="${t}"`, `Summoned by ${catalog[t].name}`]);
-    const relatedHtml = related.map(([d, attrs, label]) => `<button class="dex-rel" ${attrs} data-type="${d.type}" title="${esc(label)}" aria-label="${esc(label)}">
-      <span class="portrait" data-facing="down"><span class="sprite" ${spriteStyle(d)}></span></span></button>`).join('');
+    if (isForm) related.push([base, `data-dex="${dexPick}"`, `Transforms from ${base.name}`, dexPick]);
+    else if (def.ability?.form) related.push([formDef(def), `data-dex-form="${dexPick}"`, `Transforms into ${def.ability.form.name}`, `form:${dexPick}`]);
+    if (!isForm && def.ability?.kind === 'summon' && catalog[def.ability.unit]) related.push([catalog[def.ability.unit], `data-dex="${def.ability.unit}"`, `Summons ${catalog[def.ability.unit].name}`, def.ability.unit]);
+    if (def.summon) for (const t of summonersOf(dexPick)) related.push([catalog[t], `data-dex="${t}"`, `Summoned by ${catalog[t].name}`, t]);
+    const sprite = (d, cls, key) => `<span class="portrait ${cls}" data-facing="down" data-key="${key}"><span class="sprite" ${spriteStyle(d)}></span></span>`;
+    const relatedHtml = related.map(([d, attrs, label, key]) => `<button class="dex-rel" ${attrs} title="${esc(label)}" aria-label="${esc(label)}">${sprite(d, 'dex-rel-sprite', key)}</button>`).join('');
 
     const tag = isForm ? 'Transformed form' : def.summon ? 'Summoned in battle' : `${def.cost} coins`;
-    panel.innerHTML = `
-      <button id="dex-close" class="ghost" aria-label="Close">✕</button>
-      <button id="dex-back" class="ghost">‹ All Pokémon</button>
-      <section class="dex-detail" data-type="${def.type}">
+    entryEl.querySelector('.dex-panel').innerHTML = `
+      <button id="entry-close" class="ghost" aria-label="Close">✕</button>
+      <section class="dex-detail${fade ? ' refresh' : ''}" data-type="${def.type}">
         <div class="dex-hero">
           <div class="dex-figure">
             <div class="dex-art">
-              <span class="portrait dex-portrait" data-facing="down"><span class="sprite" ${spriteStyle(def)}></span></span>
+              ${sprite(def, 'dex-portrait', isForm ? `form:${dexPick}` : dexPick)}
               ${relatedHtml ? `<div class="dex-rels">${relatedHtml}</div>` : ''}
             </div>
             <button id="dex-level" class="dex-level" title="Tap for the next level (→)" aria-label="Level: ${LEVEL_NAMES[star]}. Tap for the next level."><span class="stars s${star}">${levelMark(star)}</span></button>
@@ -1916,7 +1948,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
           <div class="dex-title">
             <h2>${esc(def.name)}</h2>
             <p class="dex-tags"><span class="dex-type">${typeName(def.type)}</span><span>${tag}</span></p>
-            ${related.length ? `<p class="dex-rel-names">${related.map(([d, attrs, label]) => `<button class="linkish" ${attrs}>${esc(label)}</button>`).join('')}</p>` : ''}
+            ${related.length ? `<p class="dex-rel-names">${related.map(([, attrs, label]) => `<button class="linkish" ${attrs}>${esc(label)}</button>`).join('')}</p>` : ''}
           </div>
         </div>
         <div class="dex-chips">${chips}</div>
