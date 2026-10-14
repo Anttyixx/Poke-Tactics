@@ -12,6 +12,7 @@ import {
   simulate, MAX_TICKS, COLS, HALF, SUDDEN_DEATH_TICK, SUDDEN_DEATH_HP_PER_SECOND, MOVE_SPEEDS, STEP_TICKS, CRIT_PCT, STAT_SCALE, TICK_SECONDS,
 } from '../src/combat.js';
 import { botTurn, planLayout } from '../src/bot.js';
+import { fightSummary } from '../src/matchlog.js';
 import { loadProfile, saveProfile, recordMatch, recordBattle, favouriteTroop, addFriend, removeFriend, AVATARS, DEFAULT_AVATAR, NAME_MAX } from '../src/profile.js';
 
 const catalog = JSON.parse(readFileSync(new URL('../data/units.json', import.meta.url), 'utf8'));
@@ -483,6 +484,15 @@ test('Sweet Treat (Alcremie): Mint Cream shields the ally under attack: less dam
   assert.ok(!evs(r, 'stun', ally).some((e) => e.t === broke.t), 'and does not stun');
   const after = hits.find((e) => e.t > broke.t);
   assert.equal(after.amount, 200, 'full damage once it is broken');
+});
+
+test('match log: each fight lists its seed and what happened by chance (Alcremie\'s flavour and who got it)', () => {
+  const { r, cat } = treatFight('guard');
+  const f = fightSummary({ result: r, round: 3, seed: 1 }, cat, ['Ann', 'Bo']);
+  assert.equal(f.round, 3);
+  assert.equal(f.seed, 1);
+  assert.ok(f.chance.some((c) => /Alcremie \(Ann\) rolled shield -> Ally \(Ann\)|Alcremie \(Ann\) rolled shield -> \S+ \(Ann\)/.test(c)), f.chance.join(' | '));
+  assert.deepEqual(Object.keys(f.crits), ['Ann', 'Bo']);
 });
 
 test('a shield also stops a shove: a Heat Crash breaks it instead of knocking the Pokémon back and stunning it', () => {

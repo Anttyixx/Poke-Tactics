@@ -26,6 +26,7 @@ import { hashSeed } from '../src/rng.js';
 import { summarizeFight, applyPatch } from './balance.mjs';
 import { bestLayout } from './placer.mjs';
 import { replayReport } from './replay-html.mjs';
+import { fightSummary } from '../src/matchlog.js';
 
 const args = process.argv.slice(2);
 const flags = Object.fromEntries(args.filter((a) => a.startsWith('--')).map((a) => { const [k, v] = a.slice(2).split('='); return [k, v ?? true]; }));
@@ -67,6 +68,7 @@ log.intents.forEach(([player, intent], i) => {
       damage: state.combat.damage,
       result: state.combat.result,
       fight: summarizeFight(state.combat.result, state.round),
+      chance: fightSummary(state.combat, catalog, log.names).chance,
     });
   }
 });
@@ -124,6 +126,7 @@ for (const r of rounds) {
   for (const p of [0, 1]) out.push(`  ${N[p].padEnd(12)} ${boardText(r.boards[p])}`);
   const top = [...r.fight.units].sort((a, b) => b.dmg - a.dmg)[0];
   if (top) out.push(`  Top damage: ${name(top.unitId)}${stars(top.star)} (${N[top.side]}) ${top.dmg}`);
+  for (const c of r.chance) out.push(`  Chance: ${c}`);
   if (r.luck !== null) out.push(`  Same boards, other seeds: ${N[w]} wins ${pct(r.luck)}${r.luck < 0.5 ? '  ← lucky win' : r.luck < 0.7 ? '  (close)' : ''}`);
   if (r.better && r.better.winChance > 0.5) out.push(`  ${N[r.better.player]} could have won ${pct(r.better.winChance)} of the time with: ${r.better.layout.map((u) => `${name(u.unitId)} @${u.x},${u.y}`).join(', ')}  (x 0-4 left→right, y 0 = front row)`);
   if (r.patched) out.push(`  With the patch: ${r.patched.winner === null ? 'draw' : `${N[r.patched.winner]} wins`}${r.patched.winner !== w ? '  ← RESULT CHANGES' : ''} · actual winner wins ${pct(r.patched.winChance)} over seeds`);

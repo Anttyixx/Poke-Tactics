@@ -8,6 +8,7 @@
 
 import { createGame, applyIntent } from './game.js';
 import { botTurn } from './bot.js';
+import { fightSummary } from './matchlog.js';
 import { createUI } from './ui.js';
 import { hashSeed } from './rng.js';
 import { connect, isCode, playerId, serverUrl, checkServer, netLog, note } from './online.js';
@@ -59,7 +60,7 @@ const ui = createUI({
 // The match log, plus this browser's connection log (what happened to the
 // online connection, for looking into drops).
 function getLog() {
-  const withNet = (log) => (log && mode !== 'bot' ? { ...log, connection: [...netLog] } : log);
+  const withNet = (log) => (log ? { ...log, fights: fightsFor(log.seed), ...(mode !== 'bot' && { connection: [...netLog] }) } : log);
   if (mode !== 'online') return Promise.resolve(withNet(matchLog));
   return new Promise((resolve) => {
     const done = (log) => resolve(withNet(log));
@@ -92,7 +93,7 @@ function clearSession() {
 const LAST_LOG_KEY = 'poke-tactics-last-log';
 function lastLogText() {
   const base = matchLog ?? { format: 'poke-tactics-match', v: 1, build: BUILD, mode: 'pvp', seed: state?.seed, names: state?.players.map((p) => p.name) };
-  return JSON.stringify({ ...base, code: roomCode, player: me, round: state?.round, connection: [...netLog], copied: new Date().toISOString() });
+  return JSON.stringify({ ...base, code: roomCode, player: me, round: state?.round, fights: fightsFor(base.seed), connection: [...netLog], copied: new Date().toISOString() });
 }
 function saveLastLog() {
   if (mode === 'bot') return;
@@ -173,6 +174,16 @@ function show() {
   ui.render(state);
 }
 
+// Each fight's seed and chance outcomes (Alcremie's flavours, Minior's hops,
+// crits), kept for the match log so a reader can see what happened by chance.
+let fightLog = { seed: null, list: [] };
+function noteFight() {
+  if (fightLog.seed !== state.seed) fightLog = { seed: state.seed, list: [] };
+  if (fightLog.list.some((f) => f.round === state.combat.round)) return;
+  fightLog.list.push(fightSummary(state.combat, catalog, state.players.map((p) => p.name)));
+}
+const fightsFor = (seed) => (fightLog.seed === seed ? fightLog.list : []);
+
 // Profile stats: each battle counts the Pokémon this player fielded; each
 // finished match counts a win, loss or draw (online and training separately).
 let trackedKey = null;
@@ -181,6 +192,7 @@ function trackStats() {
   if (key === trackedKey) return;
   trackedKey = key;
   if (state.phase === 'combat') {
+    noteFight();
     profile = recordBattle(state.combat.result.initial.filter((u) => u.side === me && !u.summoned).map((u) => u.unitId));
   } else if (state.phase === 'gameover') {
     profile = recordMatch(mode === 'bot' ? 'training' : 'online', state.winner === me ? 'win' : state.winner === null ? 'draw' : 'loss');

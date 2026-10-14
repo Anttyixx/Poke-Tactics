@@ -74,6 +74,7 @@ export function replayReport({ log, rounds, totals, catalog, winner, finalHp, su
         <figure>${arena(r.boards)}<figcaption>${esc(N[them])} on top, ${esc(N[me])} below. Front rows meet in the middle.</figcaption></figure>
         <div class="round-notes">
           ${luck}
+          ${r.chance?.length ? `<p><b>Chance outcomes:</b></p><ul class="chance">${r.chance.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>` : ''}
           ${top ? `<p><b>Top damage:</b> ${esc(name(top.unitId))} ${mark(top.star)} (${esc(N[top.side])}) <span class="num">${num(top.dmg)}</span></p>` : ''}
           ${better ? `<p><b>${esc(N[better.player])} could have won ${pct(better.winChance)} of the time</b> with the same Pokémon placed like this:</p>
             <figure>${arena(better.player === 0 ? [better.layout, r.boards[1]] : [r.boards[0], better.layout], better.player)}<figcaption>Suggested layout (highlighted side).</figcaption></figure>` : ''}
@@ -142,6 +143,7 @@ figure { margin: 0; } figcaption { font-size: 12px; color: var(--muted); margin-
 table { border-collapse: collapse; width: 100%; } th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
 th:first-child, td:first-child { text-align: left; } th { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
 .scroll { overflow-x: auto; }
+.chance { margin: 0; padding-left: 18px; font-size: 13px; color: var(--ink-2); }
 ${spriteCss}
 @media (max-width: 640px) { .round-body { grid-template-columns: 1fr; } .round-body > figure { max-width: 260px; } .cols { grid-template-columns: 1fr; } .round .meta { margin-left: 0; } }
 </style></head><body><div class="page">

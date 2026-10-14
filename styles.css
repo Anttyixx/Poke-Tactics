@@ -797,6 +797,7 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .help-list b { color: var(--text); }
 .confirm-row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
 .back { margin-bottom: 12px; }
+.log-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 
 /* Pokédex: a grid of cards, then one Pokémon's entry. */
 .dex-panel { max-width: 860px; border-top: 6px solid var(--accent); padding: 20px 22px; }
@@ -1401,6 +1402,19 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 @keyframes chill-spin { to { rotate: 360deg; } }
 .float.chill { color: #a8ecff; }
 .float.guard { color: #9fd8ff; }
+/* Treated by Alcremie: a glow in the treat's colour and a badge saying which
+   treat it is (heart = healing, chevrons = attack speed, shield = shield). */
+.unit.sprite-unit.treated .sprite { filter: var(--tint) drop-shadow(0 0 2px var(--treat)) drop-shadow(0 0 6px var(--treat)); animation: treat-glow 1s ease-in-out infinite; }
+@keyframes treat-glow { 50% { filter: var(--tint) drop-shadow(0 0 3px var(--treat)) drop-shadow(0 0 10px var(--treat)); } }
+.unit.treated::before {
+  content: ""; position: absolute; left: 2%; top: 4%; width: 30%; aspect-ratio: 1; z-index: 4; pointer-events: none;
+  background: center / contain no-repeat; filter: drop-shadow(0 1px 1px #000a);
+  animation: pop-in 0.3s var(--spring);
+}
+.unit.treated[data-treat="heal"]::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.1 0 3.6 1.2 5.3 3.2 1.7-2 3.2-3.2 5.3-3.2 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z' fill='%236fe08a' stroke='%23123d1e' stroke-width='1.6'/%3E%3C/svg%3E"); }
+.unit.treated[data-treat="haste"]::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='none' stroke='%23ff7fae' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 6l6 6-6 6M12 6l6 6-6 6'/%3E%3C/g%3E%3Cg fill='none' stroke='%234a0f24' stroke-width='1' opacity='.5'%3E%3Cpath d='M5 6l6 6-6 6M12 6l6 6-6 6'/%3E%3C/g%3E%3C/svg%3E"); }
+.unit.treated[data-treat="guard"]::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2.5l8 3v6c0 5-3.4 8.6-8 10-4.6-1.4-8-5-8-10v-6z' fill='%238fd2ff' stroke='%230d3550' stroke-width='1.6'/%3E%3Cpath d='M12 6v12' stroke='%23e8f7ff' stroke-width='1.6' opacity='.8'/%3E%3C/svg%3E"); }
+@media (prefers-reduced-motion: reduce) { .unit.sprite-unit.treated .sprite { animation: none; } }
 /* Alcremie's Mint Cream shield: a soft bubble around the Pokémon. */
 .unit.guarded::after {
   content: ""; position: absolute; inset: 2% 4% 0; border-radius: 50%; pointer-events: none; z-index: 3;
