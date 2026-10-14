@@ -17,7 +17,7 @@ import { runJobs } from './balance.mjs';
 import { hashSeed } from '../src/rng.js';
 
 const catalog = JSON.parse(readFileSync(new URL('../data/units.json', import.meta.url), 'utf8'));
-const troops = Object.keys(catalog).filter((id) => !catalog[id].summon);
+const troops = Object.keys(catalog).filter((id) => !catalog[id].summon && !catalog[id].disabled);
 const flags = Object.fromEntries(process.argv.slice(2).filter((a) => a.startsWith('--')).map((a) => a.slice(2).split('=')));
 const [teamA, teamB] = process.argv.slice(2).filter((a) => !a.startsWith('--')).map(parseTeam);
 if (!teamA || !teamB) { console.error('Usage: node tools/match.mjs "<6 Pokémon>" "<6 Pokémon>" [--games=500] [--place=smart]'); process.exit(1); }

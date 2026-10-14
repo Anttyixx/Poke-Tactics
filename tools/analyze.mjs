@@ -9,7 +9,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 const inPath = process.argv[2] ?? new URL('./out/balance.json', import.meta.url).pathname;
 const outPath = process.argv[3] ?? new URL('./out/summary.json', import.meta.url).pathname;
 const { catalog, archetypes, games } = JSON.parse(readFileSync(inPath, 'utf8'));
-const troops = Object.keys(catalog).filter((id) => !catalog[id].summon);
+const troops = Object.keys(catalog).filter((id) => !catalog[id].summon && !catalog[id].disabled);
 const random = games.filter((g) => g.kind === 'random');
 const decided = (list) => list.filter((g) => g.winner !== null);
 const ci = (p, n) => (n ? 1.96 * Math.sqrt((p * (1 - p)) / n) : 0); // 95% margin

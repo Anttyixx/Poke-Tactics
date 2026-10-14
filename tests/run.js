@@ -21,7 +21,7 @@ const test = (name, fn) => tests.push({ name, fn });
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const TROOPS = troopIds(catalog);
 // A fixed default team, so tests don't depend on which Pokémon sort first.
-const DEFAULT_TEAM = ['mawile', 'beheeyem', 'coalossal', 'toxtricity', 'vespiquen', 'decidueye'];
+const DEFAULT_TEAM = ['infernape', 'beheeyem', 'coalossal', 'toxtricity', 'vespiquen', 'decidueye'];
 const team = (troops = DEFAULT_TEAM) => ({ type: 'chooseTeam', troops });
 // Test-only movement tier for units that must never move.
 MOVE_SPEEDS.statue = 1000;
@@ -59,10 +59,10 @@ function assertCopiesConserved(player) {
 // ---- catalog --------------------------------------------------------------
 
 test('unit catalog is well formed, and every unit has a sprite that exists', () => {
-  const kinds = new Set(['empower', 'snipe', 'summon', 'stealth', 'haste', 'opening', 'quake', 'transform', 'splashHeal', 'selfdestruct', 'copy', 'chill', 'treat', 'boost', 'bind']);
+  const kinds = new Set(['empower', 'snipe', 'summon', 'stealth', 'haste', 'opening', 'quake', 'transform', 'splashHeal', 'selfdestruct', 'copy', 'chill', 'treat', 'boost', 'bind', 'taunt', 'rage', 'darts']);
   // Powers that fire on a counter of attacks need `energy`; the rest (battle
   // start, passives, knockout or low-HP triggers) have none.
-  const counted = (a) => ['empower', 'snipe', 'summon', 'stealth', 'haste', 'quake', 'treat', 'boost', 'bind'].includes(a.kind) || (a.kind === 'transform' && !a.trigger);
+  const counted = (a) => ['empower', 'snipe', 'summon', 'stealth', 'haste', 'quake', 'treat', 'boost', 'bind', 'taunt'].includes(a.kind) || (a.kind === 'transform' && !a.trigger);
   for (const [id, u] of Object.entries(catalog)) {
     for (const k of ['hp', 'damage']) {
       const v = u[k];
@@ -122,7 +122,7 @@ test('team phase: pick 6 different Pokémon; round 1 starts with an empty board 
     team(TROOPS.slice(0, need + 1)), // too many
     team([...TROOPS.slice(0, need - 1), TROOPS[0]]), // duplicate
     team([...TROOPS.slice(0, need - 1), 'toString']), // not a Pokémon
-    team('mawile'), team(null),
+    team('infernape'), team(null),
   ];
   for (const intent of bad) {
     const before = clone(s);
@@ -186,7 +186,7 @@ test('buying places onto the chosen square and removes the copy from the pool', 
 test('no duplicates on the field: buying a troop you already have levels it up (1-4 copies = 0-3 stars)', () => {
   const s = startedGame();
   const p = s.players[0];
-  const id = 'mawile';
+  const id = 'infernape';
   const other = DEFAULT_TEAM.find((t) => t !== id); // in this player's pool
   p.coins = 99;
   p.shop = [id, id, other];
@@ -273,9 +273,9 @@ test('economy: start with START_COINS; each round +ROUND_COINS +1 per own Pokém
   assert.deepEqual(s.players.map((p) => p.coins), [START_COINS, START_COINS]);
   const [a, b] = s.players;
   a.coins = 50; b.coins = 50; // whatever isn't spent carries over to the next round
-  a.shop = ['mawile', 'coalossal', null];
+  a.shop = ['infernape', 'coalossal', null];
   assert.ok(applyIntent(s, catalog, 0, { type: 'buy', slot: 0, x: 2, y: 0 }).ok);
-  b.shop = ['mawile', null, null];
+  b.shop = ['infernape', null, null];
   assert.ok(applyIntent(s, catalog, 1, { type: 'buy', slot: 0, x: 2, y: 0 }).ok);
   const before = s.players.map((q) => q.coins);
   for (const i of [0, 1]) applyIntent(s, catalog, i, { type: 'ready' });
@@ -331,17 +331,17 @@ test("each player's lineup from the last fight is kept for the next planning pha
   assert.deepEqual(s.players.map((p) => p.lastBoard), [[], []], 'nothing before the first fight');
   const p = s.players[1];
   p.coins = 99;
-  p.shop = ['mawile', 'coalossal', null];
+  p.shop = ['infernape', 'coalossal', null];
   applyIntent(s, catalog, 1, { type: 'buy', slot: 0, x: 1, y: 0 });
-  p.shop = ['mawile', 'coalossal', null];
+  p.shop = ['infernape', 'coalossal', null];
   applyIntent(s, catalog, 1, { type: 'buy', slot: 1, x: 3, y: 2 });
   for (const i of [0, 1]) applyIntent(s, catalog, i, { type: 'ready' });
   for (const i of [0, 1]) applyIntent(s, catalog, i, { type: 'continue' });
   assert.equal(s.phase, 'planning');
-  assert.deepEqual(p.lastBoard, [{ unitId: 'mawile', star: 0, x: 1, y: 0 }, { unitId: 'coalossal', star: 0, x: 3, y: 2 }]);
+  assert.deepEqual(p.lastBoard, [{ unitId: 'infernape', star: 0, x: 1, y: 0 }, { unitId: 'coalossal', star: 0, x: 3, y: 2 }]);
   // Changing the board now doesn't change what the opponent sees from last round.
   applyIntent(s, catalog, 1, { type: 'move', uid: p.board[0].uid, x: 0, y: 3 });
-  assert.deepEqual(p.lastBoard[0], { unitId: 'mawile', star: 0, x: 1, y: 0 });
+  assert.deepEqual(p.lastBoard[0], { unitId: 'infernape', star: 0, x: 1, y: 0 });
 });
 
 test('featured troop leads the shop while its pool has copies; bad ids are ignored', () => {
@@ -702,32 +702,88 @@ test('teleport powers (no Pokémon uses one right now): the attack after 6 telep
   assert.equal(evs(r, 'heal', g).find((e) => e.t === cast.t).amount, Math.floor(dealt / 10));
 });
 
-test('Binding Ring (Hoopa): once full it waits; the next enemy that tries to move is bound in place for 5s', () => {
+test('Binding Ring (Hoopa): starts charged; the first enemy that tries to move is bound 3s; refills after 2 attacks; never the same Pokémon twice in a row', () => {
   const cat = powerCat();
-  cat.walker = { ...cat.wall, range: 1, moveSpeed: 'super slow' }; // a long walk from the back
-  // Hoopa at combat (2,5) shoots a wall at (2,3); the walker starts at (4,0).
+  cat.walker = { ...cat.wall, range: 1, moveSpeed: 'super slow' }; // long walks from the back
+  // Hoopa at combat (2,5) shoots a wall at (2,3); two walkers start at the back.
   const r = simulate(cat, [
     [{ uid: 1, unitId: 'hoopa', star: 0, x: 2, y: 1 }],
-    [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'walker', star: 0, x: 0, y: 3 }],
+    [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'walker', star: 0, x: 0, y: 3 }, { uid: 4, unitId: 'walker', star: 0, x: 4, y: 3 }],
   ], 1);
   const h = unitOf(r, 1).id;
-  const w = unitOf(r, 3).id;
-  const bind = evs(r, 'bind', w)[0];
-  assert.ok(bind, 'the walker gets bound');
-  assert.equal(bind.by, h);
-  assert.equal(bind.duration, catalog.hoopa.ability.duration);
-  const full = evs(r, 'attack', h)[catalog.hoopa.energy - 1];
-  assert.ok(bind.t >= full.t, 'only once its counter is full');
-  assert.ok(evs(r, 'cast', h).some((e) => e.t === bind.t && e.target === w), 'Hoopa casts it');
-  const moves = evs(r, 'move', w).map((e) => e.t);
-  assert.ok(!moves.some((t) => t >= bind.t && t <= bind.t + bind.duration), 'no steps while bound');
-  // Once it wears off, the walker moves again, unless Hoopa has refilled its
-  // counter by then (4 more attacks) and binds it again on its next try.
-  const end = bind.t + bind.duration;
-  const again = evs(r, 'bind', w)[1];
-  assert.ok(moves.some((t) => t > end) || (again && again.t > end), 'free once the bind wears off');
-  if (again) assert.ok(evs(r, 'attack', h).filter((e) => e.t > bind.t && e.t <= again.t).length >= catalog.hoopa.energy, 'a second bind needs a refill');
-  assert.equal(evs(r, 'bind').filter((e) => e.t < bind.t).length, 0);
+  const p = catalog.hoopa.ability;
+  assert.equal(unitOf(r, 1).mana, catalog.hoopa.energy, 'starts the fight charged');
+  const binds = evs(r, 'bind');
+  assert.ok(binds.length >= 2, 'binds both walkers');
+  assert.ok(evs(r, 'attack', h).filter((e) => e.t <= binds[0].t).length < catalog.hoopa.energy, 'the first bind comes before it could have charged by attacking');
+  assert.ok(binds.every((b) => b.by === h && b.duration === p.duration));
+  for (let k = 1; k < binds.length; k++) {
+    assert.notEqual(binds[k].id, binds[k - 1].id, 'never the same Pokémon twice in a row');
+    const refill = evs(r, 'attack', h).filter((e) => e.t > binds[k - 1].t && e.t <= binds[k].t).length;
+    assert.ok(refill >= catalog.hoopa.energy, 'each later bind needs a refill');
+  }
+  const first = binds[0];
+  const moves = evs(r, 'move', first.id).map((e) => e.t);
+  assert.ok(!moves.some((t) => t >= first.t && t <= first.t + first.duration), 'no steps while bound');
+  assert.ok(moves.some((t) => t > first.t + first.duration), 'it walks again once free');
+  // Charged, it shows as Hoopa Unbound; binding turns it back.
+  const forms = evs(r, 'transform', h);
+  assert.equal(forms[0].name, 'Hoopa Unbound');
+  assert.ok(forms.some((f) => f.revert && f.t === first.t), 'back to Hoopa when it binds');
+});
+
+test('Rage Powder (Amoonguss): every 2 attacks, the hardest hitter within the 5x5 that is attacking someone else must attack Amoonguss', () => {
+  const cat = powerCat();
+  cat.decoy = { ...cat.wall, hp: [1e5, 1e5, 1e5, 1e5] };
+  cat.hitter = { ...cat.wall, range: 1, moveSpeed: 'fast', secPerHit: 1, damage: [10, 10, 10, 10], hp: [1e5, 1e5, 1e5, 1e5] };
+  // Amoonguss at combat (2,4) hits a wall at (2,3); the hitter at (0,3) is
+  // beating on the decoy at (0,4), two squares from Amoonguss.
+  const r = simulate(cat, [
+    [{ uid: 1, unitId: 'amoonguss', star: 0, x: 2, y: 0 }, { uid: 2, unitId: 'decoy', star: 0, x: 0, y: 0 }],
+    [{ uid: 3, unitId: 'wall', star: 0, x: 2, y: 0 }, { uid: 4, unitId: 'hitter', star: 0, x: 4, y: 0 }],
+  ], 1);
+  const am = unitOf(r, 1).id;
+  const hitter = unitOf(r, 4).id;
+  const taunt = evs(r, 'taunt', hitter)[0];
+  assert.ok(taunt && taunt.by === am, 'the hitter is pulled');
+  assert.equal(evs(r, 'attack', am).filter((e) => e.t <= taunt.t).length, catalog.amoonguss.energy, 'after 2 attacks');
+  assert.equal(taunt.duration, catalog.amoonguss.ability.duration);
+  const during = evs(r, 'attack', hitter).filter((e) => e.t > taunt.t && e.t <= taunt.t + taunt.duration);
+  assert.ok(during.length > 0 && during.every((e) => e.target === am), 'it only attacks Amoonguss while taunted');
+  assert.ok(evs(r, 'attack', hitter).some((e) => e.t < taunt.t && e.target === unitOf(r, 2).id), 'it was attacking the decoy before');
+});
+
+test('Rage Fist (Annihilape): each attack in a row without moving makes the next ones faster, up to the cap', () => {
+  const r = simulate(powerCat(), [[{ uid: 1, unitId: 'annihilape', star: 0, x: 2, y: 0 }], [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }]], 1);
+  const a = unitOf(r, 1).id;
+  const p = catalog.annihilape.ability;
+  const cd = Math.round(catalog.annihilape.secPerHit / TICK_SECONDS);
+  const times = evs(r, 'attack', a).map((e) => e.t).slice(0, p.maxStacks + 4);
+  const gaps = times.slice(1).map((t, k) => t - times[k]);
+  // The first attack starts the streak (0 stacks); each one after adds a stack.
+  gaps.forEach((g, k) => assert.equal(g, Math.round((cd * 100) / (100 + Math.min(k, p.maxStacks) * p.stackPct)), `gap ${k}`));
+  assert.equal(Math.max(...evs(r, 'rage', a).map((e) => e.stacks)), p.maxStacks);
+});
+
+test('Dragon Darts (Dragapult): fires 2 Dreepy at the 2 farthest enemies; a fainted one flies back, then is fired again', () => {
+  const cat = powerCat();
+  cat.biter = { ...cat.wall, range: 1, secPerHit: 1, damage: [500, 500, 500, 500] }; // knocks out a Dreepy fast
+  const r = simulate(cat, [
+    [{ uid: 1, unitId: 'dragapult', star: 0, x: 2, y: 2 }], // combat (2,6)
+    [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'biter', star: 0, x: 0, y: 3 }, { uid: 4, unitId: 'wall', star: 0, x: 4, y: 3 }], // (2,3), (4,0), (0,0)
+  ], 1);
+  const d = unitOf(r, 1).id;
+  const p = catalog.dragapult.ability;
+  const darts = evs(r, 'summon', d).filter((e) => e.dart);
+  const first = darts.filter((e) => e.t === darts[0].t);
+  assert.equal(first.length, p.count, 'two at once');
+  assert.deepEqual(first.map((e) => e.target).sort(), [unitOf(r, 3).id, unitOf(r, 4).id].sort(), 'at the two farthest');
+  const impact = Math.floor((Math.round(catalog.dragapult.damage[0] * STAT_SCALE) * p.impactPct) / 100);
+  assert.ok(first.every((e) => r.events.some((x) => x.type === 'damage' && x.src === d && x.id === e.target && x.amount === impact && x.t === e.t)), 'each hits on impact');
+  const back = evs(r, 'dartReturn', d)[0];
+  assert.ok(back, 'a fainted Dreepy flies back');
+  const again = darts.find((e) => e.t > back.t);
+  assert.ok(again && again.t === back.t + back.duration, 'fired again once it is home');
 });
 
 test('Earthquake (Torterra): after 5 attacks, hits every enemy on the board for 30% and stuns them', () => {
@@ -1135,7 +1191,7 @@ test('basic attacks crit at the unit\'s crit chance for 50% more damage; mirrore
   assert.ok(!r.events.some((e) => e.crit));
 });
 
-test('every fight starts with power progress at 0 and a full attack cooldown before the first hit', () => {
+test('every fight starts with power progress at 0 (Hoopa: full) and a full attack cooldown before the first hit', () => {
   const r = simulate(powerCat(), [[{ uid: 1, unitId: 'infernape', star: 2, x: 2, y: 0 }], [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }]], 1);
   const i = unitOf(r, 1).id;
   assert.equal(unitOf(r, 1).mana, 0);
@@ -1148,7 +1204,8 @@ test('every fight starts with power progress at 0 and a full attack cooldown bef
       const send = (intent) => applyIntent(state, catalog, p, intent);
       if (state.phase === 'combat') send({ type: 'continue' }); else if (state.phase !== 'gameover') botTurn(state, catalog, p, send);
     }
-    if (state.phase === 'combat') { fights++; assert.ok(state.combat.result.initial.every((u) => u.mana === 0), `fight ${fights}`); }
+    const start = (u) => (catalog[u.unitId].ability?.startCharged ? u.maxMana : 0);
+    if (state.phase === 'combat') { fights++; assert.ok(state.combat.result.initial.every((u) => u.mana === start(u)), `fight ${fights}`); }
   }
 });
 

@@ -204,7 +204,8 @@ test a set of changes together. Team styles to pit against each other live in `A
   simultaneously, and crit luck is shared slot for slot between the sides, so neither side gets an edge.
 - **Powers:** every Pokémon has one. Most count attacks (the purple bar). Every fight starts with the bar
   empty and a full attack cooldown before anyone's first hit, and progress is never lost mid-fight:
-  - Mawile, **Jaw Lock**: after 8 attacks, the next hits for 130% and stuns for 1s.
+  - Mawile, **Jaw Lock**: after 8 attacks, the next hits for 130% and stuns for 1s. *Disabled for now*
+    (`"disabled": true` in units.json keeps a Pokémon out of team picks, shops and the Pokédex).
   - Beheeyem, **Psywave**: at the start of battle, a wave flies down its column to the other end of the
     board. The first enemy it hits takes 50% and is carried to that end, then is stunned for 1s; anyone
     already there is pushed to the side. Both sit out until the wave lands.
@@ -219,9 +220,18 @@ test a set of changes together. Team styles to pit against each other live in `A
   - Decidueye, **Phantom Force**: after 8 attacks, invisible for 3s and attacks 30% faster. Enemies can't
     target or follow an invisible unit.
   - Infernape, **Blaze**: after 7 attacks, attacks 50% faster for 3s.
-  - Hoopa (cost 3, mage, range 2, attacks every 1.11s), **Binding Ring**: after 4 attacks its power is
-    full and stays full until an enemy tries to move (walk, zip or dash). That Pokémon is bound in place
-    for 5s: it can't move, but it still attacks anything in range. Then Hoopa starts charging again.
+  - Hoopa (cost 3, mage, range 2, attacks every 1.11s), **Binding Ring**: it starts the fight charged
+    (shown as Hoopa Unbound) and waits until an enemy tries to move (walk, zip or dash). That Pokémon
+    is bound in place for 3s: it can't move, but it still attacks anything in range. Hoopa turns back,
+    refills after 2 attacks, and never binds the same Pokémon twice in a row.
+  - Amoonguss (cost 4, warrior, tank), **Rage Powder**: every 2 attacks, the hardest-hitting enemy
+    within the 5x5 around it that is attacking someone else must attack Amoonguss for 5s.
+  - Annihilape (cost 4, warrior), **Rage Fist**: each attack in a row without moving makes it attack
+    20% faster, up to +100% after 5 attacks. Moving (or being moved) resets it.
+  - Dragapult (cost 4, ranger, range 3), **Dragon Darts**: at the start it fires 2 Dreepy at the two
+    farthest enemies (50% damage on impact); they land beside their targets and fight. A Dreepy that
+    faints flies back (4s a square) and is fired again once it's home. Darts fire at the end of the
+    tick, at enemies already on the board, so neither side gets an edge.
   - Greninja, **Battle Bond**: after 5 attacks, becomes Ash-Greninja for the rest of the fight: fast
     movement, attacks every 0.8s, more damage, range 3 (same HP).
   - Torterra, **Earthquake**: with every 5th attack, every enemy on the board takes 30% and is stunned 1s.

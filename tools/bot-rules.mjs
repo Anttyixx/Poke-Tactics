@@ -12,7 +12,7 @@ import { playGame } from './balance.mjs';
 import { hashSeed } from '../src/rng.js';
 
 const catalog = JSON.parse(readFileSync(new URL('../data/units.json', import.meta.url), 'utf8'));
-const troops = Object.keys(catalog).filter((id) => !catalog[id].summon);
+const troops = Object.keys(catalog).filter((id) => !catalog[id].summon && !catalog[id].disabled);
 const N = Number(process.argv[2] ?? 4000);
 const pick = (seed, salt) => [...troops].map((t, k) => [hashSeed(`${seed}-${salt}-${t}-${k}`), t]).sort((a, b) => a[0] - b[0]).slice(0, 6).map((x) => x[1]);
 

@@ -14,7 +14,7 @@ import { hashSeed } from '../src/rng.js';
 import { COLS, HALF } from '../src/combat.js';
 
 const catalog = JSON.parse(readFileSync(new URL('../data/units.json', import.meta.url), 'utf8'));
-const troops = Object.keys(catalog).filter((id) => !catalog[id].summon);
+const troops = Object.keys(catalog).filter((id) => !catalog[id].summon && !catalog[id].disabled);
 const args = process.argv.slice(2);
 const flags = Object.fromEntries(args.filter((a) => a.startsWith('--')).map((a) => { const [k, v] = a.slice(2).split('='); return [k, v ?? true]; }));
 const key = (s) => String(s).toLowerCase().replace(/[^a-z]/g, '');

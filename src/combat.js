@@ -99,6 +99,10 @@ function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, in
     moveTimer: stats.moveCd, // waiting before the next step (it waits before its first one too)
     stepTimer: 0, // mid-step: ticks until it reaches the square it's walking to
     hasteUntil: 0, hastePct: 0, stealthFrom: 0, stealthUntil: 0,
+    tauntBy: null, tauntUntil: 0, // Amoonguss's Rage Powder: it must attack this unit through tauntUntil
+    rage: 0, movedSinceHit: true, // Annihilape's Rage Fist: attacks in a row without moving
+    darts: null, dartOf: null, dartSlot: 0, // Dragapult's Dreepy: [{ readyAt, unit }] / which Dragapult a Dreepy belongs to
+    bindingUntil: 0, hoopaForm: null, // Hoopa: its own bind lasts through this tick; the form it has taken
     boundUntil: 0, // Hoopa's bind: it can't move (walk, zip or dash) through this tick; it can still attack
     guardUntil: 0, guardPct: 0, guardBrokeAt: -1, // Alcremie's Mint Cream shield: less damage; the first stun or shove only breaks it
     regen: null, // Alcremie's Matcha Cream: { src, per, left, next } healing once a second
@@ -169,13 +173,39 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
   function heldBack(u) {
     if (bound(u)) return true;
     if (immune(u)) return false;
-    const hoopa = units.find((h) => h.side !== u.side && standing(h) && h.power?.kind === 'bind' && h.maxMana > 0 && h.mana >= h.maxMana && !h.copyOf);
+    const ready = (h) => (h.power.noCounter ? !(t <= h.bindingUntil) : h.maxMana > 0 && h.mana >= h.maxMana);
+    const hoopa = units.find((h) => h.side !== u.side && standing(h) && h.power?.kind === 'bind' && !h.copyOf && ready(h) && !(h.power.noRepeat && h.lastBound === u.id));
     if (!hoopa) return false;
-    hoopa.mana = 0;
+    hoopa.lastBound = u.id;
+    if (hoopa.maxMana > 0) hoopa.mana = 0;
+    hoopa.bindingUntil = t + hoopa.power.duration;
     emit('cast', { id: hoopa.id, target: u.id });
+    if (hoopa.power.chargedForm) hoopaForm(hoopa, null); // its charge is spent: back to its usual form
+    if (hoopa.power.bindForm) hoopaForm(hoopa, hoopa.power.bindForm); // its other form while the bind lasts
     u.boundUntil = t + hoopa.power.duration;
     emit('bind', { id: u.id, by: hoopa.id, duration: hoopa.power.duration });
     return true;
+  }
+  // Hoopa's forms: `form` = { name, sprite, hpPct, damagePct, speedPct, range,
+  // moveSpeed } relative to its own stats at its star; null = its own form.
+  // Max HP changes keep the same share of HP.
+  function hoopaForm(h, form) {
+    const def = catalog[h.unitId];
+    const base = unitStats(def, h.star);
+    const f = form ?? {};
+    rescaleHp(h, Math.round((base.hp * (f.hpPct ?? 100)) / 100));
+    h.atk = Math.round((base.atk * (f.damagePct ?? 100)) / 100);
+    h.attackCd = Math.max(1, Math.round((base.attackCd * 100) / (f.speedPct ?? 100)));
+    h.range = f.range ?? def.range;
+    h.moveCd = f.moveSpeed ? ticksOf(MOVE_SPEEDS[f.moveSpeed]) : base.moveCd;
+    h.hoopaForm = form ? form.name ?? 'form' : null;
+    emit('transform', { id: h.id, sprite: f.sprite ?? def.sprite, range: h.range, moveCd: h.moveCd, name: f.name ?? def.name, hp: h.hp, maxHp: h.maxHp, revert: !form });
+  }
+  // Every tick: a charged Hoopa takes its charged form; a bind form ends with its bind.
+  function hoopaTick(h) {
+    const p = h.power;
+    if (p.chargedForm && !h.hoopaForm && h.maxMana > 0 && h.mana >= h.maxMana) hoopaForm(h, p.chargedForm);
+    if (p.bindForm && h.hoopaForm && !(t <= h.bindingUntil)) hoopaForm(h, null);
   }
   // Shielded by Alcremie (Mint Cream) this tick.
   const guarded = (u) => u.guardUntil > 0 && t <= u.guardUntil;
@@ -343,6 +373,7 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
     if (u.x === cell.x && u.y === cell.y) return;
     u.x = cell.x;
     u.y = cell.y;
+    u.movedSinceHit = true;
     emit(type, { id: u.id, x: u.x, y: u.y, ...extra });
   }
 
@@ -475,6 +506,8 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
     // Summons take the free squares around the summoner in freeAround's order.
     const cells = p.kind === 'summon' ? freeAround(u).slice(0, summonCount(u)) : [];
     if (p.kind === 'summon' && !cells.length) return;
+    const taunted = p.kind === 'taunt' ? tauntPick(u) : null;
+    if (p.kind === 'taunt' && !taunted) return; // nobody to pull: stays charged
     u.mana = 0;
     switch (p.kind) {
       case 'snipe': {
@@ -514,6 +547,13 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
       case 'treat':
         sweetTreat(u);
         break;
+      case 'taunt':
+        emit('cast', { id: u.id, target: taunted.id });
+        taunted.tauntBy = u.id;
+        taunted.tauntUntil = t + p.duration;
+        taunted.target = u.id;
+        emit('taunt', { id: taunted.id, by: u.id, duration: p.duration });
+        break;
       case 'boost': {
         // Toxtricity's Overdrive: allies in the plus around it (left, right, front,
         // back) that have a power counter gain `charges` toward their power (never
@@ -537,6 +577,72 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
       default:
         throw new Error(`Unknown power kind "${p.kind}"`);
     }
+  }
+
+  // Amoonguss's Rage Powder: of the enemies within `radius` squares (the 5x5 for
+  // 2) that are attacking someone else, the hardest hitter is pulled onto it.
+  function tauntPick(u) {
+    const r = u.power.radius;
+    let best = null;
+    for (const e of units) {
+      if (e.side === u.side || !standing(e) || e.target === u.id || (e.tauntUntil >= t && standing(units[e.tauntBy]))) continue;
+      if (Math.max(Math.abs(e.x - u.x), Math.abs(e.y - u.y)) > r) continue;
+      const dps = e.atk / e.attackCd;
+      if (!best || dps > best.dps || (dps === best.dps && e.slot < best.e.slot)) best = { e, dps };
+    }
+    return best?.e ?? null;
+  }
+
+  // Dragapult's Dragon Darts: each of its Dreepy slots, when ready, fires a
+  // Dreepy at one of the farthest enemies (two darts go for two different
+  // ones). It hits on impact, then lands beside its target and fights. When it
+  // faints it flies back slowly; the slot is ready again once it is home.
+  // Darts fly at the end of the tick (both sides at once), at enemies that were
+  // already on the board when the tick began.
+  let dartQueue = [];
+  function launchDarts(u) {
+    const p = u.power;
+    u.darts ??= Array.from({ length: p.count }, () => ({ readyAt: p.firstAt ?? 1, unit: null }));
+    if (u.darts.some((slot) => !slot.unit && t >= slot.readyAt)) dartQueue.push(u);
+  }
+  function fireDarts(u) {
+    const p = u.power;
+    for (const slot of u.darts) {
+      if (slot.unit || t < slot.readyAt) continue;
+      const busy = new Set(u.darts.map((s) => s.unit?.target).filter((x) => x !== null && x !== undefined));
+      const foes = units.filter((e) => e.side !== u.side && visible(e) && e.bornAt !== t)
+        .sort((a, b) => Math.max(Math.abs(b.x - u.x), Math.abs(b.y - u.y)) - Math.max(Math.abs(a.x - u.x), Math.abs(a.y - u.y)) || dist(u, b) - dist(u, a) || a.slot - b.slot);
+      const target = foes.find((e) => !busy.has(e.id)) ?? foes[0];
+      if (!target) return;
+      const cell = dashSpot(u, target) ?? closestFree(at(target), u, null, u.side);
+      if (!cell) return;
+      emit('cast', { id: u.id, target: target.id });
+      const kin = units.length;
+      const pal = spawn(catalog, { uid: -kin, unitId: p.unit, star: u.star, summoned: true }, u.side, kin, bySide[u.side].length, cell);
+      pal.sp = { x: pal.x, y: pal.y };
+      pal.sx = pal.x;
+      pal.sy = pal.y;
+      pal.dartOf = u.id;
+      pal.bornAt = t;
+      pal.target = target.id;
+      units.push(pal);
+      bySide[u.side].push(pal);
+      slot.unit = pal;
+      emit('summon', { id: u.id, unit: snapshot(pal), dart: true, target: target.id });
+      damage(target, Math.floor((u.atk * p.impactPct) / 100), u);
+    }
+  }
+  // A Dreepy fainted: it flies back to Dragapult, a square every `returnSec`.
+  function dartHome(d) {
+    const u = units[d.dartOf];
+    const slot = u?.darts?.find((s) => s.unit === d);
+    if (!slot) return;
+    slot.unit = null;
+    if (!standing(u)) return;
+    const squares = Math.max(Math.abs(d.x - u.x), Math.abs(d.y - u.y));
+    const ticks = Math.max(1, Math.round((squares * u.power.returnSec) / TICK_SECONDS));
+    slot.readyAt = t + ticks;
+    emit('dartReturn', { id: u.id, fromX: d.x, fromY: d.y, duration: ticks, unitId: d.unitId });
   }
 
   // Alcremie's Sweet Treat: a random flavour (seeded, so replays match). It
@@ -626,7 +732,12 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
   // chill lands at the end of the tick and counts from the next one.
   const chilled = (u) => t >= u.chillFrom && t <= u.chillUntil;
   const slowed = (ticks, u) => (chilled(u) ? Math.round((ticks * (100 + u.chillPct)) / 100) : ticks);
-  const cooldown = (u) => slowed(u.hasteUntil > t ? Math.max(1, Math.round((u.attackCd * 100) / (100 + u.hastePct))) : u.attackCd, u);
+  // Haste (Infernape, Alcremie's Ruby Cream) and Annihilape's rage both speed
+  // attacks up; they add together.
+  const cooldown = (u) => {
+    const pct = (u.hasteUntil > t ? u.hastePct : 0) + (u.rage && u.power?.kind === 'rage' ? u.rage * u.power.stackPct : 0);
+    return slowed(pct ? Math.max(1, Math.round((u.attackCd * 100) / (100 + pct))) : u.attackCd, u);
+  };
   // A hit from Frosmoth chills the target (a new hit restarts the timer).
   function chill(target, p) {
     if (!standing(target) || immune(target)) return;
@@ -709,6 +820,7 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
   function moveTo(u, cell) {
     u.x = cell.x;
     u.y = cell.y;
+    u.movedSinceHit = true;
     emit('move', { id: u.id, x: u.x, y: u.y });
   }
 
@@ -731,11 +843,13 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
   }
 
   function act(u) {
+    if (u.power?.kind === 'bind' && standing(u)) hoopaTick(u);
     // A Golem knocked out with its fuse lit just counts down, then explodes.
     if (u.fuse > 0 && u.fusedAt < t) { u.fuse--; if (u.fuse === 0) explode(u); return; }
     // Coming out of a stun (or landing after being carried), a Pokémon looks
     // around again and picks the nearest enemy rather than its old target.
-    if (u.stun > 0) { u.stun--; if (u.stun === 0) u.target = null; return; }
+    if (u.stun > 0) { u.stun--; if (u.stun === 0 && !(u.tauntUntil >= t)) u.target = null; return; }
+    if (u.power?.kind === 'darts' && standing(u)) launchDarts(u);
     if (u.atkTimer > 0) u.atkTimer--;
     if (u.moveTimer > 0) u.moveTimer--;
     if (u.stepTimer > 0) u.stepTimer--;
@@ -784,6 +898,15 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
       }
     }
 
+    // Pulled by Amoonguss's Rage Powder: it goes after Amoonguss until it wears off.
+    if (u.tauntUntil >= t && standing(units[u.tauntBy]) && visible(units[u.tauntBy])) {
+      const tt = units[u.tauntBy];
+      u.target = tt.id;
+      if (reach(u, at(tt)) > u.range) {
+        if (u.moveTimer === 0 && u.stepTimer === 0 && !heldBack(u) && step(u, tt)) startStep(u);
+        return;
+      }
+    }
     let target = u.target === null ? null : units[u.target];
     if (!target || !visible(target) || target.side === u.side || reach(u, at(target)) > u.range) target = nearestEnemy(u);
     if (!target) return;
@@ -834,6 +957,13 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
       } else {
         if (u.maxMana > 0) u.mana = Math.min(u.maxMana, u.mana + MANA_PER_ATTACK);
         emit('attack', { id: u.id, target: target.id, mana: shownMana(u) });
+        // Annihilape: every attack in a row without moving makes the next ones faster.
+        if (u.power?.kind === 'rage') {
+          const was = u.rage;
+          u.rage = u.movedSinceHit ? 0 : Math.min(u.power.maxStacks, u.rage + 1);
+          u.movedSinceHit = false;
+          if (u.rage !== was) emit('rage', { id: u.id, stacks: u.rage, pct: u.rage * u.power.stackPct });
+        }
         const crit = critRoll(seed, t, u.slot) < u.crit;
         const hit = crit ? Math.floor((u.atk * CRIT_PCT) / 100) : u.atk;
         damage(target, Math.max(1, Math.floor((hit * 100) / (100 + target.armor))), u, crit);
@@ -925,6 +1055,8 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
     knocks = [];
     for (const tr of treats) if (standing(tr.u)) serveTreat(tr);
     treats = [];
+    for (const d of dartQueue) if (standing(d)) fireDarts(d);
+    dartQueue = [];
     for (const u of units) {
       if (!u.alive) continue; // out since an earlier tick: nothing left to resolve
       // Alcremie's Matcha Cream: a chunk of healing every second.
@@ -981,7 +1113,10 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
     }
     for (const u of units) {
       if (!u.alive) continue;
-      if (u.hp === 0 && !(u.fuse > 0)) u.alive = false; // knocked out this tick (a lit Golem stays)
+      if (u.hp === 0 && !(u.fuse > 0)) {
+        u.alive = false; // knocked out this tick (a lit Golem stays)
+        if (u.dartOf !== null) dartHome(u); // a Dreepy flies back to its Dragapult
+      }
       u.mana = shownMana(u);
       u.stun = Math.max(u.stun, u.pendingStun);
       if (u.pendingChill && u.hp > 0) {

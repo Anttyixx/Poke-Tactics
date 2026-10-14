@@ -44,10 +44,10 @@ const MAX_ROUNDS = 60; // safety net; real games end long before
 export const ARCHETYPES = {
   'Tanks + healer': ['coalossal', 'torterra', 'golem', 'minior', 'lilligant', 'decidueye'],
   'Ranged backline': ['decidueye', 'vespiquen', 'beheeyem', 'greninja', 'lilligant', 'tapukoko'],
-  'Divers': ['hoopa', 'tapukoko', 'infernape', 'mawile', 'greninja', 'beheeyem'],
-  'Stun lock': ['beheeyem', 'coalossal', 'torterra', 'mawile', 'tapukoko', 'golem'],
+  'Divers': ['hoopa', 'tapukoko', 'infernape', 'annihilape', 'greninja', 'beheeyem'],
+  'Stun lock': ['beheeyem', 'coalossal', 'torterra', 'amoonguss', 'tapukoko', 'golem'],
   'Cheap & wide': ['beheeyem', 'lilligant', 'ditto', 'hoopa', 'vespiquen', 'infernape'],
-  'Big hitters': ['coalossal', 'mawile', 'toxtricity', 'decidueye', 'greninja', 'minior'],
+  'Big hitters': ['coalossal', 'dragapult', 'toxtricity', 'decidueye', 'greninja', 'minior'],
 };
 
 // ---- one game ----------------------------------------------------------------

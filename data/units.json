@@ -1,5 +1,6 @@
 {
   "mawile": {
+    "disabled": true,
     "name": "Mawile", "sprite": "assets/sprites/mawile.png", "fx": "#d4dae6", "type": "warrior", "cost": 4,
     "hp": [810, 1467, 2646, 4770], "damage": [113, 200, 365, 655], "range": 1, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 8,
     "ability": {"name": "Jaw Lock", "kind": "empower", "damagePct": 130, "stun": 10}
@@ -31,8 +32,9 @@
   },
   "hoopa": {
     "name": "Hoopa", "sprite": "assets/sprites/hoopa.png", "fx": "#ff8ad8", "type": "mage", "cost": 3,
-    "hp": [840, 1365, 2184, 3500], "damage": [75, 125, 195, 315], "range": 2, "moveSpeed": "medium", "secPerHit": 1.11, "critChance": 15, "energy": 4,
-    "ability": {"name": "Binding Ring", "kind": "bind", "duration": 50}
+    "hp": [840, 1365, 2184, 3500], "damage": [68, 113, 176, 284], "range": 2, "moveSpeed": "medium", "secPerHit": 1.11, "critChance": 15, "energy": 2,
+    "ability": {"name": "Binding Ring", "kind": "bind", "duration": 30, "startCharged": true, "noRepeat": true,
+      "chargedForm": {"name": "Hoopa Unbound", "sprite": "assets/sprites/hoopa-unbound.png"}}
   },
   "infernape": {
     "name": "Infernape", "sprite": "assets/sprites/infernape.png", "fx": "#ff8a2a", "type": "warrior", "cost": 3,
@@ -82,6 +84,26 @@
       {"flavor": "haste", "name": "Alcremie (Ruby Cream)", "sprite": "assets/sprites/alcremie-ruby.png", "hastePct": 100},
       {"flavor": "guard", "name": "Alcremie (Mint Cream)", "sprite": "assets/sprites/alcremie-mint.png", "guardPct": 40}
     ]}
+  },
+  "amoonguss": {
+    "name": "Amoonguss", "sprite": "assets/sprites/amoonguss.png", "fx": "#ff6fa8", "type": "warrior", "cost": 4,
+    "hp": [1700,  2890,  4913,  8330], "damage": [70,  119,  202,  343], "range": 1, "moveSpeed": "slow", "secPerHit": 1.5, "critChance": 15, "energy": 2,
+    "ability": {"name": "Rage Powder", "kind": "taunt", "radius": 2, "duration": 50}
+  },
+  "annihilape": {
+    "name": "Annihilape", "sprite": "assets/sprites/annihilape.png", "fx": "#c9c9e0", "type": "warrior", "cost": 4,
+    "hp": [1250,  2125,  3612,  6125], "damage": [100,  170,  289,  490], "range": 1, "moveSpeed": "medium", "secPerHit": 1.4, "critChance": 15, "energy": 0,
+    "ability": {"name": "Rage Fist", "kind": "rage", "stackPct": 20, "maxStacks": 5}
+  },
+  "dragapult": {
+    "name": "Dragapult", "sprite": "assets/sprites/dragapult.png", "fx": "#6fe0d8", "type": "ranger", "cost": 4,
+    "hp": [750,  1275,  2168,  3675], "damage": [75,  128,  217,  368], "range": 3, "moveSpeed": "fast", "secPerHit": 1.3, "critChance": 15, "energy": 0,
+    "ability": {"name": "Dragon Darts", "kind": "darts", "unit": "dreepy", "count": 2, "impactPct": 50, "returnSec": 4.0, "firstAt": 5}
+  },
+  "dreepy": {
+    "name": "Dreepy", "summon": true, "sprite": "assets/sprites/dreepy.png", "fx": "#7fe0a8", "type": "warrior", "cost": 0,
+    "hp": [80,  136,  231,  392], "damage": [12,  20,  35,  59], "range": 1, "moveSpeed": "very fast", "secPerHit": 0.8, "critChance": 15, "energy": 0,
+    "ability": null
   },
   "combee": {
     "name": "Combee", "summon": true, "sprite": "assets/sprites/combee.png", "fx": "#ffd35a", "type": "warrior", "cost": 0,

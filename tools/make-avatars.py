@@ -1,5 +1,5 @@
 # Builds the profile pictures in assets/avatars/ from the sprite sheets:
-# the front-facing frame (top-left 64x64), cropped to the Pokémon itself and
+# the front-facing frame (top-left quarter of the sheet, scaled to 64x64), cropped to the Pokémon itself and
 # centred on a square canvas with a little padding.
 #
 #   python3 tools/make-avatars.py
@@ -14,7 +14,11 @@ ids = re.findall(r"'([a-z0-9-]+)'", re.search(r"AVATARS = \[(.*?)\]", (root / 's
 out = root / 'assets/avatars'
 out.mkdir(exist_ok=True)
 for id in ids:
-    frame = Image.open(root / f'assets/sprites/{id}.png').convert('RGBA').crop((0, 0, 64, 64))
+    sheet = Image.open(root / f'assets/sprites/{id}.png').convert('RGBA')
+    size = sheet.width // 4  # frames are a quarter of the sheet (64px, or 128px for big sheets)
+    frame = sheet.crop((0, 0, size, size))
+    if size != 64:
+        frame = frame.resize((64, 64), Image.LANCZOS)
     box = frame.getchannel('A').point(lambda a: 255 if a > 8 else 0).getbbox()
     body = frame.crop(box)
     side = max(body.width, body.height) + 4  # 2px padding all round
