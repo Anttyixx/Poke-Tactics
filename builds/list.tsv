@@ -1,3 +1,4 @@
+78e1eb4	dev	2026-10-14 06:31 UTC	Toxtricity rework: Overdrive gives +2 power charges to allies in the plus around it
 e8c3d5e	dev	2026-10-14 05:51 UTC	Alcremie treat visuals, Main menu after a match, downloadable match log with each fight's seed and chance outcomes
 305a902	dev	2026-10-14 05:34 UTC	New Pokémon: Alcremie (Sweet Treat: random flavour heals, hastes or shields an ally)
 d9ee80b	dev	2026-10-14 05:13 UTC	Bot: rearrange the board before every fight by explained layout rules
@@ -27,4 +28,3 @@ bd99db0	dev	2026-10-14 00:36 UTC	Online play on a Cloudflare game server; Find a
 34fba29	dev	2026-10-13 23:31 UTC	Online: keep the screen on; match log reachable after a drop
 aa11be7	dev	2026-10-13 23:20 UTC	Online: rejoin after a reload; host can reopen its match
 06bd63b	dev	2026-10-13 22:48 UTC	Online: recover from connections that look open but are dead
-c200ba6	dev	2026-10-13 22:14 UTC	Online: a quiet player is locked in, not kicked; guests reconnect

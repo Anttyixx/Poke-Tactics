@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=e8c3d5e';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=78e1eb4';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=e8c3d5e';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=e8c3d5e';
+} from './game.js?v=78e1eb4';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=78e1eb4';
 
 const TICK_MS = 100;
 // Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
@@ -64,6 +64,7 @@ export function powerText(def, star, catalog) {
       ].filter(Boolean);
       return { when: every, text: `Its next attack hits for ${hit}${extra.length ? `${extra.length === 1 ? ' and ' : ', '}${extra.join(' and ')}` : ''}.` };
     }
+    case 'boost': return { when: every, text: `Charges up the allies directly left, right, in front of and behind it: each gains ${vNum(`+${p.charges}`)} toward its power (Pokémon without a power counter don't benefit).` };
     case 'snipe': return { when: every, text: `The attack also zaps the farthest enemy for ${hit}.` };
     case 'summon': {
       const name = catalog?.[p.unit]?.name ?? p.unit;
@@ -1519,6 +1520,10 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         });
         break;
       }
+      case 'boost': // Toxtricity's Overdrive: power charges for an ally beside it
+        if (newest()) { setMana(ev.mana); bars(a); }
+        if (animate) { floatText(a, `+${ev.amount} charge`, 'boost'); fx(at().x, at().y, 'burst', '#ffe14d', 1.1); }
+        break;
       case 'chill': { // Frosmoth: slower for a while (each hit restarts it)
         const fresh = !(a.chillUntil && ev.t < a.chillUntil);
         a.chillUntil = ev.t + ev.duration + 1;
