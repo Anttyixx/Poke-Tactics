@@ -1,3 +1,4 @@
+b2dbf54	dev	2026-10-14 15:30 UTC	Dreepy damage 6 -&gt; 20, Dragapult damage 65 -&gt; 55 (option N, 0.26.0)
 0f0b43a	dev	2026-10-14 15:23 UTC	Dragapult: fires both Dreepy in place of an attack, only when both are home; attacks normally otherwise; damage 25 -&gt; 65 (0.25.0)
 ec880a5	dev	2026-10-14 15:13 UTC	Dragapult: Dreepy hold their target until they faint; fly back in 1.5s; new pair only once both are home; no impact damage, Dragapult damage 40 -&gt; 25 (0.24.0)
 9c0d6be	dev	2026-10-14 08:39 UTC	Smart placement: 4 random layouts + 6 climb steps (wins 51.7% vs the previous version at the same cost; keeps 10,000 smart games under 5 minutes)
@@ -27,4 +28,3 @@ fbb6cd7	dev	2026-10-14 02:45 UTC	Level marks: ★, ★★, ★★★ and a shiny
 e26c195	dev	2026-10-14 02:34 UTC	New Pokédex: card grid, entries with a level cycler, form and summon links
 5109c12	dev	2026-10-14 02:19 UTC	Ditto: cost 3, 1s transform, 600 base HP
 1f3efcd	dev	2026-10-14 01:33 UTC	New Pokemon: Frosmoth (Frostbite chills on every hit)
-00ece56	dev	2026-10-14 01:22 UTC	Online pop-ups over the start screen, not the battle board
