@@ -1,3 +1,4 @@
+00ece56	dev	2026-10-14 01:22 UTC	Online pop-ups over the start screen, not the battle board
 9604ecf	dev	2026-10-14 01:07 UTC	README: rejoining is from the Rejoin screen only
 dde5c5a	dev	2026-10-14 01:07 UTC	Battle goes straight to the queue; Battle a friend by friend code
 271d960	dev	2026-10-14 00:51 UTC	Friends: friend codes, online status, battle requests
@@ -27,4 +28,3 @@ f1199da	dev	2026-10-12 20:11 UTC	Start screen: menu button and version number
 b12b2de	dev	2026-10-12 05:17 UTC	Add balance-testing tools: full-game simulator, analysis, stat sweeps
 e106d6e	stable	2026-10-12 04:55 UTC	Walking: wait the movement speed, then a 0.5s step
 03b4835	dev	2026-10-12 04:33 UTC	Start screen: Battle (online) is the main button, Training plays the bot
-be57b68	dev	2026-10-12 04:30 UTC	Attack range is a square radius around the Pokemon
