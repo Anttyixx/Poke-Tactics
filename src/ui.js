@@ -2003,7 +2003,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       !copycat && chip('dmg', 'Damage', v.dmg),
       !copycat && chip('', 'Attacks every', `${attackTime(st)}s`),
       !copycat && chip('', 'Range', def.range > 1 ? `${def.range} tiles` : 'Melee'),
-      chip('', 'Movement', SPEED_NAME[def.moveSpeed]),
+      chip('', 'Speed', SPEED_NAME[def.moveSpeed]),
     ].filter(Boolean).join('');
     const power = isForm
       ? `<div class="dex-power"><h3>${esc(base.ability.name)} form</h3><p data-k="power">${v.power}</p></div>`
