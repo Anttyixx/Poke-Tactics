@@ -779,6 +779,11 @@ test('Dragon Darts (Dragapult): fires 2 Dreepy into the 2 farthest enemies, shov
   assert.equal(first.length, p.count, 'two at once');
   assert.deepEqual(first.map((e) => e.target).sort(), [unitOf(r, 3).id, unitOf(r, 4).id].sort(), 'at the two farthest');
   const impact = Math.floor((Math.round(catalog.dragapult.damage[0] * STAT_SCALE) * p.impactPct) / 100);
+  if (p.impactDamage) {
+    const hit = Math.round(p.impactDamage[0] * STAT_SCALE);
+    assert.ok(first.every((e) => r.events.some((x) => x.type === 'damage' && x.src === e.unit.id && x.id === e.target && x.amount === hit && x.t === e.t)), 'each Dreepy hits its target as it lands');
+  }
+  if (p.impactStun) assert.ok(first.every((e) => r.events.some((x) => x.type === 'stun' && x.id === e.target && x.duration === p.impactStun && x.t === e.t)), 'and stuns it');
   if (impact) assert.ok(first.every((e) => r.events.some((x) => x.type === 'damage' && x.src === d && x.id === e.target && x.amount === impact && x.t === e.t)), 'each hits on impact');
   // Each crashes into its target: it lands on the target's square and the
   // target is shoved to the square beside it.

@@ -1,5 +1,19 @@
 [
   {
+    "id": "2026-10-14-dreepy-impact-stun",
+    "version": "0.28.0",
+    "date": "2026-10-14",
+    "title": "Dreepy hit hard when they land",
+    "intro": "Dragapult's Dreepy now hit and stun the Pokémon they crash into. Dragapult is still all about disruption.",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "buff", "text": "Each Dreepy deals 40 damage at ★ when it crashes into its target, and stuns it for 0.5 seconds." },
+      { "pokemon": "dragapult", "kind": "buff", "text": "Damage 45 → 55 at ★." },
+      { "pokemon": "dreepy", "kind": "change", "text": "Damage 20 → 15 at ★ (still an attack every 0.5s). HP 80 → 55 at ★." },
+      { "pokemon": "dragapult", "kind": "nerf", "text": "A fainted Dreepy now takes 3 seconds to fly back (was 1.5)." },
+      { "pokemon": "dragapult", "kind": "fix", "text": "A Dragapult knocked out at the same moment it fires still gets its Dreepy out, like any other Pokémon's last action." }
+    ]
+  },
+  {
     "id": "2026-10-14-dreepy-missile",
     "version": "0.27.0",
     "date": "2026-10-14",
