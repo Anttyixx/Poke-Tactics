@@ -73,6 +73,7 @@ const agg = (rows) => {
   return {
     fights: n, fightWinRate: rows.filter((r) => r.win).length / n,
     dmg: sum('dmg') / n, taken: sum('taken') / n, kills: sum('kills') / n, casts: sum('casts') / n,
+    attacks: sum('attacks') / n, healed: sum('healed') / n, healOffered: sum('healOffered') / n, healHits: sum('healHits') / n,
     survival: rows.filter((r) => r.me.survived).length / n,
   };
 };
@@ -119,6 +120,7 @@ writeFileSync(`${outDir}focus-${focus}.html`, report(summary));
 const pct = (x) => (x === null || x === undefined ? '  –  ' : `${(x * 100).toFixed(1)}%`);
 console.log(`${name(focus)}: ${games} games in ${secs.toFixed(0)}s (placement ${place})`);
 console.log(`Teams with it win ${pct(overall.winRate)} ±${(overall.margin * 100).toFixed(1)}  ·  fights won ${pct(stats.fightWinRate)}  ·  survives ${pct(stats.survival)}  ·  ${stats.dmg.toFixed(0)} damage, ${stats.kills.toFixed(2)} KOs, ${stats.casts.toFixed(2)} powers per fight`);
+if (stats.healOffered) console.log(`Healing: ${stats.healed.toFixed(0)} HP restored per fight (${pct(stats.healed / stats.healOffered)} of ${stats.healOffered.toFixed(0)} offered) · ${stats.healHits.toFixed(1)} heals landed · ${stats.attacks.toFixed(1)} attacks per fight`);
 console.log('\nBy star:', byStar.map((s) => `★${s.star}: wins ${pct(s.fightWinRate)} of ${s.fights} fights`).join(' · '));
 console.log('\nFight win rate by square (random placement; front row first, as its player sees it):');
 for (let y = 0; y < HALF; y++) console.log('  ' + squares[y].map((s) => pct(s?.fightWinRate).padStart(7)).join(' '));
@@ -169,6 +171,7 @@ th { font: 600 11px ui-monospace, Menlo, monospace; color: var(--muted); text-tr
 <div class="panel tile"><b>${P(s.stats.survival)}</b>of fights it survives</div>
 <div class="panel tile"><b>${Math.round(s.stats.dmg).toLocaleString()}</b>damage per fight</div>
 <div class="panel tile"><b>${s.stats.casts.toFixed(2)}</b>powers per fight</div>
+${s.stats.healOffered ? `<div class="panel tile"><b>${Math.round(s.stats.healed).toLocaleString()}</b>HP healed per fight (${P(s.stats.healed / s.stats.healOffered)} of what it offered; the rest was over max HP)</div>` : ''}
 </section>
 <section><h2>Where to place it</h2><p class="muted">Fight win rate when put on each square at random (from ${exp.length.toLocaleString()} fights). Shown as its own player sees the board: front row (next to the enemy) on top. Darker = wins more.</p>
 <div class="panel"><div class="board">

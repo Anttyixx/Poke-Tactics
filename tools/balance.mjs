@@ -99,7 +99,7 @@ export function summarizeFight(result, round) {
     // Start square in the owner's own coordinates (y 0 = front row, x as they see it).
     const ox = u.side === 0 ? u.x : COLS - 1 - u.x;
     const oy = u.side === 0 ? u.y - HALF : HALF - 1 - u.y;
-    units.set(u.id, { side: u.side, unitId: u.unitId, star: u.star, x: ox, y: oy, dmg: 0, taken: 0, kills: 0, casts: 0, survived: true, killedBy: null, victims: [] });
+    units.set(u.id, { side: u.side, unitId: u.unitId, star: u.star, x: ox, y: oy, dmg: 0, taken: 0, kills: 0, casts: 0, attacks: 0, healed: 0, healOffered: 0, healHits: 0, survived: true, killedBy: null, victims: [] });
   }
   const lastHit = new Map();
   for (const e of result.events) {
@@ -119,6 +119,16 @@ export function summarizeFight(result, round) {
     } else if (e.type === 'cast') {
       const u = units.get(e.id);
       if (u) u.casts++;
+    } else if (e.type === 'attack') {
+      const u = units.get(e.id);
+      if (u) u.attacks++;
+    } else if (e.type === 'heal') {
+      // Healing done, credited to the healer: HP actually restored, HP it
+      // offered (restored + wasted over max HP), and allies it reached.
+      for (const [id, [got, offered]] of Object.entries(e.from ?? {})) {
+        const h = units.get(owner.get(Number(id)));
+        if (h) { h.healed += got; h.healOffered += offered; h.healHits++; }
+      }
     }
   }
   return { round, winner: result.winner, ticks: result.ticks, units: [...units.values()] };
