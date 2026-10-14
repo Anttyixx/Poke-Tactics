@@ -692,7 +692,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     if (!standing(u)) return;
     const ticks = Math.max(1, Math.round(u.power.returnSec / TICK_SECONDS));
     slot.readyAt = t + ticks;
-    record && emit('dartReturn', { id: u.id, fromX: d.x, fromY: d.y, duration: ticks, unitId: d.unitId });
+    record && emit('dartReturn', { id: u.id, dreepy: d.id, fromX: d.x, fromY: d.y, duration: ticks, unitId: d.unitId });
   }
 
   // Alcremie's Sweet Treat: a random flavour (seeded, so replays match). It
