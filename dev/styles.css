@@ -829,20 +829,36 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .dex-portrait .sprite { animation: walk 0.9s steps(4) infinite; }
 .dex-title { min-width: 0; }
 .dex-hero h2 { color: var(--text); font-size: 28px; text-transform: none; letter-spacing: 0; margin: 0 0 6px; }
-.dex-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+.dex-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
 .dex-tags span { background: var(--panel-3); border: 1px solid var(--line); border-radius: 99px; padding: 2px 10px; font-size: 13px; }
 .dex-tags .dex-type { background: color-mix(in srgb, var(--type) 30%, var(--panel-3)); border-color: var(--type); font-weight: 800; }
-.dex-levels { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.dex-figure { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: none; }
+.dex-art { position: relative; }
+/* Related Pokémon (form, summon, summoner): small sprites at the big one's corner. */
+.dex-rels { position: absolute; right: -10px; bottom: -2px; display: flex; flex-direction: column; gap: 4px; }
+.dex-rel {
+  width: 46px; height: 46px; padding: 0; border-radius: 50%; display: grid; place-items: center;
+  background: radial-gradient(circle, color-mix(in srgb, var(--type) 40%, var(--panel-3)), var(--panel-2) 75%);
+  border: 2px solid color-mix(in srgb, var(--type) 60%, var(--line-2));
+  box-shadow: 0 3px 10px #0008;
+  transition: transform 0.15s var(--spring), border-color 0.15s;
+}
+.dex-rel:hover { transform: scale(1.12); border-color: var(--type); }
+.dex-rel .portrait { width: 38px; height: 38px; }
+.dex-rel:hover .sprite { animation: walk 0.7s steps(4) infinite; }
+/* The level chip under the sprite: tap to step through the levels. */
 .dex-level {
-  display: inline-flex; align-items: baseline; gap: 8px; padding: 6px 12px; border-radius: 12px;
-  background: #2a2410; border-color: #6b5a1c; color: var(--gold);
+  display: inline-flex; align-items: center; justify-content: center; min-width: 76px; min-height: 30px;
+  padding: 3px 14px; border-radius: 99px; font-size: 17px;
+  background: #241f12; border: 1px solid #6b5a1c;
+  transition: border-color 0.15s, transform 0.15s var(--spring);
 }
 .dex-level:hover { border-color: var(--gold); }
-.dex-level small { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
-.dex-level b { min-width: 3.2em; text-align: left; font-size: 17px; }
-.dex-pips { display: inline-flex; gap: 6px; }
-.dex-pips button { width: 12px; height: 12px; padding: 0; border-radius: 50%; background: var(--line-2); border: 0; min-width: 0; }
-.dex-pips button.on { background: var(--gold); box-shadow: 0 0 6px #ffc93c99; }
+.dex-level:active { transform: scale(0.94); }
+.dex-level .stars { letter-spacing: 1px; }
+.dex-rel-names { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; }
+.linkish { padding: 0; border: 0; background: none; color: var(--mana); font-size: 13px; font-weight: 700; min-width: 0; }
+.linkish:hover { text-decoration: underline; background: none; }
 
 .dex-stats { display: grid; gap: 10px; margin-bottom: 12px; }
 .dex-stat { display: grid; grid-template-columns: 1fr auto; align-items: baseline; row-gap: 4px; }
@@ -860,16 +876,6 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .dex-power h3 { margin: 0 0 4px; font-size: 16px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
 .dex-power h3 small { color: var(--mana); font-size: 12px; font-weight: 700; }
 .dex-power p { margin: 0; color: #d4d8e8; line-height: 1.45; }
-.dex-links { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-.dex-link {
-  display: inline-flex; align-items: center; gap: 10px; padding: 6px 12px 6px 6px; border-radius: 14px; text-align: left;
-  background: color-mix(in srgb, var(--type) 14%, var(--panel-2)); border-color: color-mix(in srgb, var(--type) 45%, var(--line));
-}
-.dex-link:hover { border-color: var(--type); }
-.dex-link .portrait { width: 44px; height: 44px; }
-.dex-link span { display: grid; }
-.dex-link small { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
-.dex-link i { font-style: normal; font-size: 22px; color: var(--muted); }
 .dex-foot { font-size: 13px; margin: 4px 0 0; }
 
 /* ---- Toast ---- */
@@ -946,6 +952,8 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   .dex-card b { font-size: 13px; }
   .dex-hero { gap: 10px; padding: 10px; }
   .dex-portrait { width: 84px; height: 84px; }
+  .dex-rel { width: 38px; height: 38px; }
+  .dex-rel .portrait { width: 30px; height: 30px; }
   .dex-hero h2 { font-size: 22px; }
   .dex-panel { padding: 16px; }
 }
@@ -1232,7 +1240,7 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 /* Smallest phones: the Pokédex entry stacks its picture above the title. */
 @media (max-width: 360px) {
   .dex-hero { flex-direction: column; text-align: center; }
-  .dex-tags, .dex-levels { justify-content: center; }
+  .dex-tags, .dex-rel-names { justify-content: center; }
 }
 @media (max-width: 520px) {
   :is(#overlay, #lobby) .start-links { gap: 8px; }

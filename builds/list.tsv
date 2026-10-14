@@ -1,3 +1,4 @@
+63caf36	dev	2026-10-14 03:04 UTC	Pokédex entry: level chip under the sprite, related Pokémon as small sprites
 fbb6cd7	dev	2026-10-14 02:45 UTC	Level marks: ★, ★★, ★★★ and a shiny star for the max level
 e26c195	dev	2026-10-14 02:34 UTC	New Pokédex: card grid, entries with a level cycler, form and summon links
 5109c12	dev	2026-10-14 02:19 UTC	Ditto: cost 3, 1s transform, 600 base HP
@@ -27,4 +28,3 @@ f1199da	dev	2026-10-12 20:11 UTC	Start screen: menu button and version number
 7c0aa74	dev	2026-10-12 17:38 UTC	Balance update and an in-game What's new screen
 8af3fd1	dev	2026-10-12 07:46 UTC	Plan: building-block abilities (triggers, targets, hit patterns, effects)
 3237921	dev	2026-10-12 05:45 UTC	Match logs and replay analysis; single-Pokemon focus studies
-8afa6fc	dev	2026-10-12 05:40 UTC	Faster simulations: engine hot paths and a smarter placer
