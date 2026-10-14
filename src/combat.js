@@ -133,6 +133,13 @@ const snapshot = (u) => ({
   ...(u.summoned && { summoned: true }),
 });
 
+// The offsets of the (2r+1)x(2r+1) square around a square, row by row.
+const squares = new Map();
+const squareAround = (r) => {
+  if (!squares.has(r)) squares.set(r, Array.from({ length: (2 * r + 1) ** 2 }, (_, k) => [(k % (2 * r + 1)) - r, Math.floor(k / (2 * r + 1)) - r]));
+  return squares.get(r);
+};
+
 // Scratch space for findPath, reused by every search of every fight.
 const pathBlocked = new Uint8Array(COLS * ROWS);
 const pathPrev = new Int16Array(COLS * ROWS);
@@ -1000,7 +1007,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
           const p = at(target);
           const amount = Math.floor((u.atk * u.power.healPct) / 100);
           const r = u.power.radius ?? 0;
-          const cells = r ? Array.from({ length: (2 * r + 1) ** 2 }, (_, k) => [(k % (2 * r + 1)) - r, Math.floor(k / (2 * r + 1)) - r]) : NEIGHBORS;
+          const cells = r ? squareAround(r) : NEIGHBORS;
           for (const [dx, dy] of cells) {
             const o = unitAt(p.x + dx, p.y + dy);
             if (o && o.side === u.side) heal(o, amount, u);
@@ -1041,9 +1048,14 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
 
   // undefined = still fighting, 0/1 = winning side, null = nobody left / draw
   const outcome = () => {
-    const a = units.some((u) => u.alive && u.side === 0);
-    const b = units.some((u) => u.alive && u.side === 1);
-    if (a && b) return undefined;
+    let a = false;
+    let b = false;
+    for (let i = 0; i < units.length; i++) {
+      const u = units[i];
+      if (!u.alive) continue;
+      if (u.side === 0) a = true; else b = true;
+      if (a && b) return undefined;
+    }
     return a ? 0 : b ? 1 : null;
   };
 
@@ -1092,8 +1104,10 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
         const gained = Math.min(u.pendingHeal, u.maxHp - u.hp);
         u.hp += gained;
         // from: healer id -> [HP it restored, HP it offered] (the rest was over max HP).
-        const from = Object.fromEntries(Object.entries(u.healFrom ?? {}).map(([id, a]) => [id, [Math.round((gained * a) / u.pendingHeal), a]]));
-        record && emit('heal', { id: u.id, amount: gained, hp: u.hp, from });
+        if (record) {
+          const from = Object.fromEntries(Object.entries(u.healFrom ?? {}).map(([id, a]) => [id, [Math.round((gained * a) / u.pendingHeal), a]]));
+          emit('heal', { id: u.id, amount: gained, hp: u.hp, from });
+        }
       }
       u.pendingHeal = 0;
       u.healFrom = null;
