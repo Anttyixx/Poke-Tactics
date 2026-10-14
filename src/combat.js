@@ -91,7 +91,7 @@ function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, in
     attackCd: stats.attackCd, moveCd: stats.moveCd,
     // Every fight (and every summon) starts fresh: power progress at 0 and a full
     // attack cooldown before the first hit.
-    mana: 0, maxMana: stats.energy, // mana counts attacks toward the power; 0 = no counter
+    mana: def.ability?.startCharged ? stats.energy : 0, maxMana: stats.energy, // mana counts attacks toward the power; 0 = no counter
     power: def.ability,
     shield: 0, stun: 0,
     pendingMana: 0, pendingStun: 0, // applied at the end of the tick
@@ -99,6 +99,7 @@ function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, in
     moveTimer: stats.moveCd, // waiting before the next step (it waits before its first one too)
     stepTimer: 0, // mid-step: ticks until it reaches the square it's walking to
     hasteUntil: 0, hastePct: 0, stealthFrom: 0, stealthUntil: 0,
+    boundUntil: 0, // Hoopa's bind: it can't move (walk, zip or dash) through this tick; it can still attack
     guardUntil: 0, guardPct: 0, guardBrokeAt: -1, // Alcremie's Mint Cream shield: less damage; the first stun or shove only breaks it
     regen: null, // Alcremie's Matcha Cream: { src, per, left, next } healing once a second
     chillFrom: 0, chillUntil: 0, chillPct: 0, // Frosmoth's chill: slower attacks and steps through chillUntil
@@ -161,6 +162,21 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
   // Minior transforming and Tapu Koko dashing can't be hurt, stunned or moved.
   // Immunity always starts on a new tick, so it never decides a same-tick trade.
   const immune = (u) => t >= u.immuneFrom && t <= u.immuneUntil;
+  // Hoopa's bind. A Hoopa whose counter is full waits; the first enemy that
+  // tries to move after that is bound in place for `duration` ticks instead.
+  // Returns true if `u` may not move this tick (already bound, or just bound).
+  const bound = (u) => u.boundUntil > 0 && t <= u.boundUntil;
+  function heldBack(u) {
+    if (bound(u)) return true;
+    if (immune(u)) return false;
+    const hoopa = units.find((h) => h.side !== u.side && standing(h) && h.power?.kind === 'bind' && h.maxMana > 0 && h.mana >= h.maxMana && !h.copyOf);
+    if (!hoopa) return false;
+    hoopa.mana = 0;
+    emit('cast', { id: hoopa.id, target: u.id });
+    u.boundUntil = t + hoopa.power.duration;
+    emit('bind', { id: u.id, by: hoopa.id, duration: hoopa.power.duration });
+    return true;
+  }
   // Shielded by Alcremie (Mint Cream) this tick.
   const guarded = (u) => u.guardUntil > 0 && t <= u.guardUntil;
   // A stun or a shove that hits a shield breaks it instead of landing. Anything
@@ -786,12 +802,12 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
         u.target = far.id;
       }
     }
-    if (empowered && u.power.dash && u.atkTimer === 0 && !arrived) {
+    if (empowered && u.power.dash && u.atkTimer === 0 && !arrived && !bound(u)) {
       // Dash in a straight line next to the farthest enemy, stunning every
       // enemy it passes through on the way.
       const far = farthestEnemy(u);
       const cell = far && reach(u, at(far)) > u.range && dashSpot(u, far);
-      if (cell) {
+      if (cell && !heldBack(u)) {
         const from = { x: u.x, y: u.y };
         for (const c of lineCells(from, cell)) {
           const o = unitAt(c.x, c.y);
@@ -835,9 +851,11 @@ export function simulate(catalog, boards, seed = 0, { record = true } = {}) {
             if (o && o.side === u.side) heal(o, amount, u);
           }
         }
-        if (u.power && u.power.kind !== 'empower' && u.maxMana > 0 && u.mana >= u.maxMana) instantPower(u, target);
+        if (u.power && u.power.kind !== 'empower' && u.power.kind !== 'bind' && u.maxMana > 0 && u.mana >= u.maxMana) instantPower(u, target);
       }
       u.atkTimer = cooldown(u);
+    } else if (u.moveTimer === 0 && u.stepTimer === 0 && (u.blink || u.copyOf === null) && heldBack(u)) {
+      // Bound by Hoopa: it stays where it is (it still attacks anything in range).
     } else if (u.blink && u.moveTimer === 0 && u.stepTimer === 0) {
       // Minior's Star Form doesn't walk: it zips straight to the open square
       // beside its target closest to it, then waits its movement speed before

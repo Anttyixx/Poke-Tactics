@@ -1,5 +1,18 @@
 [
   {
+    "id": "2026-10-14-hoopa-bind",
+    "version": "0.21.0",
+    "date": "2026-10-14",
+    "title": "Hoopa rework: Binding Ring",
+    "intro": "Hoopa no longer teleports. It now holds enemies in place with its rings.",
+    "changes": [
+      { "pokemon": "hoopa", "kind": "change", "text": "New power, Binding Ring: after 4 attacks its power is full and waits. The next enemy that tries to move (walk, zip or dash) is bound in place for 5 seconds. It can still attack anything in range, but it can't move." },
+      { "pokemon": "hoopa", "kind": "change", "text": "Hyperspace Hole (the teleport and lifesteal) is gone." },
+      { "pokemon": "hoopa", "kind": "change", "text": "Range 1 → 2, so it charges from behind your front line." },
+      { "kind": "new", "text": "Bound Pokémon show glowing golden rings until the bind wears off." }
+    ]
+  },
+  {
     "id": "2026-10-14-toxtricity-overdrive",
     "version": "0.20.0",
     "date": "2026-10-14",

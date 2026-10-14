@@ -59,10 +59,10 @@ function assertCopiesConserved(player) {
 // ---- catalog --------------------------------------------------------------
 
 test('unit catalog is well formed, and every unit has a sprite that exists', () => {
-  const kinds = new Set(['empower', 'snipe', 'summon', 'stealth', 'haste', 'opening', 'quake', 'transform', 'splashHeal', 'selfdestruct', 'copy', 'chill', 'treat', 'boost']);
+  const kinds = new Set(['empower', 'snipe', 'summon', 'stealth', 'haste', 'opening', 'quake', 'transform', 'splashHeal', 'selfdestruct', 'copy', 'chill', 'treat', 'boost', 'bind']);
   // Powers that fire on a counter of attacks need `energy`; the rest (battle
   // start, passives, knockout or low-HP triggers) have none.
-  const counted = (a) => ['empower', 'snipe', 'summon', 'stealth', 'haste', 'quake', 'treat', 'boost'].includes(a.kind) || (a.kind === 'transform' && !a.trigger);
+  const counted = (a) => ['empower', 'snipe', 'summon', 'stealth', 'haste', 'quake', 'treat', 'boost', 'bind'].includes(a.kind) || (a.kind === 'transform' && !a.trigger);
   for (const [id, u] of Object.entries(catalog)) {
     for (const k of ['hp', 'damage']) {
       const v = u[k];
@@ -681,11 +681,13 @@ test('Phantom Force (Decidueye): after 8 attacks it turns invisible and faster; 
   assert.ok(times.length >= 2 && times.slice(1).every((x, i) => x - times[i] === gap), `attacks every ${gap} ticks: ${times}`);
 });
 
-test('Hyperspace Hole (Hoopa): the attack after 6 teleports to the farthest enemy, hits 30% harder and heals 10%', () => {
+test('teleport powers (no Pokémon uses one right now): the attack after 6 teleports to the farthest enemy, hits 30% harder and heals 10%', () => {
   const cat = powerCat();
   cat.brute = { ...cat.wall, range: 1, secPerHit: 1, damage: [40, 40, 40, 40] };
+  // Hoopa's old Hyperspace Hole.
+  cat.porter = { ...cat.wall, range: 1, secPerHit: 1.11, damage: [75, 125, 195, 315], critChance: 0, moveSpeed: 'medium', energy: 6, ability: { name: 'Hyperspace Hole', kind: 'empower', damagePct: 130, teleport: 'farthest', lifestealPct: 10 } };
   const r = simulate(cat, [
-    [{ uid: 1, unitId: 'hoopa', star: 0, x: 2, y: 0 }],
+    [{ uid: 1, unitId: 'porter', star: 0, x: 2, y: 0 }],
     [{ uid: 2, unitId: 'brute', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'wall', star: 0, x: 0, y: 3 }], // far one at combat (4, 0)
   ], 1);
   const g = unitOf(r, 1).id;
@@ -695,9 +697,37 @@ test('Hyperspace Hole (Hoopa): the attack after 6 teleports to the farthest enem
   const tp = evs(r, 'teleport', g)[0];
   assert.equal(tp.t, cast.t);
   assert.equal(Math.abs(tp.x - 4) + Math.abs(tp.y - 0), 1, 'lands next to the farthest enemy');
-  const dealt = Math.floor((catalog.hoopa.damage[0] * 130) / 100);
+  const dealt = Math.floor((Math.round(75 * STAT_SCALE) * 130) / 100);
   assert.equal(r.events.find((e) => e.type === 'damage' && e.id === far).amount, dealt);
   assert.equal(evs(r, 'heal', g).find((e) => e.t === cast.t).amount, Math.floor(dealt / 10));
+});
+
+test('Binding Ring (Hoopa): once full it waits; the next enemy that tries to move is bound in place for 5s', () => {
+  const cat = powerCat();
+  cat.walker = { ...cat.wall, range: 1, moveSpeed: 'super slow' }; // a long walk from the back
+  // Hoopa at combat (2,5) shoots a wall at (2,3); the walker starts at (4,0).
+  const r = simulate(cat, [
+    [{ uid: 1, unitId: 'hoopa', star: 0, x: 2, y: 1 }],
+    [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'walker', star: 0, x: 0, y: 3 }],
+  ], 1);
+  const h = unitOf(r, 1).id;
+  const w = unitOf(r, 3).id;
+  const bind = evs(r, 'bind', w)[0];
+  assert.ok(bind, 'the walker gets bound');
+  assert.equal(bind.by, h);
+  assert.equal(bind.duration, catalog.hoopa.ability.duration);
+  const full = evs(r, 'attack', h)[catalog.hoopa.energy - 1];
+  assert.ok(bind.t >= full.t, 'only once its counter is full');
+  assert.ok(evs(r, 'cast', h).some((e) => e.t === bind.t && e.target === w), 'Hoopa casts it');
+  const moves = evs(r, 'move', w).map((e) => e.t);
+  assert.ok(!moves.some((t) => t >= bind.t && t <= bind.t + bind.duration), 'no steps while bound');
+  // Once it wears off, the walker moves again, unless Hoopa has refilled its
+  // counter by then (4 more attacks) and binds it again on its next try.
+  const end = bind.t + bind.duration;
+  const again = evs(r, 'bind', w)[1];
+  assert.ok(moves.some((t) => t > end) || (again && again.t > end), 'free once the bind wears off');
+  if (again) assert.ok(evs(r, 'attack', h).filter((e) => e.t > bind.t && e.t <= again.t).length >= catalog.hoopa.energy, 'a second bind needs a refill');
+  assert.equal(evs(r, 'bind').filter((e) => e.t < bind.t).length, 0);
 });
 
 test('Earthquake (Torterra): after 5 attacks, hits every enemy on the board for 30% and stuns them', () => {
@@ -723,7 +753,7 @@ test('bot layout rules: tanks in front, ranged at the edge of their range, heale
     { uid: 901, unitId: 'coalossal', star: 0, x: 0, y: 3 },
     { uid: 902, unitId: 'vespiquen', star: 0, x: 2, y: 0 },
     { uid: 903, unitId: 'lilligant', star: 0, x: 3, y: 0 },
-    { uid: 904, unitId: 'hoopa', star: 0, x: 4, y: 3 },
+    { uid: 904, unitId: 'tapukoko', star: 0, x: 4, y: 3 },
   ];
   // Last round the enemy had a Beheeyem at their x = 2, so its Psywave runs
   // down our column 2 (the middle).
@@ -733,7 +763,7 @@ test('bot layout rules: tanks in front, ranged at the edge of their range, heale
   assert.ok(plan.every((m) => m.reason && m.reason.length > 10), 'every placement says why');
   const at = (uid) => plan.find((m) => m.uid === uid);
   assert.equal(at(901).y, 0, 'the tank holds the front row');
-  assert.equal(at(904).y, 0, 'Hoopa (a diver) starts in front');
+  assert.equal(at(904).y, 0, 'Tapu Koko (a diver) starts in front');
   assert.equal(at(902).y, catalog.vespiquen.range - 1, 'Vespiquen stands as far back as its range still reaches');
   assert.equal(at(903).y, 1, 'Lilligant right behind the front line');
   assert.ok(plan.every((m) => m.x !== 2), "nobody stands in Psywave's column");

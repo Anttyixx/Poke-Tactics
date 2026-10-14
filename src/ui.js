@@ -64,6 +64,7 @@ export function powerText(def, star, catalog) {
       ].filter(Boolean);
       return { when: every, text: `Its next attack hits for ${hit}${extra.length ? `${extra.length === 1 ? ' and ' : ', '}${extra.join(' and ')}` : ''}.` };
     }
+    case 'bind': return { when: `After ${def.energy} attacks`, text: `Its power stays full until an enemy tries to move. Hoopa binds that Pokémon in place for ${vTime(p.duration)}: it can't walk, zip or dash, but it still attacks anything in range.` };
     case 'boost': return { when: every, text: `Charges up the allies directly left, right, in front of and behind it: each gains ${vNum(`+${p.charges}`)} toward its power (Pokémon without a power counter don't benefit).` };
     case 'snipe': return { when: every, text: `The attack also zaps the farthest enemy for ${hit}.` };
     case 'summon': {
@@ -1056,6 +1057,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         if (a.stealthUntil && tick >= a.stealthUntil) { a.stealthUntil = 0; a.el.classList.remove('stealthed'); }
         if (a.hasteUntil && tick >= a.hasteUntil) { a.hasteUntil = 0; a.el.classList.remove('hasted'); }
         if (a.guardUntil && tick > a.guardUntil) { a.guardUntil = 0; a.el.classList.remove('guarded'); }
+        if (a.boundUntil && tick > a.boundUntil) { a.boundUntil = 0; a.el.classList.remove('bound'); }
         if (a.treatUntil && tick > a.treatUntil) { a.treatUntil = 0; a.el.classList.remove('treated'); delete a.el.dataset.treat; }
       }
     };
@@ -1518,6 +1520,17 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
           fx(p.x, p.y, 'burst', color, 1.4);
           floatText(to, TREAT_TEXT[ev.flavor], ev.flavor === 'heal' ? 'heal' : ev.flavor === 'guard' ? 'guard' : 'cast');
         });
+        break;
+      }
+      case 'bind': { // Hoopa: rings hold the Pokémon in place for a while
+        const from = actors.get(ev.by);
+        const wear = () => {
+          a.boundUntil = ev.t + ev.duration;
+          a.el.classList.add('bound');
+        };
+        if (!animate) { wear(); break; }
+        const ms = from ? projectile(viewPos(from.x, from.y), at(), '#ff8ad8', true) : 0;
+        later(ms, () => { wear(); floatText(a, 'Bound', 'bind'); fx(at().x, at().y, 'burst', '#ff8ad8', 1.3); });
         break;
       }
       case 'boost': // Toxtricity's Overdrive: power charges for an ally beside it
