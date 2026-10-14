@@ -626,7 +626,9 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
   function fireDarts() {
     for (let k = 0; dartQueue.length; k++) {
       dartQueue = dartQueue.filter((u) => k < u.darts.length);
-      for (const u of dartQueue) if (standing(u)) fireDart(u, u.darts[k]);
+      // A Dragapult knocked out earlier this tick still fires (like any action
+      // this tick), so a Dreepy landing first never cancels the other side's.
+      for (const u of dartQueue) if (u.alive) fireDart(u, u.darts[k]);
     }
   }
   function fireDart(u, slot) {
@@ -659,7 +661,11 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     slot.aim = target.id;
     record && emit('summon', { id: u.id, unit: snapshot(pal), dart: true, target: target.id });
     if (shove) relocate(target, shove, 'knock', { by: pal.id }); // right after it lands on that square
-    if (p.impactPct) damage(target, Math.floor((u.atk * p.impactPct) / 100), u);
+    // The crash itself: a set hit (`impactDamage` by star, or `impactPct` of
+    // Dragapult's damage) and a short stun.
+    if (p.impactDamage) damage(target, Math.round(p.impactDamage[u.star] * STAT_SCALE), pal);
+    else if (p.impactPct) damage(target, Math.floor((u.atk * p.impactPct) / 100), u);
+    if (p.impactStun && standing(target)) stun(target, p.impactStun);
     // The hit distracts it: it drops whoever it was attacking and must go
     // after the Dreepy until the Dreepy faints.
     if (p.lure && standing(target) && !immune(target)) {
