@@ -219,6 +219,10 @@ test a set of changes together. Team styles to pit against each other live in `A
     square it hits, for 50% of its damage.
   - Golem, **Self-Destruct**: when knocked out it stays on its square for 3s (it can't be hit), then
     explodes for 300% on enemies in the 3x3 square around it. The fight waits for it.
+  - Frosmoth (cost 3, mage, range 2, attacks every 1.25s), **Frostbite**: no charged power. Every
+    hit chills the target for 3s: it attacks 30% slower and waits 30% longer between steps; another
+    hit restarts the timer. Chills land at the end of the tick, like stuns. Chilled Pokémon are
+    tinted blue with a snowflake badge.
   - Minior, **Shining Star**: two lives. Rock form is a slow, soft-hitting wall (very slow, 30 damage
     every 3.0s, 1100 HP). When it would be knocked out it doesn't faint: at the end of that tick it gets
     Star Form's own HP (600), spends 0.5s transforming, immune to everything (damage, stuns, knockbacks,

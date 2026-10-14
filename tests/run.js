@@ -58,7 +58,7 @@ function assertCopiesConserved(player) {
 // ---- catalog --------------------------------------------------------------
 
 test('unit catalog is well formed, and every unit has a sprite that exists', () => {
-  const kinds = new Set(['empower', 'snipe', 'summon', 'stealth', 'haste', 'opening', 'quake', 'transform', 'splashHeal', 'selfdestruct', 'copy']);
+  const kinds = new Set(['empower', 'snipe', 'summon', 'stealth', 'haste', 'opening', 'quake', 'transform', 'splashHeal', 'selfdestruct', 'copy', 'chill']);
   // Powers that fire on a counter of attacks need `energy`; the rest (battle
   // start, passives, knockout or low-HP triggers) have none.
   const counted = (a) => ['empower', 'snipe', 'summon', 'stealth', 'haste', 'quake'].includes(a.kind) || (a.kind === 'transform' && !a.trigger);
@@ -800,6 +800,35 @@ test('Transform (Ditto): walks into the nearest enemy\'s range, takes 0.5s to co
   const next = tfs[tfs.indexOf(revert) + 1];
   assert.equal(next.copy, 'far', 'and copies it');
   assert.equal(next.maxHp, 1e6);
+});
+
+test('Frostbite (Frosmoth): every hit chills the target: slower attacks for a while, refreshed by each hit, then it wears off', () => {
+  const cat = powerCat();
+  // A sturdy dummy that attacks every second from anywhere, and never moves.
+  cat.dummy = { ...cat.wall, range: 99, secPerHit: 1, damage: [1, 1, 1, 1] };
+  const fros = catalog.frosmoth.ability;
+  const fight = (frosmothSecPerHit) => {
+    const c = structuredClone(cat);
+    c.frosmoth = { ...c.frosmoth, secPerHit: frosmothSecPerHit, damage: [1, 1, 1, 1], hp: [99999, 99999, 99999, 99999] };
+    return simulate(c, [[{ uid: 1, unitId: 'frosmoth', star: 0, x: 2, y: 0 }], [{ uid: 2, unitId: 'dummy', star: 0, x: 2, y: 0 }]], 1);
+  };
+  const r = fight(1);
+  const d = unitOf(r, 2).id;
+  const chills = evs(r, 'chill', d);
+  assert.ok(chills.length > 1, 'each hit chills');
+  assert.equal(chills[0].duration, fros.duration);
+  assert.equal(chills[0].pct, fros.slowPct);
+  const hits = r.events.filter((e) => e.type === 'attack' && e.id === d).map((e) => e.t);
+  const gaps = hits.slice(1).map((x, i) => x - hits[i]);
+  const base = Math.round(1 / 0.1);
+  assert.ok(gaps.slice(2).every((g) => g === Math.round((base * (100 + fros.slowPct)) / 100)), `chilled: ${fros.slowPct}% slower attacks (gaps ${gaps.slice(0, 6)})`);
+  // Frosmoth hits only every 8s: between its hits the chill wears off and the dummy speeds back up.
+  const slow = fight(8);
+  const sd = unitOf(slow, 2).id;
+  const h2 = slow.events.filter((e) => e.type === 'attack' && e.id === sd).map((e) => e.t);
+  const [c1, c2] = evs(slow, 'chill', sd).map((e) => e.t);
+  const between = h2.filter((x) => x > c1 + fros.duration + base && x <= c2);
+  assert.ok(between.length >= 2 && between[1] - between[0] === base, `normal speed again once the chill is over (${between})`);
 });
 
 test('Blaze (Infernape): after 7 attacks it attacks 50% faster for 3 seconds', () => {

@@ -78,5 +78,10 @@
     "name": "Combee", "summon": true, "sprite": "assets/sprites/combee.png", "fx": "#ffd35a", "type": "warrior", "cost": 0,
     "hp": [188, 300, 481, 769], "damage": [30, 47, 75, 120], "range": 1, "moveSpeed": "very fast", "secPerHit": 0.8, "critChance": 15, "energy": 0,
     "ability": null
+  },
+  "frosmoth": {
+    "name": "Frosmoth", "sprite": "assets/sprites/frosmoth.png", "fx": "#9fe8ff", "type": "mage", "cost": 3,
+    "hp": [760, 1290, 2195, 3725], "damage": [78, 133, 225, 381], "range": 2, "moveSpeed": "medium", "secPerHit": 1.25, "critChance": 15, "energy": 0,
+    "ability": {"name": "Frostbite", "kind": "chill", "slowPct": 30, "duration": 30}
   }
 }
