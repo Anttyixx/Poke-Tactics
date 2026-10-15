@@ -101,7 +101,7 @@ function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, in
     hasteUntil: 0, hastePct: 0, stealthFrom: 0, stealthUntil: 0,
     tauntBy: null, tauntUntil: 0, // Amoonguss's Rage Powder: it must attack this unit through tauntUntil
     rage: 0, movedSinceHit: true, // Annihilape's Rage Fist: attacks in a row without moving
-    darts: null, dartOf: null, dartSlot: 0, // Dragapult's Dreepy: [{ readyAt, unit }] / which Dragapult a Dreepy belongs to
+    darts: null, dartOf: null, dartSlot: 0, dartShots: 0, // Dragapult's Dreepy: [{ readyAt, unit }] / which Dragapult a Dreepy belongs to
     bindingUntil: 0, hoopaForm: null, lastBound: null, // Hoopa: its own bind lasts through this tick; the form it has taken
     boundUntil: 0, // Hoopa's bind: it can't move (walk, zip or dash) through this tick; it can still attack
     guardUntil: 0, guardPct: 0, guardBrokeAt: -1, // Alcremie's Mint Cream shield: less damage; the first stun or shove only breaks it
@@ -618,9 +618,12 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
   // Darts fly at the end of the tick (both sides at once), at enemies that were
   // already on the board when the tick began.
   let dartQueue = [];
+  // Ready to fire: every Dreepy home, or with `perShot` (Dreepy per shot)
+  // enough of them home for one shot.
   function dartsHome(u) {
     u.darts ??= Array.from({ length: u.power.count }, () => ({ readyAt: 0, unit: null, aim: null }));
-    return u.darts.every((slot) => !slot.unit && t >= slot.readyAt);
+    const home = u.darts.filter((slot) => !slot.unit && t >= slot.readyAt).length;
+    return u.power.perShot ? home >= u.power.perShot : home === u.darts.length;
   }
   // Every Dragapult's first ready Dreepy goes, then every second one, ... so
   // when both sides' darts want the same squares, neither side gets them all.
@@ -634,7 +637,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
   }
   function fireDart(u, slot) {
     const p = u.power;
-    if (slot.unit || t < slot.readyAt) return;
+    if (slot.unit || t < slot.readyAt || !(u.dartShots > 0)) return;
     // Enemies its other Dreepy were fired at (not whoever they fight now: a
     // lure from the other side's darts this same tick may have changed that).
     const busy = new Set(u.darts.filter((s) => s.unit).map((s) => s.aim));
@@ -667,6 +670,8 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     bySide[u.side].push(pal);
     slot.unit = pal;
     slot.aim = target.id;
+    u.dartShots--;
+    if (u.maxMana > 0) u.mana = 0; // the charge is spent only once a Dreepy is actually out
     record && emit('summon', { id: u.id, unit: snapshot(pal), dart: true, target: target.id });
     if (shove) relocate(target, shove, 'knock', { by: pal.id }); // right after it lands on that square
     // The crash itself: a set hit (`impactDamage` by star, or `impactPct` of
@@ -975,7 +980,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
       // before a full attack cooldown at the start of the fight).
       const inRange = reach(u, at(target)) <= u.range;
       if (u.atkTimer === 0 && (inRange || u.moveTimer === 0)) {
-        if (u.maxMana > 0) u.mana = 0;
+        u.dartShots = u.power.perShot ?? u.power.count;
         dartQueue.push(u);
         u.atkTimer = cooldown(u);
         if (!inRange) u.moveTimer = slowed(u.moveCd, u); // it used its step too: waits as if it had walked

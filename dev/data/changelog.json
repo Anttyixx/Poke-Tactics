@@ -1,5 +1,18 @@
 [
   {
+    "id": "2026-10-15-dragapult-charge",
+    "version": "0.34.0",
+    "date": "2026-10-15",
+    "title": "Dragapult charges its Dreepy",
+    "intro": "Dragapult now fires its Dreepy one at a time from a charged power, and attacks much faster to fill it. (The previous version is saved as dragapult-v1.)",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "change", "text": "Dragon Darts now has a 3-charge power bar that fills as Dragapult attacks. When it's full, Dragapult's next action fires one Dreepy (was both at once, whenever both were home)." },
+      { "pokemon": "dragapult", "kind": "change", "text": "Up to 2 Dreepy can be out at once. With both out, the bar waits, full, until one faints and is home." },
+      { "pokemon": "dragapult", "kind": "buff", "text": "Attacks every 0.7s (was 1.6s), so it fires Dreepy more often." },
+      { "pokemon": "dragapult", "kind": "change", "text": "Its power charge is only spent when a Dreepy actually launches." }
+    ]
+  },
+  {
     "id": "2026-10-15-dreepy-streak",
     "version": "0.33.2",
     "date": "2026-10-15",
