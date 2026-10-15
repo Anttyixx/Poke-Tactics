@@ -705,7 +705,7 @@ test('teleport powers (no Pokémon uses one right now): the attack after 6 telep
   assert.equal(evs(r, 'heal', g).find((e) => e.t === cast.t).amount, Math.floor(dealt / 10));
 });
 
-test('Binding Ring (Hoopa): with a full charge (5 attacks) it binds the first enemy about to move by itself; that move is stopped and the rings stop 3 tries in all', () => {
+test('Binding Ring (Hoopa): with a full charge (4 attacks) it binds the first enemy about to move by itself; that move is stopped and the rings stop 3 tries in all', () => {
   const cat = powerCat();
   cat.walker = { ...cat.wall, range: 1, moveSpeed: 'super slow' };
   cat.hoopa = { ...cat.hoopa, range: 9, moveSpeed: 'statue' }; // shoots from where it stands
