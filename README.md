@@ -230,16 +230,15 @@ test a set of changes together. Team styles to pit against each other live in `A
     within the 5x5 around it that is attacking someone else must attack Amoonguss for 5s.
   - Annihilape (cost 4, warrior), **Rage Fist**: each attack in a row without moving makes it attack
     20% faster, up to +100% after 5 attacks. Moving (or being moved) resets it.
-  - Dragapult (cost 4, ranger, range 3), **Dragon Darts**: a power counter of 2 attacks. When it's
-    full, it fires one Dreepy on its own 0.5s later (no attack is used), as long as a Dreepy is home
-    (at most 2 can be out at once), at the farthest enemy outside the 3x3 around it (never at a Pokémon
+  - Dragapult (cost 4, ranger, range 3), **Dragon Darts**: after each attack, if a Dreepy is home (at
+    most 2 can be out at once), its next action (an attack or a step, after its usual 0.8s wait)
+    fires one Dreepy instead, at the farthest enemy outside the 3x3 around it (never at a Pokémon
     right next to it; with none that far, it just attacks). The Dreepy crashes into its target for 80
     damage (growing slowly with level) and a 0.5s stun, taking its square and shoving it aside (a
     shield breaks instead); once the stun wears off the target attacks that Dreepy right away until
-    it faints. Dreepy have 150 HP and hit for 12 every 0.5s at ★, growing slowly with level. A fainted
-    Dreepy flies back (0.5s). With 2 out, the charge waits, full. Dragapult attacks fast (45 every
-    0.9s) but is fragile (550 HP). Darts fire at the end of the tick, aiming and landing from where everyone stood when it
-    began, so neither side gets an edge.
+    it faints. Dreepy have 230 HP and hit for 12 every 0.5s at ★, growing slowly with level. A fainted
+    Dreepy flies back (0.5s). Dragapult: 800 HP, 50 damage every 0.8s. Darts fire at the end of the
+    tick, aiming and landing from where everyone stood when it began, so neither side gets an edge.
   - Greninja, **Battle Bond**: after 5 attacks, becomes Ash-Greninja for the rest of the fight: fast
     movement, attacks every 0.8s, more damage, range 3 (same HP).
   - Torterra, **Earthquake**: with every 5th attack, every enemy on the board takes 30% and is stunned 1s.
