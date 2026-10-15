@@ -230,8 +230,8 @@ test a set of changes together. Team styles to pit against each other live in `A
     within the 5x5 around it that is attacking someone else must attack Amoonguss for 5s.
   - Annihilape (cost 4, warrior), **Rage Fist**: each attack in a row without moving makes it attack
     20% faster, up to +100% after 5 attacks. Moving (or being moved) resets it.
-  - Dragapult (cost 4, ranger, range 3), **Dragon Darts**: after each attack, if a Dreepy is home (at
-    most 2 can be out at once), its next action (an attack or a step, after its usual 0.8s wait)
+  - Dragapult (cost 4, ranger, range 3), **Dragon Darts**: after each attack made while a Dreepy is
+    home (at most 2 can be out at once; with both out, attacks don't charge it), its next action (an attack or a step, after its usual 0.8s wait)
     fires one Dreepy instead, at the farthest enemy outside the 3x3 around it (never at a Pokémon
     right next to it; with none that far, it just attacks). The Dreepy crashes into its target for 50
     damage at ★ (96 / 115 / 138 at higher levels) and a 0.5s stun, taking its square and shoving it aside (a

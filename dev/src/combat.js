@@ -578,7 +578,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
         record && emit('cast', { id: u.id, target: null });
         for (const [dx, dy] of NEIGHBORS) {
           const o = unitAt(u.x + dx, u.y + dy);
-          if (!o || o.side !== u.side || !standing(o) || !(o.maxMana > 0)) continue;
+          if (!o || o.side !== u.side || !standing(o) || !(o.maxMana > 0) || !canCharge(o)) continue;
           const gain = Math.min(p.charges, o.maxMana - shownMana(o));
           if (gain <= 0) continue;
           o.pendingMana += gain;
@@ -636,6 +636,8 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     u.dartShots = u.power.perShot ?? u.power.count;
     dartQueue.push(u);
   }
+  // `chargeHome`: Dragapult only charges its power while a Dreepy is home.
+  const canCharge = (u) => !(u.powerKind === 'darts' && u.power.chargeHome && !dartsHome(u));
   // Every Dragapult's first ready Dreepy goes, then every second one, ... so
   // when both sides' darts want the same squares, neither side gets them all.
   function fireDarts() {
@@ -1043,7 +1045,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
       if (empowered) {
         powerStrike(u, target);
       } else {
-        if (u.maxMana > 0) u.mana = Math.min(u.maxMana, u.mana + MANA_PER_ATTACK);
+        if (u.maxMana > 0 && canCharge(u)) u.mana = Math.min(u.maxMana, u.mana + MANA_PER_ATTACK);
         record && emit('attack', { id: u.id, target: target.id, mana: shownMana(u) });
         // Annihilape: every attack in a row without moving makes the next ones faster.
         if (u.powerKind === 'rage') {

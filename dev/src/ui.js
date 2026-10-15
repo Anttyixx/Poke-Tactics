@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=ba4e0a1';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=8a8a88d';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=ba4e0a1';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=ba4e0a1';
+} from './game.js?v=8a8a88d';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=8a8a88d';
 
 const TICK_MS = 100;
 // Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
@@ -76,7 +76,7 @@ export function powerText(def, star, catalog) {
       const ready = p.fireDelay !== undefined
         ? `${vTime(p.fireDelay)} after its counter fills (${vNum(def.energy)} attacks), it fires ${shot === 1 ? `a ${name}` : `${vNum(shot)} ${name}`} on its own, without using an attack (up to ${vNum(p.count)} can be out at once; with all out, it waits, full)`
         : p.perShot
-        ? `After ${def.energy === 1 ? 'each attack' : `every ${vNum(def.energy)} attacks`}, if a ${name} is home (up to ${vNum(p.count)} can be out at once), its next action (an attack, or a step toward its target) fires ${shot === 1 ? `a ${name}` : `${vNum(shot)} ${name}`} instead`
+        ? `After ${def.energy === 1 ? 'each attack' : `every ${vNum(def.energy)} attacks`}${p.chargeHome ? ` made while a ${name} is home (with all ${vNum(p.count)} out, attacks don't charge it)` : `, if a ${name} is home (up to ${vNum(p.count)} can be out at once)`}, its next action (an attack, or a step toward its target) fires ${shot === 1 ? `a ${name}` : `${vNum(shot)} ${name}`} instead`
         : `With all ${name} home${def.energy ? ` and its counter full (${vNum(def.energy)} attacks)` : ''}, its next action (an attack, or a step toward its target) fires them instead`;
       const at = `the farthest enemy${shot === 1 ? '' : 'ies'}${p.outside ? ` outside the ${area(p.outside)} around it (never one right next to it; with no enemy that far it just attacks)` : ''}`;
       const impact = p.impactDamage ? `, hitting for ${vDmg(show(Math.round(p.impactDamage[lvl] * STAT_SCALE)))}` : p.impactPct ? `, hitting for ${vDmg(`${p.impactPct}%`)} damage (${vDmg(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.impactPct) / 100)))})` : '';
