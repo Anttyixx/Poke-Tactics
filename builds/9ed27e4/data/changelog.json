@@ -1,5 +1,294 @@
 [
   {
+    "id": "2026-10-15-hoopa-move-bind",
+    "version": "0.37.2",
+    "date": "2026-10-15",
+    "title": "Hoopa binds the first Pokémon that moves",
+    "changes": [
+      { "pokemon": "hoopa", "kind": "change", "text": "With its power full (5 attacks), Hoopa now binds the first enemy that's about to change squares by itself, whether walking or using an ability that moves it (like a dash or a zip). That move still happens; the rings then stop its next 3 tries to move. Being shoved or knocked by an attack never sets it off." },
+      { "pokemon": "hoopa", "kind": "change", "text": "Moving abilities now count as tries to move while bound, the same as steps." }
+    ]
+  },
+  {
+    "id": "2026-10-15-hoopa-idle-bind",
+    "version": "0.37.1",
+    "date": "2026-10-15",
+    "title": "Hoopa binds the Pokémon that need to move",
+    "changes": [
+      { "pokemon": "hoopa", "kind": "change", "text": "With its power full (5 attacks), Hoopa now waits for an enemy that has nobody in its attack range, one that has to move to keep fighting, and binds the first one. It no longer binds the Pokémon it's attacking, which could just keep attacking." }
+    ]
+  },
+  {
+    "id": "2026-10-15-hoopa-rings",
+    "version": "0.37.0",
+    "date": "2026-10-15",
+    "title": "Hoopa's rings hold until they break",
+    "intro": "Hoopa now picks who to bind, and the rings hold until the Pokémon struggles free. (The previous Hoopa is saved as hoopa-v1.)",
+    "changes": [
+      { "pokemon": "hoopa", "kind": "change", "text": "Binding Ring: after 5 attacks, Hoopa binds the Pokémon it's attacking (or the nearest enemy that isn't bound yet). It no longer waits for an enemy to try to move." },
+      { "pokemon": "hoopa", "kind": "change", "text": "The bind has no timer. A bound Pokémon still attacks, but each try to move weakens the rings, and the 3rd try breaks them. Being shoved, knocked back or knocked out breaks them at once." },
+      { "pokemon": "hoopa", "kind": "change", "text": "No more Hoopa Unbound form, and Hoopa no longer starts the fight charged." },
+      { "pokemon": "hoopa", "kind": "buff", "text": "Damage 75 at ★ (was 68), attacking every 1.0s (was 1.11s)." }
+    ]
+  },
+  {
+    "id": "2026-10-15-dragapult-charge-home",
+    "version": "0.36.2",
+    "date": "2026-10-15",
+    "title": "Dragapult charges only with a Dreepy home",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "change", "text": "Dragapult only charges its power while at least one Dreepy is home. With both out, its attacks (and Toxtricity's Overdrive) no longer fill it, so when a Dreepy comes back it needs one more attack before firing it." }
+    ]
+  },
+  {
+    "id": "2026-10-15-dreepy-landing-lv1",
+    "version": "0.36.1",
+    "date": "2026-10-15",
+    "title": "Lighter Dreepy landing at ★",
+    "changes": [
+      { "pokemon": "dreepy", "kind": "nerf", "text": "Landing hit at ★ 80 → 50. Higher levels are unchanged (96 / 115 / 138)." }
+    ]
+  },
+  {
+    "id": "2026-10-15-dragapult-alternate",
+    "version": "0.36.0",
+    "date": "2026-10-15",
+    "title": "Dragapult: attack, Dreepy, attack, Dreepy",
+    "intro": "Dragapult now alternates: after each attack, its next action fires a Dreepy (when one is home). About 10 Dreepy a fight.",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "change", "text": "Its power fills with 1 attack (was 2). When it's full, its next action fires a Dreepy instead of attacking or stepping, after its usual 0.8s wait (was on its own, 0.5s after filling)." },
+      { "pokemon": "dragapult", "kind": "buff", "text": "800 HP at ★ (was 550), 50 damage (was 45), attacking every 0.8s (was 0.9s)." },
+      { "pokemon": "dreepy", "kind": "buff", "text": "HP 230 / 275 / 330 / 400 by level (was 150 / 180 / 215 / 260), so each one holds attention longer." }
+    ]
+  },
+  {
+    "id": "2026-10-15-dragapult-heavier",
+    "version": "0.35.1",
+    "date": "2026-10-15",
+    "title": "Dragapult hits harder, Dreepy crash harder",
+    "intro": "Bigger numbers where they count: Dragapult's attacks and the Dreepy crash. Still about 8 Dreepy a fight.",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "buff", "text": "Damage 45 at ★ (was 27), attacking every 0.9s (was 0.6s)." },
+      { "pokemon": "dreepy", "kind": "buff", "text": "Landing hit 80 / 96 / 115 / 138 by level (was 40 / 48 / 58 / 69). The 0.5s stun is unchanged." },
+      { "pokemon": "dragapult", "kind": "change", "text": "Its power fills with 2 attacks (was 3), so it still fires about 8 Dreepy a fight." },
+      { "pokemon": "dreepy", "kind": "nerf", "text": "Damage 12 / 15 / 19 / 23 by level (was 20 / 25 / 31 / 38): they're a distraction, not a damage dealer." },
+      { "pokemon": "dragapult", "kind": "nerf", "text": "HP 550 at ★ (was 750): more fragile to pay for the rest." }
+    ]
+  },
+  {
+    "id": "2026-10-15-dragapult-more-shots",
+    "version": "0.35.0",
+    "date": "2026-10-15",
+    "title": "More Dreepy",
+    "intro": "Dragapult fires about 9 Dreepy a fight now (was about 5–6): faster attacks fill its power sooner, and each hit is lighter.",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "change", "text": "Attacks every 0.6s (was 0.9s) for 27 damage at ★ (was 55), so its 3-charge power fills much more often." },
+      { "pokemon": "dreepy", "kind": "nerf", "text": "Landing hit 40 / 48 / 58 / 69 by level (was 100 / 120 / 144 / 172). The 0.5s stun is unchanged." }
+    ]
+  },
+  {
+    "id": "2026-10-15-dreepy-impact",
+    "version": "0.34.2",
+    "date": "2026-10-15",
+    "title": "Dreepy hit harder on impact",
+    "changes": [
+      { "pokemon": "dreepy", "kind": "buff", "text": "A Dreepy's landing hit is doubled: 100 / 120 / 144 / 172 by level (was 50 / 60 / 72 / 86)." }
+    ]
+  },
+  {
+    "id": "2026-10-15-dragapult-auto-fire",
+    "version": "0.34.1",
+    "date": "2026-10-15",
+    "title": "Dragapult fires on its own",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "change", "text": "When its power bar fills, Dragapult fires a Dreepy 0.5 seconds later on its own. It no longer uses up an attack or a step to do it." },
+      { "pokemon": "dragapult", "kind": "nerf", "text": "Attacks every 0.9s (was 0.7s), since firing no longer costs it an attack." }
+    ]
+  },
+  {
+    "id": "2026-10-15-dragapult-charge",
+    "version": "0.34.0",
+    "date": "2026-10-15",
+    "title": "Dragapult charges its Dreepy",
+    "intro": "Dragapult now fires its Dreepy one at a time from a charged power, and attacks much faster to fill it. (The previous version is saved as dragapult-v1.)",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "change", "text": "Dragon Darts now has a 3-charge power bar that fills as Dragapult attacks. When it's full, Dragapult's next action fires one Dreepy (was both at once, whenever both were home)." },
+      { "pokemon": "dragapult", "kind": "change", "text": "Up to 2 Dreepy can be out at once. With both out, the bar waits, full, until one faints and is home." },
+      { "pokemon": "dragapult", "kind": "buff", "text": "Attacks every 0.7s (was 1.6s), so it fires Dreepy more often." },
+      { "pokemon": "dragapult", "kind": "change", "text": "Its power charge is only spent when a Dreepy actually launches." }
+    ]
+  },
+  {
+    "id": "2026-10-15-dreepy-streak",
+    "version": "0.33.2",
+    "date": "2026-10-15",
+    "title": "Dreepy streaks and snappier distractions",
+    "changes": [
+      { "pokemon": "dreepy", "kind": "change", "text": "Dreepy leave a white streak behind them as they shoot out of Dragapult, like something flying through the air." },
+      { "pokemon": "dreepy", "kind": "fix", "text": "The Pokémon a Dreepy crashes into now gets hit, stunned and shoved at the moment the Dreepy arrives (they showed before it got there)." },
+      { "pokemon": "dragapult", "kind": "change", "text": "Once the stun wears off, the Pokémon a Dreepy crashed into turns on the Dreepy and attacks it right away. Before, it finished its old attack timer first, so it took up to 1.6 seconds." },
+      { "pokemon": "dragapult", "kind": "buff", "text": "Attacks every 1.6s (was 1.7s), since its Dreepy now get attacked sooner." },
+      { "pokemon": "amoonguss", "kind": "fix", "text": "Rage Powder's pull now lands at the end of the moment, like stuns, so it never matters which side happened to act first." }
+    ]
+  },
+  {
+    "id": "2026-10-14-dreepy-dash",
+    "version": "0.33.1",
+    "date": "2026-10-14",
+    "title": "Dreepy dash out",
+    "changes": [
+      { "pokemon": "dreepy", "kind": "change", "text": "Dreepy now streak out of Dragapult like Tapu Koko's dash: fast, straight, glowing, with sparks behind them. They still start small and reach full size as they land." },
+      { "pokemon": "dragapult", "kind": "fix", "text": "Dragapult no longer fires its Dreepy half a second into the fight. Firing counts as an attack, so like every other Pokémon it waits its full attack cooldown first." }
+    ]
+  },
+  {
+    "id": "2026-10-14-dreepy-next-action",
+    "version": "0.33.0",
+    "date": "2026-10-14",
+    "title": "Dreepy launch",
+    "intro": "Dragapult fires its Dreepy as soon as it can, and you can see them fly.",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "change", "text": "With both Dreepy home, Dragapult's next action fires them, whether it was about to attack or take a step. Before, it only fired in place of an attack." },
+      { "pokemon": "dragapult", "kind": "nerf", "text": "Attacks every 1.7s (was 1.5s), since it now fires its Dreepy sooner." },
+      { "pokemon": "dreepy", "kind": "new", "text": "Dreepy are shot out of Dragapult in a low arc, small at first and full size as they land." }
+    ]
+  },
+  {
+    "id": "2026-10-14-dreepy-facing",
+    "version": "0.32.2",
+    "date": "2026-10-14",
+    "title": "Dreepy face the right way",
+    "changes": [
+      { "pokemon": "dreepy", "kind": "fix", "text": "Dreepy now face the Pokémon they attack and walk toward (their sprite showed the wrong side when moving left, right or up)." }
+    ]
+  },
+  {
+    "id": "2026-10-14-dreepy-knockout-arc",
+    "version": "0.32.1",
+    "date": "2026-10-14",
+    "title": "Dreepy get knocked home",
+    "changes": [
+      { "pokemon": "dreepy", "kind": "new", "text": "A knocked-out Dreepy now gets knocked back in the direction it was hit, spinning, then arcs back to Dragapult." }
+    ]
+  },
+  {
+    "id": "2026-10-14-dreepy-grow",
+    "version": "0.32.0",
+    "date": "2026-10-14",
+    "title": "Dreepy grow with Dragapult",
+    "intro": "Dragapult was too strong early and fell off later, because its Dreepy never got stronger. Now they grow slowly with its level.",
+    "changes": [
+      { "pokemon": "dreepy", "kind": "change", "text": "HP 150 / 180 / 215 / 260 by level (was 150 at every level). Damage 20 / 25 / 31 / 38 (was 25 at every level), so less early-game dominance." },
+      { "pokemon": "dragapult", "kind": "buff", "text": "Landing hit 50 / 60 / 72 / 86 by level (was 50 at every level)." },
+      { "pokemon": "dragapult", "kind": "change", "text": "Attacks every 1.5s (was 1.8s) for 55 damage at ★ (was 65)." },
+      { "pokemon": "dragapult", "kind": "fix", "text": "A Dragapult shoved by an enemy Dreepy at the same moment it fires now still aims from where it stood, so mirrored fights stay fair." }
+    ]
+  },
+  {
+    "id": "2026-10-14-dreepy-outside",
+    "version": "0.31.0",
+    "date": "2026-10-14",
+    "title": "Dreepy fly at far targets only",
+    "intro": "Dragapult's Dreepy are for disrupting enemies at a distance, and now keep the same stats all game.",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "change", "text": "Dreepy are only fired at enemies outside the 3x3 around Dragapult, farthest first. One enemy that far gets one Dreepy; with none, Dragapult just attacks." },
+      { "pokemon": "dreepy", "kind": "change", "text": "Dreepy have 150 HP and hit for 25 every 0.5s at every level (was 55 HP and 10 at ★, growing with level)." },
+      { "pokemon": "dragapult", "kind": "change", "text": "Each Dreepy's landing hit is 50 at every level (was 40 at ★, growing with level). The 0.5s stun and shove are unchanged." },
+      { "pokemon": "dragapult", "kind": "change", "text": "Attacks every 1.8s (was 2.5s) for 65 damage at ★ (was 70)." }
+    ]
+  },
+  {
+    "id": "2026-10-14-dreepy-close-first",
+    "version": "0.30.0",
+    "date": "2026-10-14",
+    "title": "Dragapult fires whenever both Dreepy are home",
+    "intro": "No more counting attacks: Dragapult fires its Dreepy whenever both are back, and protects itself first.",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "change", "text": "Dragapult no longer needs 3 attacks between pairs: whenever both Dreepy are home, its next attack fires them instead." },
+      { "pokemon": "dragapult", "kind": "change", "text": "Dreepy go first at enemies in the 3x3 around Dragapult (closest first), shoving them away. With nobody that close, they go at the farthest enemies as before." },
+      { "pokemon": "dragapult", "kind": "change", "text": "Attacks every 2.5s (was 1.3s), for 70 damage at ★ (was 55): fewer, harder hits, since every pair of Dreepy now takes the place of one." }
+    ]
+  },
+  {
+    "id": "2026-10-14-dreepy-10",
+    "version": "0.29.1",
+    "date": "2026-10-14",
+    "title": "Dreepy nibble",
+    "changes": [
+      { "pokemon": "dreepy", "kind": "nerf", "text": "Damage 15 → 10 at ★ (still an attack every 0.5s). Their landing hit (40) and stun are unchanged." }
+    ]
+  },
+  {
+    "id": "2026-10-14-dreepy-quick-return",
+    "version": "0.29.0",
+    "date": "2026-10-14",
+    "title": "Dreepy zip home",
+    "intro": "Knocked-out Dreepy fly straight back to Dragapult, and Dragapult winds up between pairs instead.",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "change", "text": "A knocked-out Dreepy flies back to Dragapult in 0.5 seconds (was 3)." },
+      { "pokemon": "dragapult", "kind": "change", "text": "Dragapult starts each fight ready to fire. After firing a pair, it needs 3 attacks (shown on its power bar) and both Dreepy home before it fires again." }
+    ]
+  },
+  {
+    "id": "2026-10-14-dreepy-impact-stun",
+    "version": "0.28.0",
+    "date": "2026-10-14",
+    "title": "Dreepy hit hard when they land",
+    "intro": "Dragapult's Dreepy now hit and stun the Pokémon they crash into. Dragapult is still all about disruption.",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "buff", "text": "Each Dreepy deals 40 damage at ★ when it crashes into its target, and stuns it for 0.5 seconds." },
+      { "pokemon": "dragapult", "kind": "buff", "text": "Damage 45 → 55 at ★." },
+      { "pokemon": "dreepy", "kind": "change", "text": "Damage 20 → 15 at ★ (still an attack every 0.5s). HP 80 → 55 at ★." },
+      { "pokemon": "dragapult", "kind": "nerf", "text": "A fainted Dreepy now takes 3 seconds to fly back (was 1.5)." },
+      { "pokemon": "dragapult", "kind": "fix", "text": "A Dragapult knocked out at the same moment it fires still gets its Dreepy out, like any other Pokémon's last action." }
+    ]
+  },
+  {
+    "id": "2026-10-14-dreepy-missile",
+    "version": "0.27.0",
+    "date": "2026-10-14",
+    "title": "Dreepy crash into their targets",
+    "intro": "Dragapult's Dreepy now fly like missiles and hit the Pokémon they're aimed at.",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "change", "text": "Each Dreepy crashes into its target: it lands on the target's square and shoves the target to a square next to it. A shielded Pokémon isn't moved (its shield breaks instead), and if there's no room the Dreepy lands beside it as before." },
+      { "pokemon": "dragapult", "kind": "nerf", "text": "Damage 55 → 45 at ★, to make up for the shove." }
+    ]
+  },
+  {
+    "id": "2026-10-14-dreepy-20",
+    "version": "0.26.0",
+    "date": "2026-10-14",
+    "title": "Dreepy bite harder",
+    "intro": "Dragapult's Dreepy do more damage; Dragapult itself hits a little softer.",
+    "changes": [
+      { "pokemon": "dreepy", "kind": "buff", "text": "Damage 6 → 20 at ★ (still an attack every 0.5s)." },
+      { "pokemon": "dragapult", "kind": "nerf", "text": "Damage 65 → 55 at ★." }
+    ]
+  },
+  {
+    "id": "2026-10-14-dreepy-instead-of-attack",
+    "version": "0.25.0",
+    "date": "2026-10-14",
+    "title": "Dragapult fires its Dreepy instead of attacking",
+    "intro": "Dragapult now fires its Dreepy as its attack, whenever both are home.",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "change", "text": "Dragon Darts: when Dragapult attacks with both Dreepy at home, it fires them instead of attacking. Until both are back, it attacks normally. It no longer fires them on its own at the start of the fight." },
+      { "pokemon": "dragapult", "kind": "buff", "text": "Damage 25 → 65 at ★, since firing its Dreepy now costs it an attack." }
+    ]
+  },
+  {
+    "id": "2026-10-14-dreepy-until-faint",
+    "version": "0.24.0",
+    "date": "2026-10-14",
+    "title": "Dreepy hold attention until they faint",
+    "intro": "Dragapult's Dreepy are now all about pulling attention.",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "change", "text": "A Pokémon hit by a Dreepy must attack that Dreepy until it faints (was up to 3 seconds)." },
+      { "pokemon": "dragapult", "kind": "change", "text": "A fainted Dreepy flies back in 1.5 seconds, and Dragapult fires a new pair only once both are home (was each one 3 seconds after fainting)." },
+      { "pokemon": "dragapult", "kind": "nerf", "text": "Dreepy no longer deal damage when they land, and Dragapult's damage is 25 at ★ (was 40), to pay for the stronger distraction." }
+    ]
+  },
+  {
     "id": "2026-10-14-dreepy-distract-fast-sims",
     "version": "0.23.0",
     "date": "2026-10-14",

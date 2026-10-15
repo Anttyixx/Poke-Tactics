@@ -14,7 +14,7 @@
 // { type: 'refuse', reason, text }, 'pong'; from the queue: 'waiting',
 // { type: 'matched', code }.
 
-import { SERVER_URL } from './server-config.js?v=2a0d20e';
+import { SERVER_URL } from './server-config.js?v=9ed27e4';
 
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O or 1/I/L: codes get read out loud
 const CODE_LENGTH = 5;
