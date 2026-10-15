@@ -119,20 +119,22 @@ node tools/sweep.mjs             # try stat changes one at a time without editin
 Two specific teams, with each team's stats per Pokémon:
 
 ```sh
-node tools/match.mjs "beheeyem,infernape,ditto,vespiquen,lilligant,hoopa" "coalossal,torterra,golem,minior,mawile,decidueye" --games=500 --place=smart
+node tools/match.mjs "beheeyem,infernape,ditto,vespiquen,lilligant,hoopa" "coalossal,torterra,golem,minior,annihilape,decidueye" --games=500 --place=smart
 ```
 
 `--place=smart` makes the simulated players reposition before every fight to counter the
 opponent's lineup from the round before (`tools/placer.mjs`), the way a real player would;
 `--place-a` / `--place-b` set each side separately. `balance.mjs --smart` does the same for
-the whole study. All tools use the game's own code (`src/combat.js`, `src/game.js`,
+the whole study (`--smart=classic`: the older, slower search). Games run on every CPU core at
+once: on 4 cores, 10,000 games take about half a minute, or about 4.5 minutes with `--smart`.
+All tools use the game's own code (`src/combat.js`, `src/game.js`,
 `src/bot.js`), so they stay accurate as the game changes.
 
 One Pokémon in depth (best squares, rows and columns, hardest and easiest opponents, best
 teammates, who knocks it out, stats by star), as a console summary and an HTML report:
 
 ```sh
-node tools/focus.mjs mawile --games=4000 [--smart]   # -> tools/out/focus-mawile.html
+node tools/focus.mjs dragapult --games=4000 [--smart]   # -> tools/out/focus-dragapult.html
 ```
 
 A real match: in the game, **Menu → Match log** (or **Copy match log** after a match) copies
@@ -220,18 +222,24 @@ test a set of changes together. Team styles to pit against each other live in `A
   - Decidueye, **Phantom Force**: after 8 attacks, invisible for 3s and attacks 30% faster. Enemies can't
     target or follow an invisible unit.
   - Infernape, **Blaze**: after 7 attacks, attacks 50% faster for 3s.
-  - Hoopa (cost 3, mage, range 2, attacks every 1.11s), **Binding Ring**: it starts the fight charged
-    (shown as Hoopa Unbound) and waits until an enemy tries to move (walk, zip or dash). That Pokémon
-    is bound in place for 3s: it can't move, but it still attacks anything in range. Hoopa turns back,
-    refills after 2 attacks, and never binds the same Pokémon twice in a row.
+  - Hoopa (cost 3, mage, range 2, attacks every 1.0s), **Binding Ring**: after 5 attacks it holds its
+    charge until an enemy has nobody in its attack range (so it has to move), and binds the first one. A bound
+    Pokémon still attacks anything in range but can't walk, zip or dash; each try to move weakens the
+    rings and the 3rd try breaks them. They also snap at once if it's shoved or knocked to another
+    square, or knocked out.
   - Amoonguss (cost 4, warrior, tank), **Rage Powder**: every 2 attacks, the hardest-hitting enemy
     within the 5x5 around it that is attacking someone else must attack Amoonguss for 5s.
   - Annihilape (cost 4, warrior), **Rage Fist**: each attack in a row without moving makes it attack
     20% faster, up to +100% after 5 attacks. Moving (or being moved) resets it.
-  - Dragapult (cost 4, ranger, range 3), **Dragon Darts**: at the start it fires 2 Dreepy at the two
-    farthest enemies (50% damage on impact); they land beside their targets and fight. A Dreepy that
-    faints flies back (4s a square) and is fired again once it's home. Darts fire at the end of the
-    tick, at enemies already on the board, so neither side gets an edge.
+  - Dragapult (cost 4, ranger, range 3), **Dragon Darts**: after each attack made while a Dreepy is
+    home (at most 2 can be out at once; with both out, attacks don't charge it), its next action (an attack or a step, after its usual 0.8s wait)
+    fires one Dreepy instead, at the farthest enemy outside the 3x3 around it (never at a Pokémon
+    right next to it; with none that far, it just attacks). The Dreepy crashes into its target for 50
+    damage at ★ (96 / 115 / 138 at higher levels) and a 0.5s stun, taking its square and shoving it aside (a
+    shield breaks instead); once the stun wears off the target attacks that Dreepy right away until
+    it faints. Dreepy have 230 HP and hit for 12 every 0.5s at ★, growing slowly with level. A fainted
+    Dreepy flies back (0.5s). Dragapult: 800 HP, 50 damage every 0.8s. Darts fire at the end of the
+    tick, aiming and landing from where everyone stood when it began, so neither side gets an edge.
   - Greninja, **Battle Bond**: after 5 attacks, becomes Ash-Greninja for the rest of the fight: fast
     movement, attacks every 0.8s, more damage, range 3 (same HP).
   - Torterra, **Earthquake**: with every 5th attack, every enemy on the board takes 30% and is stunned 1s.

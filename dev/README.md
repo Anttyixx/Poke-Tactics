@@ -222,8 +222,8 @@ test a set of changes together. Team styles to pit against each other live in `A
   - Decidueye, **Phantom Force**: after 8 attacks, invisible for 3s and attacks 30% faster. Enemies can't
     target or follow an invisible unit.
   - Infernape, **Blaze**: after 7 attacks, attacks 50% faster for 3s.
-  - Hoopa (cost 3, mage, range 2, attacks every 1.0s), **Binding Ring**: after 5 attacks it binds the
-    Pokémon it's attacking (or, if that one is already bound, the nearest enemy that isn't). A bound
+  - Hoopa (cost 3, mage, range 2, attacks every 1.0s), **Binding Ring**: after 5 attacks it holds its
+    charge until an enemy has nobody in its attack range (so it has to move), and binds the first one. A bound
     Pokémon still attacks anything in range but can't walk, zip or dash; each try to move weakens the
     rings and the 3rd try breaks them. They also snap at once if it's shoved or knocked to another
     square, or knocked out.

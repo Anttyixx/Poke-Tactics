@@ -664,6 +664,18 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     u.dartShots = u.power.perShot ?? u.power.count;
     dartQueue.push(u);
   }
+  // Hoopa (`pick: 'idle'`): a full charge waits for an enemy with nobody in its
+  // attack range (so it has to move to fight), then binds the first one it
+  // sees. Judged from where everyone stood when the tick began.
+  function idleBind(u) {
+    if (!(u.maxMana > 0 && u.mana >= u.maxMana)) return;
+    const stuck = (e) => !units.some((o) => o.side !== e.side && visible(o) && reach(at(e), at(o)) <= e.range);
+    const victim = units.find((e) => e.side !== u.side && visible(e) && e.boundBy === null && e.pendingBind === null && !immune(e) && stuck(e));
+    if (!victim) return;
+    u.mana = 0;
+    record && emit('cast', { id: u.id, target: victim.id });
+    victim.pendingBind = u.id; // the rings close at the end of the tick, like stuns
+  }
   // `chargeHome`: Dragapult only charges its power while a Dreepy is home.
   const canCharge = (u) => !(u.powerKind === 'darts' && u.power.chargeHome && !dartsHome(u));
   // Every Dragapult's first ready Dreepy goes, then every second one, ... so
@@ -950,6 +962,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     // around again and picks the nearest enemy rather than its old target.
     if (u.stun > 0) { u.stun--; if (u.stun === 0 && !(u.tauntUntil >= t)) u.target = null; return; }
     if (u.powerKind === 'darts' && u.power.fireDelay !== undefined) chargedDart(u);
+    if (u.powerKind === 'bind' && u.power.pick === 'idle' && !u.copyOf) idleBind(u);
     if (u.atkTimer > 0) u.atkTimer--;
     if (u.moveTimer > 0) u.moveTimer--;
     if (u.stepTimer > 0) u.stepTimer--;
@@ -1099,7 +1112,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
             if (o && o.side === u.side) heal(o, amount, u);
           }
         }
-        if (u.powerKind && u.powerKind !== 'empower' && !(u.powerKind === 'bind' && !u.power.targeted) && u.powerKind !== 'darts' && u.maxMana > 0 && u.mana >= u.maxMana) instantPower(u, target);
+        if (u.powerKind && u.powerKind !== 'empower' && !(u.powerKind === 'bind' && (!u.power.targeted || u.power.pick === 'idle')) && u.powerKind !== 'darts' && u.maxMana > 0 && u.mana >= u.maxMana) instantPower(u, target);
       }
       u.atkTimer = cooldown(u);
     } else if (u.moveTimer === 0 && u.stepTimer === 0 && (u.blink || u.copyOf === null) && heldBack(u)) {
