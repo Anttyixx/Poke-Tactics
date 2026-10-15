@@ -1,117 +1,117 @@
 {
   "mawile": {
     "disabled": true,
-    "name": "Mawile", "sprite": "assets/sprites/mawile.png?v=d2953cb", "fx": "#d4dae6", "type": "warrior", "cost": 4,
+    "name": "Mawile", "sprite": "assets/sprites/mawile.png?v=ba4e0a1", "fx": "#d4dae6", "type": "warrior", "cost": 4,
     "hp": [810, 1467, 2646, 4770], "damage": [113, 200, 365, 655], "range": 1, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 8,
     "ability": {"name": "Jaw Lock", "kind": "empower", "damagePct": 130, "stun": 10}
   },
   "beheeyem": {
-    "name": "Beheeyem", "sprite": "assets/sprites/beheeyem.png?v=d2953cb", "fx": "#ff7ad9", "type": "mage", "cost": 3,
+    "name": "Beheeyem", "sprite": "assets/sprites/beheeyem.png?v=ba4e0a1", "fx": "#ff7ad9", "type": "mage", "cost": 3,
     "hp": [700, 1145, 1565, 2350], "damage": [116, 175, 261, 390], "range": 2, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 0,
     "ability": {"name": "Psywave", "kind": "opening", "damagePct": 50, "stun": 10}
   },
   "toxtricity": {
-    "name": "Toxtricity", "sprite": "assets/sprites/toxtricity.png?v=d2953cb", "fx": "#ffe14d", "type": "ranger", "cost": 3,
+    "name": "Toxtricity", "sprite": "assets/sprites/toxtricity.png?v=ba4e0a1", "fx": "#ffe14d", "type": "ranger", "cost": 3,
     "hp": [950,  1615,  2746,  4655], "damage": [70,  119,  202,  343], "range": 2, "moveSpeed": "medium", "secPerHit": 1.25, "critChance": 15, "energy": 3,
     "ability": {"name": "Overdrive", "kind": "boost", "charges": 2}
   },
   "vespiquen": {
-    "name": "Vespiquen", "sprite": "assets/sprites/vespiquen.png?v=d2953cb", "fx": "#ffc23d", "type": "ranger", "cost": 3,
+    "name": "Vespiquen", "sprite": "assets/sprites/vespiquen.png?v=ba4e0a1", "fx": "#ffc23d", "type": "ranger", "cost": 3,
     "hp": [840, 1350, 2155, 3450], "damage": [80, 125, 200, 320], "range": 3, "moveSpeed": "very slow", "secPerHit": 1.42, "critChance": 15, "energy": 6,
     "ability": {"name": "Attack Order", "kind": "summon", "unit": "combee", "countByStar": [2, 2, 2, 2]}
   },
   "coalossal": {
-    "name": "Coalossal", "sprite": "assets/sprites/coalossal.png?v=d2953cb", "fx": "#ff7a2f", "type": "warrior", "cost": 5,
+    "name": "Coalossal", "sprite": "assets/sprites/coalossal.png?v=ba4e0a1", "fx": "#ff7a2f", "type": "warrior", "cost": 5,
     "hp": [1243, 2235, 4025, 7250], "damage": [155, 280, 500, 900], "range": 1, "moveSpeed": "very slow", "secPerHit": 2, "critChance": 15, "energy": 6,
     "ability": {"name": "Heat Crash", "kind": "empower", "damagePct": 130, "knockback": 2, "stun": 10}
   },
   "decidueye": {
-    "name": "Decidueye", "sprite": "assets/sprites/decidueye.png?v=d2953cb", "fx": "#8ee07a", "type": "ranger", "cost": 4,
+    "name": "Decidueye", "sprite": "assets/sprites/decidueye.png?v=ba4e0a1", "fx": "#8ee07a", "type": "ranger", "cost": 4,
     "hp": [800, 1360, 2310, 3930], "damage": [100, 170, 285, 490], "range": 4, "moveSpeed": "very slow", "secPerHit": 1.42, "critChance": 15, "energy": 8,
     "ability": {"name": "Phantom Force", "kind": "stealth", "duration": 30, "hastePct": 30}
   },
   "hoopa": {
-    "name": "Hoopa", "sprite": "assets/sprites/hoopa.png?v=d2953cb", "fx": "#ff8ad8", "type": "mage", "cost": 3,
+    "name": "Hoopa", "sprite": "assets/sprites/hoopa.png?v=ba4e0a1", "fx": "#ff8ad8", "type": "mage", "cost": 3,
     "hp": [840, 1365, 2184, 3500], "damage": [68, 113, 176, 284], "range": 2, "moveSpeed": "medium", "secPerHit": 1.11, "critChance": 15, "energy": 2,
     "ability": {"name": "Binding Ring", "kind": "bind", "duration": 30, "startCharged": true, "noRepeat": true,
-      "chargedForm": {"name": "Hoopa Unbound", "sprite": "assets/sprites/hoopa-unbound.png?v=d2953cb"}}
+      "chargedForm": {"name": "Hoopa Unbound", "sprite": "assets/sprites/hoopa-unbound.png?v=ba4e0a1"}}
   },
   "infernape": {
-    "name": "Infernape", "sprite": "assets/sprites/infernape.png?v=d2953cb", "fx": "#ff8a2a", "type": "warrior", "cost": 3,
+    "name": "Infernape", "sprite": "assets/sprites/infernape.png?v=ba4e0a1", "fx": "#ff8a2a", "type": "warrior", "cost": 3,
     "hp": [945, 1415, 2125, 3190], "damage": [118, 180, 265, 400], "range": 1, "moveSpeed": "medium", "secPerHit": 1.11, "critChance": 15, "energy": 7,
     "ability": {"name": "Blaze", "kind": "haste", "duration": 30, "hastePct": 50}
   },
   "greninja": {
-    "name": "Greninja", "sprite": "assets/sprites/greninja.png?v=d2953cb", "fx": "#5ab8ff", "type": "rogue", "cost": 4,
+    "name": "Greninja", "sprite": "assets/sprites/greninja.png?v=ba4e0a1", "fx": "#5ab8ff", "type": "rogue", "cost": 4,
     "hp": [735, 1250, 2126, 3602], "damage": [80, 136, 231, 392], "range": 2, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 5,
-    "ability": {"name": "Battle Bond", "kind": "transform", "form": {"name": "Ash-Greninja", "sprite": "assets/sprites/ash-greninja.png?v=d2953cb", "moveSpeed": "fast", "secPerHit": 0.8, "damage": [110, 187, 318, 539], "range": 3}}
+    "ability": {"name": "Battle Bond", "kind": "transform", "form": {"name": "Ash-Greninja", "sprite": "assets/sprites/ash-greninja.png?v=ba4e0a1", "moveSpeed": "fast", "secPerHit": 0.8, "damage": [110, 187, 318, 539], "range": 3}}
   },
   "torterra": {
-    "name": "Torterra", "sprite": "assets/sprites/torterra.png?v=d2953cb", "fx": "#7bd36a", "type": "warrior", "cost": 4,
+    "name": "Torterra", "sprite": "assets/sprites/torterra.png?v=ba4e0a1", "fx": "#7bd36a", "type": "warrior", "cost": 4,
     "hp": [900, 1530, 2600, 4410], "damage": [125, 212, 361, 612], "range": 1, "moveSpeed": "very slow", "secPerHit": 1.8, "critChance": 15, "energy": 5,
     "ability": {"name": "Earthquake", "kind": "quake", "damagePct": 30, "stun": 10}
   },
   "lilligant": {
-    "name": "Lilligant", "sprite": "assets/sprites/lilligant.png?v=d2953cb", "fx": "#9be07a", "type": "cleric", "cost": 3,
+    "name": "Lilligant", "sprite": "assets/sprites/lilligant.png?v=ba4e0a1", "fx": "#9be07a", "type": "cleric", "cost": 3,
     "hp": [700, 1190, 2025, 3430], "damage": [66, 112, 190, 323], "range": 2, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 0,
     "ability": {"name": "Aromatherapy", "kind": "splashHeal", "healPct": 60, "radius": 1}
   },
   "golem": {
-    "name": "Golem", "sprite": "assets/sprites/golem.png?v=d2953cb", "fx": "#d8b16a", "type": "warrior", "cost": 4,
+    "name": "Golem", "sprite": "assets/sprites/golem.png?v=ba4e0a1", "fx": "#d8b16a", "type": "warrior", "cost": 4,
     "hp": [1100, 1870, 3180, 5390], "damage": [100, 170, 289, 490], "range": 1, "moveSpeed": "slow", "secPerHit": 1.8, "critChance": 15, "energy": 0,
     "ability": {"name": "Self-Destruct", "kind": "selfdestruct", "delay": 30, "damagePct": 300, "radius": 1}
   },
   "minior": {
-    "name": "Minior", "sprite": "assets/sprites/minior.png?v=d2953cb", "fx": "#ff7aa8", "type": "mage", "cost": 4,
+    "name": "Minior", "sprite": "assets/sprites/minior.png?v=ba4e0a1", "fx": "#ff7aa8", "type": "mage", "cost": 4,
     "hp": [1100, 1870, 3179, 5390], "damage": [30, 51, 87, 147], "range": 1, "moveSpeed": "very slow", "secPerHit": 3.0, "critChance": 15, "energy": 0,
-    "ability": {"name": "Shining Star", "kind": "transform", "trigger": "knockedOut", "morph": 5, "form": {"name": "Minior (Star Form)", "sprite": "assets/sprites/minior-star.png?v=d2953cb", "hp": [600, 1020, 1734, 2940], "moveSpeed": "very fast", "secPerHit": 0.3, "damage": [20, 34, 58, 98], "range": 1, "blink": true, "shockwave": {"radius": 1, "stun": 10}, "hop": true, "energy": 10}}
+    "ability": {"name": "Shining Star", "kind": "transform", "trigger": "knockedOut", "morph": 5, "form": {"name": "Minior (Star Form)", "sprite": "assets/sprites/minior-star.png?v=ba4e0a1", "hp": [600, 1020, 1734, 2940], "moveSpeed": "very fast", "secPerHit": 0.3, "damage": [20, 34, 58, 98], "range": 1, "blink": true, "shockwave": {"radius": 1, "stun": 10}, "hop": true, "energy": 10}}
   },
   "tapukoko": {
-    "name": "Tapu Koko", "sprite": "assets/sprites/tapukoko.png?v=d2953cb", "fx": "#ffe14d", "type": "rogue", "cost": 4,
+    "name": "Tapu Koko", "sprite": "assets/sprites/tapukoko.png?v=ba4e0a1", "fx": "#ffe14d", "type": "rogue", "cost": 4,
     "hp": [805, 1369, 2329, 3945], "damage": [100, 170, 289, 490], "range": 2, "moveSpeed": "medium", "secPerHit": 1.1, "critChance": 15, "energy": 4,
     "ability": {"name": "Wild Charge", "kind": "empower", "damagePct": 150, "dash": true, "stun": 10}
   },
   "ditto": {
-    "name": "Ditto", "sprite": "assets/sprites/ditto.png?v=d2953cb", "fx": "#c9a4ff", "type": "mage", "cost": 3,
+    "name": "Ditto", "sprite": "assets/sprites/ditto.png?v=ba4e0a1", "fx": "#c9a4ff", "type": "mage", "cost": 3,
     "hp": [600, 1020, 1734, 2940], "damage": [40, 68, 116, 196], "range": 1, "moveSpeed": "medium", "secPerHit": 1.42, "critChance": 15, "energy": 0,
     "ability": {"name": "Transform", "kind": "copy", "morph": 10}
   },
   "alcremie": {
-    "name": "Alcremie", "sprite": "assets/sprites/alcremie.png?v=d2953cb", "fx": "#ffc4e1", "type": "cleric", "cost": 3,
+    "name": "Alcremie", "sprite": "assets/sprites/alcremie.png?v=ba4e0a1", "fx": "#ffc4e1", "type": "cleric", "cost": 3,
     "hp": [760,  1292,  2196,  3724], "damage": [55,  94,  159,  270], "range": 2, "moveSpeed": "medium", "secPerHit": 1.25, "critChance": 15, "energy": 4,
     "ability": {"name": "Sweet Treat", "kind": "treat", "duration": 30, "flavors": [
-      {"flavor": "heal", "name": "Alcremie (Matcha Cream)", "sprite": "assets/sprites/alcremie-matcha.png?v=d2953cb", "healPct": 600},
-      {"flavor": "haste", "name": "Alcremie (Ruby Cream)", "sprite": "assets/sprites/alcremie-ruby.png?v=d2953cb", "hastePct": 100},
-      {"flavor": "guard", "name": "Alcremie (Mint Cream)", "sprite": "assets/sprites/alcremie-mint.png?v=d2953cb", "guardPct": 40}
+      {"flavor": "heal", "name": "Alcremie (Matcha Cream)", "sprite": "assets/sprites/alcremie-matcha.png?v=ba4e0a1", "healPct": 600},
+      {"flavor": "haste", "name": "Alcremie (Ruby Cream)", "sprite": "assets/sprites/alcremie-ruby.png?v=ba4e0a1", "hastePct": 100},
+      {"flavor": "guard", "name": "Alcremie (Mint Cream)", "sprite": "assets/sprites/alcremie-mint.png?v=ba4e0a1", "guardPct": 40}
     ]}
   },
   "amoonguss": {
-    "name": "Amoonguss", "sprite": "assets/sprites/amoonguss.png?v=d2953cb", "fx": "#ff6fa8", "type": "warrior", "cost": 4,
+    "name": "Amoonguss", "sprite": "assets/sprites/amoonguss.png?v=ba4e0a1", "fx": "#ff6fa8", "type": "warrior", "cost": 4,
     "hp": [1700,  2890,  4913,  8330], "damage": [70,  119,  202,  343], "range": 1, "moveSpeed": "slow", "secPerHit": 1.5, "critChance": 15, "energy": 2,
     "ability": {"name": "Rage Powder", "kind": "taunt", "radius": 2, "duration": 50}
   },
   "annihilape": {
-    "name": "Annihilape", "sprite": "assets/sprites/annihilape.png?v=d2953cb", "fx": "#c9c9e0", "type": "warrior", "cost": 4,
+    "name": "Annihilape", "sprite": "assets/sprites/annihilape.png?v=ba4e0a1", "fx": "#c9c9e0", "type": "warrior", "cost": 4,
     "hp": [1250,  2125,  3612,  6125], "damage": [100,  170,  289,  490], "range": 1, "moveSpeed": "medium", "secPerHit": 1.4, "critChance": 15, "energy": 0,
     "ability": {"name": "Rage Fist", "kind": "rage", "stackPct": 20, "maxStacks": 5}
   },
   "dragapult": {
-    "name": "Dragapult", "sprite": "assets/sprites/dragapult.png?v=d2953cb", "fx": "#6fe0d8", "type": "ranger", "cost": 4,
+    "name": "Dragapult", "sprite": "assets/sprites/dragapult.png?v=ba4e0a1", "fx": "#6fe0d8", "type": "ranger", "cost": 4,
     "hp": [800,  1360,  2312,  3930], "damage": [50,  85,  145,  245], "range": 3, "moveSpeed": "fast", "secPerHit": 0.8, "critChance": 15, "energy": 1,
-    "ability": {"name": "Dragon Darts", "kind": "darts", "unit": "dreepy", "count": 2, "perShot": 1, "impactDamage": [80, 96, 115, 138], "impactStun": 5, "displace": true, "lure": true, "returnSec": 0.5, "outside": 1}
+    "ability": {"name": "Dragon Darts", "kind": "darts", "unit": "dreepy", "count": 2, "perShot": 1, "impactDamage": [50, 96, 115, 138], "impactStun": 5, "displace": true, "lure": true, "returnSec": 0.5, "outside": 1}
   },
   "dreepy": {
-    "name": "Dreepy", "summon": true, "sprite": "assets/sprites/dreepy.png?v=d2953cb", "fx": "#7fe0a8", "type": "warrior", "cost": 0,
+    "name": "Dreepy", "summon": true, "sprite": "assets/sprites/dreepy.png?v=ba4e0a1", "fx": "#7fe0a8", "type": "warrior", "cost": 0,
     "hp": [230, 275, 330, 400], "damage": [12, 15, 19, 23], "range": 1, "moveSpeed": "very fast", "secPerHit": 0.5, "critChance": 15, "energy": 0,
     "ability": null
   },
   "combee": {
-    "name": "Combee", "summon": true, "sprite": "assets/sprites/combee.png?v=d2953cb", "fx": "#ffd35a", "type": "warrior", "cost": 0,
+    "name": "Combee", "summon": true, "sprite": "assets/sprites/combee.png?v=ba4e0a1", "fx": "#ffd35a", "type": "warrior", "cost": 0,
     "hp": [188, 300, 481, 769], "damage": [30, 47, 75, 120], "range": 1, "moveSpeed": "very fast", "secPerHit": 0.8, "critChance": 15, "energy": 0,
     "ability": null
   },
   "frosmoth": {
-    "name": "Frosmoth", "sprite": "assets/sprites/frosmoth.png?v=d2953cb", "fx": "#9fe8ff", "type": "mage", "cost": 3,
+    "name": "Frosmoth", "sprite": "assets/sprites/frosmoth.png?v=ba4e0a1", "fx": "#9fe8ff", "type": "mage", "cost": 3,
     "hp": [760, 1290, 2195, 3725], "damage": [78, 133, 225, 381], "range": 2, "moveSpeed": "medium", "secPerHit": 1.25, "critChance": 15, "energy": 0,
     "ability": {"name": "Frostbite", "kind": "chill", "slowPct": 30, "duration": 30}
   }

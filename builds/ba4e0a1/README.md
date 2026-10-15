@@ -119,20 +119,22 @@ node tools/sweep.mjs             # try stat changes one at a time without editin
 Two specific teams, with each team's stats per Pokémon:
 
 ```sh
-node tools/match.mjs "beheeyem,infernape,ditto,vespiquen,lilligant,hoopa" "coalossal,torterra,golem,minior,mawile,decidueye" --games=500 --place=smart
+node tools/match.mjs "beheeyem,infernape,ditto,vespiquen,lilligant,hoopa" "coalossal,torterra,golem,minior,annihilape,decidueye" --games=500 --place=smart
 ```
 
 `--place=smart` makes the simulated players reposition before every fight to counter the
 opponent's lineup from the round before (`tools/placer.mjs`), the way a real player would;
 `--place-a` / `--place-b` set each side separately. `balance.mjs --smart` does the same for
-the whole study. All tools use the game's own code (`src/combat.js`, `src/game.js`,
+the whole study (`--smart=classic`: the older, slower search). Games run on every CPU core at
+once: on 4 cores, 10,000 games take about half a minute, or about 4.5 minutes with `--smart`.
+All tools use the game's own code (`src/combat.js`, `src/game.js`,
 `src/bot.js`), so they stay accurate as the game changes.
 
 One Pokémon in depth (best squares, rows and columns, hardest and easiest opponents, best
 teammates, who knocks it out, stats by star), as a console summary and an HTML report:
 
 ```sh
-node tools/focus.mjs mawile --games=4000 [--smart]   # -> tools/out/focus-mawile.html
+node tools/focus.mjs dragapult --games=4000 [--smart]   # -> tools/out/focus-dragapult.html
 ```
 
 A real match: in the game, **Menu → Match log** (or **Copy match log** after a match) copies
@@ -204,11 +206,14 @@ test a set of changes together. Team styles to pit against each other live in `A
   simultaneously, and crit luck is shared slot for slot between the sides, so neither side gets an edge.
 - **Powers:** every Pokémon has one. Most count attacks (the purple bar). Every fight starts with the bar
   empty and a full attack cooldown before anyone's first hit, and progress is never lost mid-fight:
-  - Mawile, **Jaw Lock**: after 8 attacks, the next hits for 130% and stuns for 1s.
+  - Mawile, **Jaw Lock**: after 8 attacks, the next hits for 130% and stuns for 1s. *Disabled for now*
+    (`"disabled": true` in units.json keeps a Pokémon out of team picks, shops and the Pokédex).
   - Beheeyem, **Psywave**: at the start of battle, a wave flies down its column to the other end of the
     board. The first enemy it hits takes 50% and is carried to that end, then is stunned for 1s; anyone
     already there is pushed to the side. Both sit out until the wave lands.
-  - Toxtricity, **Thunderbolt**: every 8th attack also zaps the farthest enemy for 80%.
+  - Toxtricity (cost 3, ranger, range 2, attacks every 1.25s), **Overdrive**: every 3 attacks, each ally
+    directly left, right, in front of and behind it that has a power counter gains +2 toward its power
+    (never past full; at the end of the tick, like all power progress).
   - Vespiquen, **Attack Order**: every 6 attacks, summons 2 Combee beside it: its sides first, then
     behind, in front, and the diagonals from back to front. Combee come at Vespiquen's star level. They fight but never count as survivors for round damage. With no free square,
     the power stays charged and tries again after the next attack.
@@ -217,8 +222,23 @@ test a set of changes together. Team styles to pit against each other live in `A
   - Decidueye, **Phantom Force**: after 8 attacks, invisible for 3s and attacks 30% faster. Enemies can't
     target or follow an invisible unit.
   - Infernape, **Blaze**: after 7 attacks, attacks 50% faster for 3s.
-  - Hoopa, **Hyperspace Hole**: after 6 attacks, the next teleports beside the farthest enemy (if it's out
-    of reach), hits for 130% and heals 10% of the damage dealt. (The old Greninja's stats and power.)
+  - Hoopa (cost 3, mage, range 2, attacks every 1.11s), **Binding Ring**: it starts the fight charged
+    (shown as Hoopa Unbound) and waits until an enemy tries to move (walk, zip or dash). That Pokémon
+    is bound in place for 3s: it can't move, but it still attacks anything in range. Hoopa turns back,
+    refills after 2 attacks, and never binds the same Pokémon twice in a row.
+  - Amoonguss (cost 4, warrior, tank), **Rage Powder**: every 2 attacks, the hardest-hitting enemy
+    within the 5x5 around it that is attacking someone else must attack Amoonguss for 5s.
+  - Annihilape (cost 4, warrior), **Rage Fist**: each attack in a row without moving makes it attack
+    20% faster, up to +100% after 5 attacks. Moving (or being moved) resets it.
+  - Dragapult (cost 4, ranger, range 3), **Dragon Darts**: after each attack, if a Dreepy is home (at
+    most 2 can be out at once), its next action (an attack or a step, after its usual 0.8s wait)
+    fires one Dreepy instead, at the farthest enemy outside the 3x3 around it (never at a Pokémon
+    right next to it; with none that far, it just attacks). The Dreepy crashes into its target for 50
+    damage at ★ (96 / 115 / 138 at higher levels) and a 0.5s stun, taking its square and shoving it aside (a
+    shield breaks instead); once the stun wears off the target attacks that Dreepy right away until
+    it faints. Dreepy have 230 HP and hit for 12 every 0.5s at ★, growing slowly with level. A fainted
+    Dreepy flies back (0.5s). Dragapult: 800 HP, 50 damage every 0.8s. Darts fire at the end of the
+    tick, aiming and landing from where everyone stood when it began, so neither side gets an edge.
   - Greninja, **Battle Bond**: after 5 attacks, becomes Ash-Greninja for the rest of the fight: fast
     movement, attacks every 0.8s, more damage, range 3 (same HP).
   - Torterra, **Earthquake**: with every 5th attack, every enemy on the board takes 30% and is stunned 1s.
@@ -256,7 +276,7 @@ test a set of changes together. Team styles to pit against each other live in `A
     (not its power or movement). It keeps its share of HP across the change, shows the copied sprite in
     Ditto's colours, and doesn't move while transformed. When the copied Pokémon faints or no enemy is in
     range, it turns back into Ditto and walks to the next nearest.
-- **Healing** (Lilligant, Hoopa) lands at the end of each tick, like stuns, so it never depends on who
+- **Healing** (Lilligant, Alcremie) lands at the end of each tick, like stuns, so it never depends on who
   acted first; a Pokémon knocked out that tick stays knocked out.
 - **Stuns:** a stunned Pokémon can't move or attack. When a stun (or a Psywave ride) ends, it picks the
   nearest enemy as its target again rather than going back to its old one.
