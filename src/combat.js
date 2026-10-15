@@ -104,6 +104,7 @@ function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, in
     darts: null, dartOf: null, dartSlot: 0, dartShots: 0, fullSince: null, // Dragapult's Dreepy: [{ readyAt, unit }] / which Dragapult a Dreepy belongs to
     bindingUntil: 0, hoopaForm: null, lastBound: null, // Hoopa: its own bind lasts through this tick; the form it has taken
     boundBy: null, bindTries: 0, pendingBind: null, // Hoopa's targeted bind: who holds it, tries to move so far, closing at the end of the tick
+    ringReady: false, ringUsed: -1, // Hoopa (`pick: 'move'`): full and free to act when the tick began; the tick it last bound someone
     boundUntil: 0, // Hoopa's bind: it can't move (walk, zip or dash) through this tick; it can still attack
     guardUntil: 0, guardPct: 0, guardBrokeAt: -1, // Alcremie's Mint Cream shield: less damage; the first stun or shove only breaks it
     regen: null, // Alcremie's Matcha Cream: { src, per, left, next } healing once a second
@@ -199,17 +200,34 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     u.bindTries = 0;
     record && emit('unbind', { id: u.id, why });
   }
+  // Each try to move strains the rings (and takes as long as a step would).
+  function strain(u) {
+    u.bindTries++;
+    u.moveTimer = STEP_TICKS + slowed(u.moveCd, u);
+    if (u.bindTries >= units[u.boundBy].power.breakAfter) unbind(u, 'broke');
+    else record && emit('bindStrain', { id: u.id, tries: u.bindTries, of: units[u.boundBy].power.breakAfter });
+  }
   function heldBack(u) {
     if (u.boundBy !== null) {
-      // Each try to move strains the rings (and takes as long as a step would).
-      u.bindTries++;
-      u.moveTimer = STEP_TICKS + slowed(u.moveCd, u);
-      if (u.bindTries >= units[u.boundBy].power.breakAfter) unbind(u, 'broke');
-      else record && emit('bindStrain', { id: u.id, tries: u.bindTries, of: units[u.boundBy].power.breakAfter });
+      if (u.moveTimer > 0) return true; // still getting over its last try (an ability can't skip that wait)
+      strain(u);
       return true;
     }
     if (bound(u)) return true;
     if (immune(u)) return false;
+    // Hoopa (`pick: 'move'`): a full charge rings the first enemy about to
+    // change squares by itself (a step, a zip, a dash, a teleport). That move
+    // still happens; the rings stop its next `breakAfter` tries.
+    const ringer = ringers.length ? ringers.find((h) => h.side !== u.side && h.ringReady && h.ringUsed !== t) : null;
+    if (ringer) {
+      ringer.ringUsed = t;
+      ringer.mana = 0;
+      record && emit('cast', { id: ringer.id, target: u.id });
+      u.boundBy = ringer.id;
+      u.bindTries = 0;
+      record && emit('bind', { id: u.id, by: ringer.id, breakAfter: ringer.power.breakAfter });
+      return false;
+    }
     const ready = (h) => (h.power.noCounter ? !(t <= h.bindingUntil) : h.maxMana > 0 && h.mana >= h.maxMana);
     const hoopa = units.find((h) => h.side !== u.side && standing(h) && h.powerKind === 'bind' && !h.power.targeted && !h.copyOf && ready(h) && !(h.power.noRepeat && h.lastBound === u.id));
     if (!hoopa) return false;
@@ -408,7 +426,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
   // Shove `u` to (x, y) without walking: knockbacks and teleports.
   function relocate(u, cell, type, extra) {
     if (u.x === cell.x && u.y === cell.y) return;
-    unbind(u, 'moved'); // shoved or knocked to another square: the rings snap
+    if (type === 'knock') unbind(u, 'moved'); // shoved or knocked to another square: the rings snap
     u.x = cell.x;
     u.y = cell.y;
     u.movedSinceHit = true;
@@ -615,7 +633,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
         break;
       }
       case 'transform':
-        if (u.form) { hop(u, target); break; } // Star Form's own power
+        if (u.form) { if (!heldBack(u)) hop(u, target); break; } // Star Form's own power (a bound Minior keeps it for its next attack)
         record && emit('cast', { id: u.id, target: null });
         applyForm(u, p.form);
         break;
@@ -664,20 +682,10 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     u.dartShots = u.power.perShot ?? u.power.count;
     dartQueue.push(u);
   }
-  // Hoopa (`pick: 'idle'`): a full charge waits for an enemy with nobody in its
-  // attack range (so it has to move to fight), then binds the first one it
-  // sees. Judged from where everyone stood when the tick began.
-  function idleBind(u) {
-    if (!(u.maxMana > 0 && u.mana >= u.maxMana)) return;
-    const stuck = (e) => !units.some((o) => o.side !== e.side && visible(o) && reach(at(e), at(o)) <= e.range);
-    const victim = units.find((e) => e.side !== u.side && visible(e) && e.boundBy === null && e.pendingBind === null && !immune(e) && stuck(e));
-    if (!victim) return;
-    u.mana = 0;
-    record && emit('cast', { id: u.id, target: victim.id });
-    victim.pendingBind = u.id; // the rings close at the end of the tick, like stuns
-  }
   // `chargeHome`: Dragapult only charges its power while a Dreepy is home.
-  const canCharge = (u) => !(u.powerKind === 'darts' && u.power.chargeHome && !dartsHome(u));
+  // Hoopa (`pick: 'move'`) full when the tick began gains nothing this tick,
+  // whether its bind goes off before or after its attack.
+  const canCharge = (u) => !(u.powerKind === 'darts' && u.power.chargeHome && !dartsHome(u)) && !u.ringReady;
   // Every Dragapult's first ready Dreepy goes, then every second one, ... so
   // when both sides' darts want the same squares, neither side gets them all.
   function fireDarts() {
@@ -962,7 +970,6 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     // around again and picks the nearest enemy rather than its old target.
     if (u.stun > 0) { u.stun--; if (u.stun === 0 && !(u.tauntUntil >= t)) u.target = null; return; }
     if (u.powerKind === 'darts' && u.power.fireDelay !== undefined) chargedDart(u);
-    if (u.powerKind === 'bind' && u.power.pick === 'idle' && !u.copyOf) idleBind(u);
     if (u.atkTimer > 0) u.atkTimer--;
     if (u.moveTimer > 0) u.moveTimer--;
     if (u.stepTimer > 0) u.stepTimer--;
@@ -1049,14 +1056,14 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
       // No need to teleport if the farthest enemy is already in reach.
       const far = farthestEnemy(u);
       const cell = far && reach(u, at(far)) > u.range && freeBeside(u, far);
-      if (cell) {
+      if (cell && !heldBack(u)) {
         relocate(u, cell, 'teleport');
         u.moveTimer = u.stepTimer = 0;
         target = far;
         u.target = far.id;
       }
     }
-    if (empowered && u.power.dash && u.atkTimer === 0 && !arrived && !bound(u)) {
+    if (empowered && u.power.dash && u.atkTimer === 0 && !arrived) {
       // Dash in a straight line next to the farthest enemy, stunning every
       // enemy it passes through on the way.
       const far = farthestEnemy(u);
@@ -1112,7 +1119,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
             if (o && o.side === u.side) heal(o, amount, u);
           }
         }
-        if (u.powerKind && u.powerKind !== 'empower' && !(u.powerKind === 'bind' && (!u.power.targeted || u.power.pick === 'idle')) && u.powerKind !== 'darts' && u.maxMana > 0 && u.mana >= u.maxMana) instantPower(u, target);
+        if (u.powerKind && u.powerKind !== 'empower' && !(u.powerKind === 'bind' && (!u.power.targeted || u.power.pick === 'move')) && u.powerKind !== 'darts' && u.maxMana > 0 && u.mana >= u.maxMana) instantPower(u, target);
       }
       u.atkTimer = cooldown(u);
     } else if (u.moveTimer === 0 && u.stepTimer === 0 && (u.blink || u.copyOf === null) && heldBack(u)) {
@@ -1159,6 +1166,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
   };
 
   let orders = null;
+  let ringers = []; // Hoopas that ring the first enemy to move
   let orderSize = -1; // rebuilt when a summon joins
   let winner = outcome();
   while (winner === undefined && t < maxTicks) {
@@ -1170,7 +1178,13 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     // contested square first. A fixed pattern (e.g. odd/even) would line up with
     // cooldowns and always favour the same side. Each side keeps its unit order,
     // and units summoned this tick wait until the next one.
-    if (orderSize !== units.length) { orders = [[...bySide[0], ...bySide[1]], [...bySide[1], ...bySide[0]]]; orderSize = units.length; }
+    if (orderSize !== units.length) {
+      orders = [[...bySide[0], ...bySide[1]], [...bySide[1], ...bySide[0]]];
+      orderSize = units.length;
+      ringers = units.filter((u) => u.powerKind === 'bind' && u.power.pick === 'move');
+    }
+    // Hoopa's ring is judged from the start of the tick: full, standing and not stunned.
+    for (const h of ringers) h.ringReady = h.alive && h.hp > 0 && h.copyOf === null && h.stun === 0 && h.maxMana > 0 && h.mana >= h.maxMana;
     const order = coin(seed, t) ? orders[0] : orders[1];
     // Battle-start powers go off on the first tick, before anyone acts.
     if (t === 1) for (const u of order) if (u.powerKind === 'opening' && standing(u)) openingPower(u);

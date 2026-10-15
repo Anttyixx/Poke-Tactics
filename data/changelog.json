@@ -1,5 +1,15 @@
 [
   {
+    "id": "2026-10-15-hoopa-move-bind",
+    "version": "0.37.2",
+    "date": "2026-10-15",
+    "title": "Hoopa binds the first Pokémon that moves",
+    "changes": [
+      { "pokemon": "hoopa", "kind": "change", "text": "With its power full (5 attacks), Hoopa now binds the first enemy that's about to change squares by itself, whether walking or using an ability that moves it (like a dash or a zip). That move still happens; the rings then stop its next 3 tries to move. Being shoved or knocked by an attack never sets it off." },
+      { "pokemon": "hoopa", "kind": "change", "text": "Moving abilities now count as tries to move while bound, the same as steps." }
+    ]
+  },
+  {
     "id": "2026-10-15-hoopa-idle-bind",
     "version": "0.37.1",
     "date": "2026-10-15",

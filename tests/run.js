@@ -705,11 +705,11 @@ test('teleport powers (no Pokémon uses one right now): the attack after 6 telep
   assert.equal(evs(r, 'heal', g).find((e) => e.t === cast.t).amount, Math.floor(dealt / 10));
 });
 
-test('Binding Ring (Hoopa): with a full charge (5 attacks) it binds the first enemy with nobody in its attack range; it can\'t move, and breaks free after 3 tries', () => {
+test('Binding Ring (Hoopa): with a full charge (5 attacks) it binds the first enemy that moves by itself; that move happens, then the rings stop its next 3 tries', () => {
   const cat = powerCat();
   cat.walker = { ...cat.wall, range: 1, moveSpeed: 'super slow' };
   cat.hoopa = { ...cat.hoopa, range: 9, moveSpeed: 'statue' }; // shoots from where it stands
-  // Hoopa at combat (2,5); a walker starts at (2,0) and slowly walks toward it.
+  // Hoopa at combat (2,5); a walker starts at (2,3) and slowly walks toward it.
   const r = simulate(cat, [
     [{ uid: 1, unitId: 'hoopa', star: 0, x: 2, y: 1 }],
     [{ uid: 2, unitId: 'walker', star: 0, x: 2, y: 3 }],
@@ -722,36 +722,36 @@ test('Binding Ring (Hoopa): with a full charge (5 attacks) it binds the first en
   assert.equal(evs(r, 'transform', h).length, 0, 'no Hoopa Unbound form');
   const bind = evs(r, 'bind')[0];
   assert.ok(bind, 'it binds');
-  const attacks = evs(r, 'attack', h).filter((a) => a.t <= bind.t);
-  assert.equal(attacks.length, energy, `as soon as it has ${energy} charges: the walker has nobody in range`);
-  assert.equal(bind.id, w, 'the walker, which has to move to reach anyone');
+  assert.equal(bind.id, w);
   assert.equal(bind.by, h);
+  const full = evs(r, 'attack', h)[energy - 1];
+  assert.ok(full.t < bind.t, `only once it has ${energy} charges`);
+  const firstMove = evs(r, 'move', w).find((m) => m.t > full.t);
+  assert.equal(firstMove?.t, bind.t, 'on the first step the walker takes after that, and that step still happens');
   const free = evs(r, 'unbind', w)[0];
   assert.ok(free && free.why === 'broke', 'it breaks free by trying to move');
-  assert.equal(evs(r, 'bindStrain', w).filter((e) => e.t > bind.t && e.t < free.t).length, p.breakAfter - 1, `on its ${p.breakAfter}th try`);
+  assert.equal(evs(r, 'bindStrain', w).filter((e) => e.t > bind.t && e.t < free.t).length, p.breakAfter - 1, `its ${p.breakAfter} tries after that are stopped`);
   assert.ok(!evs(r, 'move', w).some((m) => m.t > bind.t && m.t <= free.t), 'no steps while bound');
-  const again = evs(r, 'bind', w).find((b) => b.t > free.t);
-  assert.ok(evs(r, 'move', w).some((m) => m.t > free.t && (!again || m.t < again.t)) || again, 'once free it walks again (unless Hoopa, charged again, binds it first)');
-  if (again) assert.equal(evs(r, 'bindStrain', w).find((e) => e.t > again.t)?.tries ?? 1, 1, 'a new bind starts over at full strength');
 });
 
-test('Binding Ring (Hoopa): a Pokémon in reach of an enemy is never bound; one knocked out of reach is, and breaks free the moment it is knocked again', () => {
+test('Binding Ring (Hoopa): being knocked away never triggers it, and snaps the rings of a bound Pokémon', () => {
   const cat = powerCat();
   cat.crasher = { ...cat.wall, range: 9, secPerHit: 1, damage: [1, 1, 1, 1], energy: 3, ability: { name: 'Heat Crash', kind: 'empower', damagePct: 100, knockback: 1 } };
-  cat.target = { ...cat.wall, range: 1, moveSpeed: 'slow' }; // once knocked away, it has nobody in range
+  cat.target = { ...cat.wall, range: 1, moveSpeed: 'slow' }; // once knocked away, it walks back
   // Hoopa at combat (2,5) and a crasher at (2,4) both hit the target at (2,3).
   const r = simulate(cat, [
     [{ uid: 1, unitId: 'hoopa', star: 0, x: 2, y: 1 }, { uid: 2, unitId: 'crasher', star: 0, x: 2, y: 0 }],
     [{ uid: 3, unitId: 'target', star: 0, x: 2, y: 0 }],
   ], 1);
   const t3 = unitOf(r, 3).id;
+  const full = evs(r, 'attack', unitOf(r, 1).id)[catalog.hoopa.energy - 1];
   const bind = evs(r, 'bind', t3)[0];
   assert.ok(bind, 'it is bound');
-  const firstKnock = evs(r, 'knock', t3)[0];
-  assert.ok(firstKnock && firstKnock.t < bind.t, 'only after being knocked out of reach of the crasher');
-  const knock = evs(r, 'knock', t3).find((k) => k.t >= bind.t);
+  assert.ok(full.t < bind.t && !evs(r, 'knock', t3).some((k) => k.t === bind.t), 'not by being knocked');
+  assert.ok(evs(r, 'move', t3).some((m) => m.t === bind.t), 'but as it walks back on its own');
+  const knock = evs(r, 'knock', t3).find((k) => k.t > bind.t);
   assert.ok(knock, 'then knocked back');
-  const free = evs(r, 'unbind', t3).find((u) => u.t >= bind.t);
+  const free = evs(r, 'unbind', t3).find((u) => u.t > bind.t);
   assert.ok(free && free.why === 'moved' && free.t === knock.t, 'the rings snap as it is knocked away');
 });
 
