@@ -1,3 +1,4 @@
+cd50a55	dev	2026-10-15 04:41 UTC	Dreepy landing hit doubled: 100/120/144/172 (0.34.2)
 692f7ed	dev	2026-10-15 04:35 UTC	Dragapult fires a Dreepy on its own 0.5s after its power fills (no attack used); attacks every 0.9s (0.34.1)
 6029e64	dev	2026-10-15 04:17 UTC	Dragapult: 3-charge power fires one Dreepy per full charge (max 2 out), attacks every 0.7s (0.34.0)
 4c243a7	dev	2026-10-15 03:29 UTC	Saved Dragapult version points at commit 45c1684
@@ -27,4 +28,3 @@ e8c3d5e	dev	2026-10-14 05:51 UTC	Alcremie treat visuals, Main menu after a match
 305a902	dev	2026-10-14 05:34 UTC	New Pokémon: Alcremie (Sweet Treat: random flavour heals, hastes or shields an ally)
 d9ee80b	dev	2026-10-14 05:13 UTC	Bot: rearrange the board before every fight by explained layout rules
 46d787b	dev	2026-10-14 04:59 UTC	Lilligant: Aromatherapy heals the 3x3 around its target for 60%, damage +10%
-45bf21b	dev	2026-10-14 04:46 UTC	Track healing: heal events credit each healer; focus studies report HP healed per fight
