@@ -72,7 +72,7 @@ export function powerText(def, star, catalog) {
     case 'rage': return { when: 'Every attack', text: `Each attack in a row without moving makes it attack ${vNum(`${p.stackPct}%`)} faster, up to ${vNum(`${p.stackPct * p.maxStacks}%`)} after ${vNum(p.maxStacks)} attacks. Moving resets it.` };
     case 'darts': {
       const name = catalog?.[p.unit]?.name ?? p.unit;
-      return { when: def.energy ? 'Both home + charged' : 'Both home', text: `With both ${name} at home${def.energy ? ` and its counter full (it starts full, then fills with ${vNum(def.energy)} attacks)` : ''}, its next action (an attack, or a step toward its target) fires them instead: one at each of the ${vNum(p.count)} farthest enemies${p.outside ? ` outside the ${area(p.outside)} around it (never at a Pokémon right next to it; with only one enemy that far, just one ${name} goes, and with none it attacks)` : ''}${p.impactDamage ? `, each hitting for ${vDmg(show(Math.round(p.impactDamage[lvl] * STAT_SCALE)))}` : p.impactPct ? `, each hitting for ${vDmg(`${p.impactPct}%`)} damage (${vDmg(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.impactPct) / 100)))})` : ''}${p.impactStun ? ` and stunning it for ${vTime(p.impactStun)}` : ''}. Each ${p.displace ? 'crashes into its target, shoving it aside onto a square next to it, then stays' : 'lands beside its target'} and fights.${p.lure ? ` Its target stops attacking whoever it was and must attack the ${name} until it faints.` : ''} A ${name} that faints flies back (${vTime(Math.round(p.returnSec * 10))}). Until both are home, ${esc(def.name)} attacks normally. They come at ${esc(def.name)}'s level.` };
+      return { when: def.energy ? 'Both home + charged' : 'Both home', text: `With both ${name} at home${def.energy ? ` and its counter full (it starts full, then fills with ${vNum(def.energy)} attacks)` : ''}, its next action (an attack, or a step toward its target) fires them instead: one at each of the ${vNum(p.count)} farthest enemies${p.outside ? ` outside the ${area(p.outside)} around it (never at a Pokémon right next to it; with only one enemy that far, just one ${name} goes, and with none it attacks)` : ''}${p.impactDamage ? `, each hitting for ${vDmg(show(Math.round(p.impactDamage[lvl] * STAT_SCALE)))}` : p.impactPct ? `, each hitting for ${vDmg(`${p.impactPct}%`)} damage (${vDmg(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.impactPct) / 100)))})` : ''}${p.impactStun ? ` and stunning it for ${vTime(p.impactStun)}` : ''}. Each ${p.displace ? 'crashes into its target, shoving it aside onto a square next to it, then stays' : 'lands beside its target'} and fights.${p.lure ? ` Once the stun wears off, its target drops whoever it was attacking and attacks the ${name} right away, until it faints.` : ''} A ${name} that faints flies back (${vTime(Math.round(p.returnSec * 10))}). Until both are home, ${esc(def.name)} attacks normally. They come at ${esc(def.name)}'s level.` };
     }
     case 'boost': return { when: every, text: `Charges up the allies directly left, right, in front of and behind it: each gains ${vNum(`+${p.charges}`)} toward its power (Pokémon without a power counter don't benefit).` };
     case 'snipe': return { when: every, text: `The attack also zaps the farthest enemy for ${hit}.` };
@@ -1192,6 +1192,25 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   }
 
   // Fly a projectile from one square to another; returns its flight time in ms.
+  // A white streak drawn behind something shooting from `from` to `to` (view
+  // squares), growing with it and then fading, like a trail through the air.
+  let streakId = 0;
+  function streak(from, to, ms, easing) {
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('class', 'streak');
+    svg.setAttribute('viewBox', `0 0 ${COLS * 100} ${ROWS * 100}`);
+    svg.setAttribute('preserveAspectRatio', 'none');
+    const [x1, y1, x2, y2] = [(from.x + 0.5) * 100, (from.y + 0.5) * 100, (to.x + 0.5) * 100, (to.y + 0.5) * 100];
+    const id = `streak${++streakId}`;
+    svg.innerHTML = `<defs><linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.7" stop-color="#fff" stop-opacity="0.55"/><stop offset="1" stop-color="#fff" stop-opacity="0.95"/></linearGradient></defs>`
+      + `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="url(#${id})" stroke-width="7" stroke-linecap="round" vector-effect="non-scaling-stroke" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1"/>`;
+    layer.append(svg);
+    const line = svg.querySelector('line');
+    line.animate([{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], { duration: ms, easing, fill: 'forwards' });
+    svg.animate([{ opacity: 1 }, { opacity: 1, offset: 0.55 }, { opacity: 0 }], { duration: ms + 380 / speed }).onfinish = () => svg.remove();
+  }
+
   function projectile(from, to, color, big) {
     const dx = to.x - from.x;
     const dy = to.y - from.y;
@@ -1334,11 +1353,12 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
           flyer.innerHTML = `<div class="body"><div class="sprite" style="background-image:url('${catalog[pal.unitId]?.sprite ?? ''}')"></div></div>`;
           place(flyer, from.x, from.y);
           layer.append(flyer);
-          flyer.animate([{ translate: '0 0', scale: '0.35' }, { translate: `${dx * 100}% ${dy * 100}%`, scale: '1' }], { duration: ms, easing: 'cubic-bezier(.6,0,.2,1)' }).onfinish = () => flyer.remove();
-          for (let i = 1; i <= squares; i++) {
-            const k = i / (squares + 1);
-            setTimeout(() => fx(from.x + dx * k, from.y + dy * k, 'zap', color, 0.8), ms * k);
-          }
+          const ease = 'cubic-bezier(.6,0,.2,1)';
+          flyer.animate([{ translate: '0 0', scale: '0.35' }, { translate: `${dx * 100}% ${dy * 100}%`, scale: '1' }], { duration: ms, easing: ease }).onfinish = () => flyer.remove();
+          streak(from, p, ms, ease);
+          // Its hit, stun and shove all land when it arrives.
+          ctx.srcDelay.set(pal.id, ms);
+          ctx.hitDelay.set(ev.target, ms);
           ctx.hitDelay.set(pal.id, ms);
           later(ms, () => { pal.el.style.visibility = ''; play(pal.el, 'spawned', 300); fx(p.x, p.y, 'burst', fxColor(pal.unitId), 1.2); });
         } else { play(pal.el, 'spawned', 400); fx(p.x, p.y, 'ring', fxColor(pal.unitId), 1.3); }
