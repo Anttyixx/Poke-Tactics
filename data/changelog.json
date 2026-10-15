@@ -1,5 +1,14 @@
 [
   {
+    "id": "2026-10-15-hoopa-idle-bind",
+    "version": "0.37.1",
+    "date": "2026-10-15",
+    "title": "Hoopa binds the Pokémon that need to move",
+    "changes": [
+      { "pokemon": "hoopa", "kind": "change", "text": "With its power full (5 attacks), Hoopa now waits for an enemy that has nobody in its attack range, one that has to move to keep fighting, and binds the first one. It no longer binds the Pokémon it's attacking, which could just keep attacking." }
+    ]
+  },
+  {
     "id": "2026-10-15-hoopa-rings",
     "version": "0.37.0",
     "date": "2026-10-15",

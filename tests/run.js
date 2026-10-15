@@ -705,7 +705,7 @@ test('teleport powers (no Pokémon uses one right now): the attack after 6 telep
   assert.equal(evs(r, 'heal', g).find((e) => e.t === cast.t).amount, Math.floor(dealt / 10));
 });
 
-test('Binding Ring (Hoopa): after 5 attacks it binds the Pokémon it is attacking; it still attacks but can\'t move, and breaks free after 3 tries to move', () => {
+test('Binding Ring (Hoopa): with a full charge (5 attacks) it binds the first enemy with nobody in its attack range; it can\'t move, and breaks free after 3 tries', () => {
   const cat = powerCat();
   cat.walker = { ...cat.wall, range: 1, moveSpeed: 'super slow' };
   cat.hoopa = { ...cat.hoopa, range: 9, moveSpeed: 'statue' }; // shoots from where it stands
@@ -723,8 +723,8 @@ test('Binding Ring (Hoopa): after 5 attacks it binds the Pokémon it is attackin
   const bind = evs(r, 'bind')[0];
   assert.ok(bind, 'it binds');
   const attacks = evs(r, 'attack', h).filter((a) => a.t <= bind.t);
-  assert.equal(attacks.length, energy, `after ${energy} attacks`);
-  assert.equal(bind.id, attacks[attacks.length - 1].target, 'the Pokémon it was attacking');
+  assert.equal(attacks.length, energy, `as soon as it has ${energy} charges: the walker has nobody in range`);
+  assert.equal(bind.id, w, 'the walker, which has to move to reach anyone');
   assert.equal(bind.by, h);
   const free = evs(r, 'unbind', w)[0];
   assert.ok(free && free.why === 'broke', 'it breaks free by trying to move');
@@ -735,10 +735,10 @@ test('Binding Ring (Hoopa): after 5 attacks it binds the Pokémon it is attackin
   if (again) assert.equal(evs(r, 'bindStrain', w).find((e) => e.t > again.t)?.tries ?? 1, 1, 'a new bind starts over at full strength');
 });
 
-test('Binding Ring (Hoopa): a bound Pokémon that is knocked to another square breaks free at once', () => {
+test('Binding Ring (Hoopa): a Pokémon in reach of an enemy is never bound; one knocked out of reach is, and breaks free the moment it is knocked again', () => {
   const cat = powerCat();
   cat.crasher = { ...cat.wall, range: 9, secPerHit: 1, damage: [1, 1, 1, 1], energy: 3, ability: { name: 'Heat Crash', kind: 'empower', damagePct: 100, knockback: 1 } };
-  cat.target = { ...cat.wall, moveSpeed: 'slow' };
+  cat.target = { ...cat.wall, range: 1, moveSpeed: 'slow' }; // once knocked away, it has nobody in range
   // Hoopa at combat (2,5) and a crasher at (2,4) both hit the target at (2,3).
   const r = simulate(cat, [
     [{ uid: 1, unitId: 'hoopa', star: 0, x: 2, y: 1 }, { uid: 2, unitId: 'crasher', star: 0, x: 2, y: 0 }],
@@ -747,6 +747,8 @@ test('Binding Ring (Hoopa): a bound Pokémon that is knocked to another square b
   const t3 = unitOf(r, 3).id;
   const bind = evs(r, 'bind', t3)[0];
   assert.ok(bind, 'it is bound');
+  const firstKnock = evs(r, 'knock', t3)[0];
+  assert.ok(firstKnock && firstKnock.t < bind.t, 'only after being knocked out of reach of the crasher');
   const knock = evs(r, 'knock', t3).find((k) => k.t >= bind.t);
   assert.ok(knock, 'then knocked back');
   const free = evs(r, 'unbind', t3).find((u) => u.t >= bind.t);
