@@ -1,5 +1,14 @@
 [
   {
+    "id": "2026-10-15-dreepy-impact",
+    "version": "0.34.2",
+    "date": "2026-10-15",
+    "title": "Dreepy hit harder on impact",
+    "changes": [
+      { "pokemon": "dreepy", "kind": "buff", "text": "A Dreepy's landing hit is doubled: 100 / 120 / 144 / 172 by level (was 50 / 60 / 72 / 86)." }
+    ]
+  },
+  {
     "id": "2026-10-15-dragapult-auto-fire",
     "version": "0.34.1",
     "date": "2026-10-15",

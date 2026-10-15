@@ -233,7 +233,7 @@ test a set of changes together. Team styles to pit against each other live in `A
   - Dragapult (cost 4, ranger, range 3), **Dragon Darts**: a power counter of 3 attacks. When it's
     full, it fires one Dreepy on its own 0.5s later (no attack is used), as long as a Dreepy is home
     (at most 2 can be out at once), at the farthest enemy outside the 3x3 around it (never at a Pokémon
-    right next to it; with none that far, it just attacks). The Dreepy crashes into its target for 50
+    right next to it; with none that far, it just attacks). The Dreepy crashes into its target for 100
     damage (growing slowly with level) and a 0.5s stun, taking its square and shoving it aside (a
     shield breaks instead); once the stun wears off the target attacks that Dreepy right away until
     it faints. Dreepy have 150 HP and hit for 20 every 0.5s at ★, growing slowly with level. A fainted
