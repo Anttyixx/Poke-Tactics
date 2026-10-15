@@ -1,5 +1,14 @@
 [
   {
+    "id": "2026-10-15-dreepy-landing-lv1",
+    "version": "0.36.1",
+    "date": "2026-10-15",
+    "title": "Lighter Dreepy landing at ★",
+    "changes": [
+      { "pokemon": "dreepy", "kind": "nerf", "text": "Landing hit at ★ 80 → 50. Higher levels are unchanged (96 / 115 / 138)." }
+    ]
+  },
+  {
     "id": "2026-10-15-dragapult-alternate",
     "version": "0.36.0",
     "date": "2026-10-15",
