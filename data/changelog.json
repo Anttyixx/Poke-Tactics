@@ -1,5 +1,14 @@
 [
   {
+    "id": "2026-10-15-hoopa-stop-move",
+    "version": "0.37.3",
+    "date": "2026-10-15",
+    "title": "Hoopa's rings close before the move",
+    "changes": [
+      { "pokemon": "hoopa", "kind": "change", "text": "Hoopa now binds the Pokémon just before it changes squares, so that move never happens. That includes moving powers: a Tapu Koko about to dash or a Minior about to zip is bound first and stays put. The stopped move counts as the first of its 3 tries to break free." }
+    ]
+  },
+  {
     "id": "2026-10-15-hoopa-move-bind",
     "version": "0.37.2",
     "date": "2026-10-15",

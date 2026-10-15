@@ -705,7 +705,7 @@ test('teleport powers (no Pokémon uses one right now): the attack after 6 telep
   assert.equal(evs(r, 'heal', g).find((e) => e.t === cast.t).amount, Math.floor(dealt / 10));
 });
 
-test('Binding Ring (Hoopa): with a full charge (5 attacks) it binds the first enemy that moves by itself; that move happens, then the rings stop its next 3 tries', () => {
+test('Binding Ring (Hoopa): with a full charge (5 attacks) it binds the first enemy about to move by itself; that move is stopped and the rings stop 3 tries in all', () => {
   const cat = powerCat();
   cat.walker = { ...cat.wall, range: 1, moveSpeed: 'super slow' };
   cat.hoopa = { ...cat.hoopa, range: 9, moveSpeed: 'statue' }; // shoots from where it stands
@@ -726,18 +726,41 @@ test('Binding Ring (Hoopa): with a full charge (5 attacks) it binds the first en
   assert.equal(bind.by, h);
   const full = evs(r, 'attack', h)[energy - 1];
   assert.ok(full.t < bind.t, `only once it has ${energy} charges`);
-  const firstMove = evs(r, 'move', w).find((m) => m.t > full.t);
-  assert.equal(firstMove?.t, bind.t, 'on the first step the walker takes after that, and that step still happens');
+  assert.ok(!evs(r, 'move', w).some((m) => m.t > full.t && m.t <= bind.t), 'on the first step the walker tries after that, which never happens');
+  const strains = evs(r, 'bindStrain', w);
+  assert.equal(strains[0]?.t, bind.t, 'the stopped step is its first try');
+  assert.equal(strains[0].tries, 1);
   const free = evs(r, 'unbind', w)[0];
   assert.ok(free && free.why === 'broke', 'it breaks free by trying to move');
-  assert.equal(evs(r, 'bindStrain', w).filter((e) => e.t > bind.t && e.t < free.t).length, p.breakAfter - 1, `its ${p.breakAfter} tries after that are stopped`);
-  assert.ok(!evs(r, 'move', w).some((m) => m.t > bind.t && m.t <= free.t), 'no steps while bound');
+  assert.equal(strains.filter((e) => e.t >= bind.t && e.t < free.t).length + 1, p.breakAfter, `${p.breakAfter} tries stopped in all, the last one breaks the rings`);
+  assert.ok(!evs(r, 'move', w).some((m) => m.t > full.t && m.t <= free.t), 'no steps while bound');
+});
+
+test('Binding Ring (Hoopa): a Pokémon about to move with its power (Tapu Koko\'s dash) is bound first, and the dash never happens', () => {
+  const cat = powerCat();
+  cat.pecker = { ...cat.wall, secPerHit: 0.1 };
+  cat.hoopa = { ...cat.hoopa, range: 9, moveSpeed: 'statue' };
+  cat.tapukoko = { ...cat.tapukoko, energy: 8, hp: [1e5, 1e5, 1e5, 1e5] }; // charges after Hoopa
+  const toOwn = ([x, y]) => ({ x: COLS - 1 - x, y: HALF - 1 - y });
+  // Tapu Koko at combat (1,7) attacks the pecker beside it, so it never walks; its dash would go to (1,0).
+  const r = simulate(cat, [
+    [{ uid: 1, unitId: 'tapukoko', star: 0, x: 1, y: 3 }],
+    [{ uid: 2, unitId: 'pecker', star: 0, ...toOwn([1, 0]) }, { uid: 3, unitId: 'pecker', star: 0, ...toOwn([0, 7]) }, { uid: 4, unitId: 'hoopa', star: 0, ...toOwn([4, 0]) }],
+  ], 1);
+  const k = unitOf(r, 1).id;
+  const bind = evs(r, 'bind', k)[0];
+  assert.ok(bind && bind.by === unitOf(r, 4).id, 'Koko is bound');
+  assert.ok(!evs(r, 'move', k).some((m) => m.t <= bind.t), 'it had not walked');
+  const free = evs(r, 'unbind', k)[0];
+  assert.ok(!evs(r, 'dash', k).some((d) => d.t <= (free ? free.t : Infinity)), 'no dash while bound');
+  assert.equal(evs(r, 'bindStrain', k)[0]?.t, bind.t, 'the dash it tried is its first try');
+  if (free) assert.ok(evs(r, 'dash', k).some((d) => d.t > free.t), 'once free, it dashes');
 });
 
 test('Binding Ring (Hoopa): being knocked away never triggers it, and snaps the rings of a bound Pokémon', () => {
   const cat = powerCat();
   cat.crasher = { ...cat.wall, range: 9, secPerHit: 1, damage: [1, 1, 1, 1], energy: 3, ability: { name: 'Heat Crash', kind: 'empower', damagePct: 100, knockback: 1 } };
-  cat.target = { ...cat.wall, range: 1, moveSpeed: 'slow' }; // once knocked away, it walks back
+  cat.target = { ...cat.wall, range: 1, moveSpeed: 'super slow' }; // once knocked away, it slowly walks back
   // Hoopa at combat (2,5) and a crasher at (2,4) both hit the target at (2,3).
   const r = simulate(cat, [
     [{ uid: 1, unitId: 'hoopa', star: 0, x: 2, y: 1 }, { uid: 2, unitId: 'crasher', star: 0, x: 2, y: 0 }],
@@ -748,7 +771,7 @@ test('Binding Ring (Hoopa): being knocked away never triggers it, and snaps the 
   const bind = evs(r, 'bind', t3)[0];
   assert.ok(bind, 'it is bound');
   assert.ok(full.t < bind.t && !evs(r, 'knock', t3).some((k) => k.t === bind.t), 'not by being knocked');
-  assert.ok(evs(r, 'move', t3).some((m) => m.t === bind.t), 'but as it walks back on its own');
+  assert.ok(evs(r, 'bindStrain', t3).some((m) => m.t === bind.t), 'but as it tries to walk back on its own');
   const knock = evs(r, 'knock', t3).find((k) => k.t > bind.t);
   assert.ok(knock, 'then knocked back');
   const free = evs(r, 'unbind', t3).find((u) => u.t > bind.t);

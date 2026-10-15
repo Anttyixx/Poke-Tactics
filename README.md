@@ -224,9 +224,9 @@ test a set of changes together. Team styles to pit against each other live in `A
   - Infernape, **Blaze**: after 7 attacks, attacks 50% faster for 3s.
   - Hoopa (cost 3, mage, range 2, attacks every 1.0s), **Binding Ring**: after 5 attacks it holds its
     charge until an enemy is about to change squares by itself (a step, or an ability that moves it, like
-    a dash or a zip), and binds that one as it moves (being shoved by an attack doesn't count). A bound
-    Pokémon still attacks anything in range, but the rings stop its next 3 tries to move (walking or
-    moving abilities), then break. They also snap at once if it's shoved or knocked to another
+    a dash or a zip), and binds that one just before it goes, so the move (or the dash or zip) never happens; being
+    shoved by an attack doesn't count. A bound Pokémon still attacks anything in range, but the rings
+    stop 3 tries to move in all (that first one included, walking or moving abilities), then break. They also snap at once if it's shoved or knocked to another
     square, or knocked out.
   - Amoonguss (cost 4, warrior, tank), **Rage Powder**: every 2 attacks, the hardest-hitting enemy
     within the 5x5 around it that is attacking someone else must attack Amoonguss for 5s.
