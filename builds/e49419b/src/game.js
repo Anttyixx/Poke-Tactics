@@ -24,8 +24,8 @@
 //   { type: 'ready' }                         lock in planning; combat starts when all are ready
 //   { type: 'continue' }                      done watching combat; next round starts when all continue
 
-import { randInt } from './rng.js?v=dab82bd';
-import { simulate, COLS, HALF } from './combat.js?v=dab82bd';
+import { randInt } from './rng.js?v=e49419b';
+import { simulate, COLS, HALF } from './combat.js?v=e49419b';
 
 export const TEAM_SIZE = 6;
 export const COPIES_PER_TROOP = 4;
@@ -44,7 +44,8 @@ export const MAX_STAR = COPIES_PER_TROOP - 1; // stars = copies - 1
 export const copiesOf = (inst) => inst.star + 1;
 export const sellValue = (catalog, inst) => catalog[inst.unitId].cost * copiesOf(inst);
 // Pokémon players can pick; summoned-only units (e.g. Combee) are never in a team.
-export const troopIds = (catalog) => Object.keys(catalog).filter((id) => !catalog[id].summon).sort();
+// Pokémon you can pick. "disabled": true in units.json takes one out of the game for now.
+export const troopIds = (catalog) => Object.keys(catalog).filter((id) => !catalog[id].summon && !catalog[id].disabled).sort();
 // How many troops a team needs (fewer only if the catalog doesn't have enough).
 export const teamSize = (catalog) => Math.min(TEAM_SIZE, troopIds(catalog).length);
 // The troop of this species already on the board, if any (never more than one).

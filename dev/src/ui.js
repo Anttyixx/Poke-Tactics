@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=8a8a88d';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=e49419b';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=8a8a88d';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=8a8a88d';
+} from './game.js?v=e49419b';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=e49419b';
 
 const TICK_MS = 100;
 // Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
@@ -65,6 +65,7 @@ export function powerText(def, star, catalog) {
       return { when: every, text: `Its next attack hits for ${hit}${extra.length ? `${extra.length === 1 ? ' and ' : ', '}${extra.join(' and ')}` : ''}.` };
     }
     case 'bind': {
+      if (p.targeted) return { when: `After ${def.energy} attacks`, text: `Binds the Pokémon it's attacking in rings (if that one is already bound, the nearest enemy that isn't). A bound Pokémon still attacks anything in range, but can't walk, zip or dash. Each try to move weakens the rings, and they break on its ${vNum(p.breakAfter)}rd try. They also snap at once if it's shoved or knocked to another square, or knocked out.` };
       const start = p.startCharged ? 'It starts the fight charged and refills' : 'Its power fills';
       return { when: `After ${def.energy} attacks`, text: `${start} after ${vNum(def.energy)} attacks, then waits until an enemy tries to move. Hoopa binds that Pokémon in place for ${vTime(p.duration)}: it can't walk, zip or dash, but it still attacks anything in range.${p.noRepeat ? ' It never binds the same Pokémon twice in a row.' : ''}${p.chargedForm ? ` While charged it becomes ${esc(p.chargedForm.name)}.` : ''}` };
     }
@@ -1643,10 +1644,18 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         });
         break;
       }
+      case 'bindStrain': // Hoopa's rings: a try to move weakens them
+        if (animate) { floatText(a, `${ev.tries}/${ev.of}`, 'bind'); play(a.el, 'strain', 300); }
+        break;
+      case 'unbind': // Hoopa's rings break (broken free, or knocked away)
+        a.boundUntil = 0;
+        a.el.classList.remove('bound');
+        if (animate && ev.why === 'broke') { floatText(a, 'Broke free!', 'bind'); fx(at().x, at().y, 'burst', '#ff8ad8', 1.1); }
+        break;
       case 'bind': { // Hoopa: rings hold the Pokémon in place for a while
         const from = actors.get(ev.by);
         const wear = () => {
-          a.boundUntil = ev.t + ev.duration;
+          a.boundUntil = ev.duration ? ev.t + ev.duration : Infinity; // a targeted bind lasts until it breaks
           a.el.classList.add('bound');
         };
         if (!animate) { wear(); break; }

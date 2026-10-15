@@ -1,3 +1,4 @@
+e49419b	dev	2026-10-15 18:42 UTC	Hoopa rework: after 5 attacks it binds the Pokémon it's attacking; bind holds until 3 tries to move, a shove/knockback, or a knockout; no Unbound form; 75 dmg every 1.0s (0.37.0)
 8a8a88d	dev	2026-10-15 05:55 UTC	Dragapult only charges its power while a Dreepy is home (attacks and Overdrive) (0.36.2)
 ba4e0a1	dev	2026-10-15 05:48 UTC	Dreepy landing hit at ★ 80 -&gt; 50 (0.36.1)
 d2953cb	dev	2026-10-15 05:37 UTC	Dragapult: 800 HP, 50 dmg every 0.8s; 1-charge power: after each attack its next action fires a Dreepy (if one is home); Dreepy HP 230-400 (0.36.0)
@@ -27,4 +28,3 @@ ec880a5	dev	2026-10-14 15:13 UTC	Dragapult: Dreepy hold their target until they 
 eea073b	dev	2026-10-14 08:37 UTC	Engine: build heal log details only when recording; cache Lilligant's heal square; cheaper end-of-fight check (fights unchanged)
 626b087	dev	2026-10-14 08:32 UTC	Engine 2.4x faster with identical fights; smarter, faster smart placement; Dreepy distract (0.23.0)
 08b2011	dev	2026-10-14 07:40 UTC	New Pokémon: Amoonguss (Rage Powder taunt), Annihilape (Rage Fist), Dragapult (Dragon Darts with Dreepy); Hoopa option J with Unbound form; Mawile disabled
-dab82bd	dev	2026-10-14 06:41 UTC	Hoopa rework: Binding Ring holds the next enemy that tries to move in place for 5s
