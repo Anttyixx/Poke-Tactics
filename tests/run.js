@@ -768,47 +768,56 @@ test('Rage Fist (Annihilape): each attack in a row without moving makes the next
   assert.equal(Math.max(...evs(r, 'rage', a).map((e) => e.stacks)), p.maxStacks);
 });
 
-test('Dragon Darts (Dragapult): fires a Dreepy into each of the 2 farthest enemies outside the 3x3 around it, shoving them aside, and they must attack them; fainted ones fly back', () => {
+test('Dragon Darts (Dragapult): each full charge fires one Dreepy at the farthest enemy, which crashes in, stuns and shoves it, and must be attacked; at most 2 are out at once', () => {
   const cat = powerCat();
-  // Knocks out a Dreepy in one hit.
+  const r = simulate(cat, [
+    [{ uid: 1, unitId: 'dragapult', star: 0, x: 2, y: 2 }], // combat (2,6)
+    [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'wall', star: 0, x: 0, y: 3 }, { uid: 4, unitId: 'wall', star: 0, x: 4, y: 3 }], // (2,3), (4,0), (0,0)
+  ], 1);
+  const d = unitOf(r, 1).id;
+  const p = catalog.dragapult.ability;
+  const energy = catalog.dragapult.energy;
+  const darts = evs(r, 'summon', d).filter((e) => e.dart);
+  const attacks = evs(r, 'attack', d);
+  assert.ok(darts.length >= p.count, 'it fires');
+  assert.equal(new Set(darts.map((e) => e.t)).size, darts.length, `${p.perShot} Dreepy per shot`);
+  assert.equal(attacks.filter((a) => a.t < darts[0].t).length, energy, `after ${energy} attacks`);
+  assert.equal(attacks.filter((a) => a.t > darts[0].t && a.t < darts[1].t).length, energy, `and ${energy} more for the next`);
+  assert.ok([unitOf(r, 3).id, unitOf(r, 4).id].includes(darts[0].target), 'at one of the farthest');
+  assert.notEqual(darts[1].target, darts[0].target, 'the next at another one');
+  // The walls don't knock Dreepy out, so after two it waits with a full charge.
+  const out = (t) => darts.filter((x) => x.t < t && !r.events.some((k) => k.type === 'death' && k.id === x.unit.id && k.t < t)).length;
+  assert.ok(darts.every((x) => out(x.t) < p.count), `never more than ${p.count} out at once`);
+  const third = darts[2]?.t ?? Infinity;
+  const waiting = attacks.filter((a) => a.t > darts[1].t && a.t < third).slice(energy);
+  assert.ok(waiting.length > 0 && waiting.every((a) => a.mana === energy), 'its charge waits, full, while two are out');
+  const e = darts[0];
+  const hit = Math.round(p.impactDamage[0] * STAT_SCALE);
+  assert.ok(r.events.some((x) => x.type === 'damage' && x.src === e.unit.id && x.id === e.target && x.amount === hit && x.t === e.t), 'the Dreepy hits its target as it lands');
+  assert.ok(r.events.some((x) => x.type === 'stun' && x.id === e.target && x.duration === p.impactStun && x.t === e.t), 'and stuns it');
+  const shove = r.events.find((x) => x.type === 'knock' && x.id === e.target && x.by === e.unit.id && x.t === e.t);
+  assert.ok(shove, 'the target is shoved aside');
+  assert.equal(Math.max(Math.abs(shove.x - e.unit.x), Math.abs(shove.y - e.unit.y)), 1, 'to a square next to where the Dreepy landed');
+  assert.ok(r.events.some((x) => x.type === 'taunt' && x.dart && x.id === e.target && x.by === e.unit.id && x.t === e.t), 'it must attack the Dreepy until it faints');
+});
+
+test('Dragon Darts (Dragapult): a knocked-out Dreepy flies home, freeing a slot for the next charge', () => {
+  const cat = powerCat();
   const oneShot = catalog.dreepy.hp[0];
   cat.biter = { ...cat.wall, range: 1, secPerHit: 1, damage: [oneShot, oneShot + 1, oneShot + 2, oneShot + 3] };
   const r = simulate(cat, [
     [{ uid: 1, unitId: 'dragapult', star: 0, x: 2, y: 2 }], // combat (2,6)
-    [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'biter', star: 0, x: 0, y: 3 }, { uid: 4, unitId: 'biter', star: 0, x: 4, y: 3 }], // (2,3), (4,0), (0,0)
+    [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'biter', star: 0, x: 0, y: 3 }, { uid: 4, unitId: 'biter', star: 0, x: 4, y: 3 }],
   ], 1);
   const d = unitOf(r, 1).id;
   const p = catalog.dragapult.ability;
   const darts = evs(r, 'summon', d).filter((e) => e.dart);
-  const first = darts.filter((e) => e.t === darts[0].t);
-  assert.equal(first.length, p.count, 'two at once');
-  assert.deepEqual(first.map((e) => e.target).sort(), [unitOf(r, 3).id, unitOf(r, 4).id].sort(), 'at the two farthest');
-  const hit = Math.round(p.impactDamage[0] * STAT_SCALE);
-  assert.ok(first.every((e) => r.events.some((x) => x.type === 'damage' && x.src === e.unit.id && x.id === e.target && x.amount === hit && x.t === e.t)), 'each Dreepy hits its target as it lands');
-  if (p.impactStun) assert.ok(first.every((e) => r.events.some((x) => x.type === 'stun' && x.id === e.target && x.duration === p.impactStun && x.t === e.t)), 'and stuns it');
-  // Each crashes into its target: it lands on the target's square and the
-  // target is shoved to the square beside it.
-  for (const e of first) {
-    const shove = r.events.find((x) => x.type === 'knock' && x.id === e.target && x.by === e.unit.id && x.t === e.t);
-    assert.ok(shove, 'the target is shoved aside');
-    assert.equal(Math.max(Math.abs(shove.x - e.unit.x), Math.abs(shove.y - e.unit.y)), 1, 'to a square next to where the Dreepy landed');
-  }
-  const lured = r.events.filter((x) => x.type === 'taunt' && x.dart && x.t === first[0].t);
-  assert.deepEqual(lured.map((x) => x.id).sort(), first.map((e) => e.target).sort(), 'both targets are distracted');
-  assert.ok(lured.every((x) => first.some((e) => e.unit.id === x.by && e.target === x.id)), 'by the Dreepy that hit them, until it faints');
-  const biter = unitOf(r, 3).id;
-  const dreepyOnBiter = first.find((e) => e.target === biter).unit.id;
-  assert.equal(evs(r, 'attack', biter).find((a) => a.t > first[0].t).target, dreepyOnBiter, 'the distracted Pokémon attacks the Dreepy');
-  const homes = evs(r, 'dartReturn', d).slice(0, p.count);
-  assert.equal(homes.length, p.count, 'both fly back once they faint');
-  assert.ok(homes.every((h) => h.duration === Math.round(p.returnSec * 10)));
-  // The volley takes the place of an attack, and the next one waits for both.
+  const back = evs(r, 'dartReturn', d);
+  assert.ok(back.length >= 1, 'a knocked-out Dreepy flies back');
+  assert.ok(back.every((h) => h.duration === Math.round(p.returnSec * 10)));
+  assert.ok(darts.length > p.count, 'so Dragapult keeps firing');
   const attacks = evs(r, 'attack', d);
-  assert.ok(attacks.every((a) => a.t > darts[0].t), 'its first attack is the volley');
-  const again = darts.find((e) => e.t > first[0].t);
-  assert.ok(again, 'fired again');
-  assert.ok(again.t >= Math.max(...homes.map((h) => h.t + h.duration)), 'only once both are home');
-  assert.ok(!attacks.some((a) => a.t === again.t), 'no attack on the tick it fires');
+  assert.ok(!darts.some((e) => attacks.some((a) => a.t === e.t)), 'a shot takes the place of an attack');
 });
 
 test('Dragon Darts (Dragapult): never at an enemy in the 3x3 around it: one far enemy gets one Dreepy, and with only close ones it just attacks', () => {
@@ -831,22 +840,6 @@ test('Dragon Darts (Dragapult): never at an enemy in the 3x3 around it: one far 
   const d2 = unitOf(close, 1).id;
   assert.equal(evs(close, 'summon', d2).length, 0, 'no Dreepy at a Pokémon next to it');
   assert.ok(evs(close, 'attack', d2).length > 0, 'it attacks normally');
-});
-
-test('Dragon Darts (Dragapult): with both Dreepy home, its next action fires them even if it was about to take a step, once its attack is ready', () => {
-  const cat = powerCat();
-  const r = simulate(cat, [
-    [{ uid: 1, unitId: 'dragapult', star: 0, x: 2, y: 3 }], // combat (2,7): nobody in its range 3
-    [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 3 }], // (2,0)
-  ], 1);
-  const d = unitOf(r, 1).id;
-  const first = evs(r, 'summon', d).find((e) => e.dart);
-  const firstMove = evs(r, 'move', d)[0];
-  assert.ok(first, 'it fires');
-  assert.ok(first.t >= Math.round(catalog.dragapult.secPerHit * 10), 'not before a full attack cooldown, like any attack');
-  assert.ok(firstMove && firstMove.t < first.t, 'it walks while it waits');
-  assert.ok(!evs(r, 'move', d).some((m) => m.t === first.t), 'and fires instead of its next step');
-  assert.ok(!evs(r, 'attack', d).some((a) => a.t <= first.t), 'with no attack before it');
 });
 
 test('Earthquake (Torterra): after 5 attacks, hits every enemy on the board for 30% and stuns them', () => {
