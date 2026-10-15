@@ -73,7 +73,9 @@ export function powerText(def, star, catalog) {
     case 'darts': {
       const name = catalog?.[p.unit]?.name ?? p.unit;
       const shot = p.perShot ?? p.count;
-      const ready = p.perShot
+      const ready = p.fireDelay !== undefined
+        ? `${vTime(p.fireDelay)} after its counter fills (${vNum(def.energy)} attacks), it fires ${shot === 1 ? `a ${name}` : `${vNum(shot)} ${name}`} on its own, without using an attack (up to ${vNum(p.count)} can be out at once; with all out, it waits, full)`
+        : p.perShot
         ? `When its counter is full (${vNum(def.energy)} attacks) and a ${name} is home (up to ${vNum(p.count)} can be out at once), its next action (an attack, or a step toward its target) fires ${shot === 1 ? `a ${name}` : `${vNum(shot)} ${name}`} instead`
         : `With all ${name} home${def.energy ? ` and its counter full (${vNum(def.energy)} attacks)` : ''}, its next action (an attack, or a step toward its target) fires them instead`;
       const at = `the farthest enemy${shot === 1 ? '' : 'ies'}${p.outside ? ` outside the ${area(p.outside)} around it (never one right next to it; with no enemy that far it just attacks)` : ''}`;

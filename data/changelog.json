@@ -1,5 +1,15 @@
 [
   {
+    "id": "2026-10-15-dragapult-auto-fire",
+    "version": "0.34.1",
+    "date": "2026-10-15",
+    "title": "Dragapult fires on its own",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "change", "text": "When its power bar fills, Dragapult fires a Dreepy 0.5 seconds later on its own. It no longer uses up an attack or a step to do it." },
+      { "pokemon": "dragapult", "kind": "nerf", "text": "Attacks every 0.9s (was 0.7s), since firing no longer costs it an attack." }
+    ]
+  },
+  {
     "id": "2026-10-15-dragapult-charge",
     "version": "0.34.0",
     "date": "2026-10-15",

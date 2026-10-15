@@ -101,7 +101,7 @@ function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, in
     hasteUntil: 0, hastePct: 0, stealthFrom: 0, stealthUntil: 0,
     tauntBy: null, tauntUntil: 0, // Amoonguss's Rage Powder: it must attack this unit through tauntUntil
     rage: 0, movedSinceHit: true, // Annihilape's Rage Fist: attacks in a row without moving
-    darts: null, dartOf: null, dartSlot: 0, dartShots: 0, // Dragapult's Dreepy: [{ readyAt, unit }] / which Dragapult a Dreepy belongs to
+    darts: null, dartOf: null, dartSlot: 0, dartShots: 0, fullSince: null, // Dragapult's Dreepy: [{ readyAt, unit }] / which Dragapult a Dreepy belongs to
     bindingUntil: 0, hoopaForm: null, lastBound: null, // Hoopa: its own bind lasts through this tick; the form it has taken
     boundUntil: 0, // Hoopa's bind: it can't move (walk, zip or dash) through this tick; it can still attack
     guardUntil: 0, guardPct: 0, guardBrokeAt: -1, // Alcremie's Mint Cream shield: less damage; the first stun or shove only breaks it
@@ -625,6 +625,17 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     const home = u.darts.filter((slot) => !slot.unit && t >= slot.readyAt).length;
     return u.power.perShot ? home >= u.power.perShot : home === u.darts.length;
   }
+  // With `fireDelay`: a full power bar fires a Dreepy on its own, `fireDelay`
+  // ticks after it filled (no attack or step is used), once a Dreepy is home
+  // and there's an enemy to aim at. Stunned, it waits.
+  function chargedDart(u) {
+    if (!(u.maxMana > 0 && u.mana >= u.maxMana)) { u.fullSince = null; return; }
+    u.fullSince ??= t - 1; // it filled last tick (at the end of it, or during its attack)
+    if (t - u.fullSince < u.power.fireDelay || !dartsHome(u)) return;
+    if (u.power.outside && !units.some((e) => e.side !== u.side && visible(e) && reach(u, at(e)) > u.power.outside)) return;
+    u.dartShots = u.power.perShot ?? u.power.count;
+    dartQueue.push(u);
+  }
   // Every Dragapult's first ready Dreepy goes, then every second one, ... so
   // when both sides' darts want the same squares, neither side gets them all.
   function fireDarts() {
@@ -671,7 +682,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     slot.unit = pal;
     slot.aim = target.id;
     u.dartShots--;
-    if (u.maxMana > 0) u.mana = 0; // the charge is spent only once a Dreepy is actually out
+    if (u.maxMana > 0) { u.mana = 0; u.fullSince = null; } // the charge is spent only once a Dreepy is actually out
     record && emit('summon', { id: u.id, unit: snapshot(pal), dart: true, target: target.id });
     if (shove) relocate(target, shove, 'knock', { by: pal.id }); // right after it lands on that square
     // The crash itself: a set hit (`impactDamage` by star, or `impactPct` of
@@ -908,6 +919,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     // Coming out of a stun (or landing after being carried), a Pokémon looks
     // around again and picks the nearest enemy rather than its old target.
     if (u.stun > 0) { u.stun--; if (u.stun === 0 && !(u.tauntUntil >= t)) u.target = null; return; }
+    if (u.powerKind === 'darts' && u.power.fireDelay !== undefined) chargedDart(u);
     if (u.atkTimer > 0) u.atkTimer--;
     if (u.moveTimer > 0) u.moveTimer--;
     if (u.stepTimer > 0) u.stepTimer--;
@@ -974,7 +986,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     // its next action (an attack, or a step toward its target) fires them
     // instead, at the end of the tick. With a power counter it also needs that many attacks since the
     // last pair.
-    if (u.powerKind === 'darts' && u.stepTimer === 0 && dartsHome(u) && !(u.maxMana > 0 && u.mana < u.maxMana)
+    if (u.powerKind === 'darts' && u.power.fireDelay === undefined && u.stepTimer === 0 && dartsHome(u) && !(u.maxMana > 0 && u.mana < u.maxMana)
       && (!u.power.outside || units.some((e) => e.side !== u.side && visible(e) && reach(u, at(e)) > u.power.outside))) {
       // Firing is an attack: it waits for its attack timer like one (so not
       // before a full attack cooldown at the start of the fight).

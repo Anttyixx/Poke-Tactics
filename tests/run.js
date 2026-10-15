@@ -781,8 +781,16 @@ test('Dragon Darts (Dragapult): each full charge fires one Dreepy at the farthes
   const attacks = evs(r, 'attack', d);
   assert.ok(darts.length >= p.count, 'it fires');
   assert.equal(new Set(darts.map((e) => e.t)).size, darts.length, `${p.perShot} Dreepy per shot`);
-  assert.equal(attacks.filter((a) => a.t < darts[0].t).length, energy, `after ${energy} attacks`);
-  assert.equal(attacks.filter((a) => a.t > darts[0].t && a.t < darts[1].t).length, energy, `and ${energy} more for the next`);
+  // The bar fills with an attack, and the Dreepy goes `fireDelay` ticks later.
+  const filled = attacks.filter((a) => a.mana === energy && a.t < darts[0].t)[0];
+  assert.equal(attacks.filter((a) => a.t <= filled.t).length, energy, `full after ${energy} attacks`);
+  if (p.fireDelay !== undefined) {
+    assert.equal(darts[0].t, filled.t + p.fireDelay, `fired ${p.fireDelay / 10}s after the bar filled`);
+    const refill = attacks.filter((a) => a.t > darts[0].t && a.mana === energy)[0];
+    assert.equal(darts[1].t, refill.t + p.fireDelay, 'and again after it filled again');
+  } else {
+    assert.equal(attacks.filter((a) => a.t > darts[0].t && a.t < darts[1].t).length, energy, `and ${energy} more for the next`);
+  }
   assert.ok([unitOf(r, 3).id, unitOf(r, 4).id].includes(darts[0].target), 'at one of the farthest');
   assert.notEqual(darts[1].target, darts[0].target, 'the next at another one');
   // The walls don't knock Dreepy out, so after two it waits with a full charge.
@@ -817,7 +825,7 @@ test('Dragon Darts (Dragapult): a knocked-out Dreepy flies home, freeing a slot 
   assert.ok(back.every((h) => h.duration === Math.round(p.returnSec * 10)));
   assert.ok(darts.length > p.count, 'so Dragapult keeps firing');
   const attacks = evs(r, 'attack', d);
-  assert.ok(!darts.some((e) => attacks.some((a) => a.t === e.t)), 'a shot takes the place of an attack');
+  if (p.fireDelay === undefined) assert.ok(!darts.some((e) => attacks.some((a) => a.t === e.t)), 'a shot takes the place of an attack');
 });
 
 test('Dragon Darts (Dragapult): never at an enemy in the 3x3 around it: one far enemy gets one Dreepy, and with only close ones it just attacks', () => {
