@@ -1,5 +1,18 @@
 [
   {
+    "id": "2026-10-15-dreepy-streak",
+    "version": "0.33.2",
+    "date": "2026-10-15",
+    "title": "Dreepy streaks and snappier distractions",
+    "changes": [
+      { "pokemon": "dreepy", "kind": "change", "text": "Dreepy leave a white streak behind them as they shoot out of Dragapult, like something flying through the air." },
+      { "pokemon": "dreepy", "kind": "fix", "text": "The Pokémon a Dreepy crashes into now gets hit, stunned and shoved at the moment the Dreepy arrives (they showed before it got there)." },
+      { "pokemon": "dragapult", "kind": "change", "text": "Once the stun wears off, the Pokémon a Dreepy crashed into turns on the Dreepy and attacks it right away. Before, it finished its old attack timer first, so it took up to 1.6 seconds." },
+      { "pokemon": "dragapult", "kind": "buff", "text": "Attacks every 1.6s (was 1.7s), since its Dreepy now get attacked sooner." },
+      { "pokemon": "amoonguss", "kind": "fix", "text": "Rage Powder's pull now lands at the end of the moment, like stuns, so it never matters which side happened to act first." }
+    ]
+  },
+  {
     "id": "2026-10-14-dreepy-dash",
     "version": "0.33.1",
     "date": "2026-10-14",

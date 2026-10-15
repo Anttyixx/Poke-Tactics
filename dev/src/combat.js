@@ -108,6 +108,7 @@ function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, in
     regen: null, // Alcremie's Matcha Cream: { src, per, left, next } healing once a second
     chillFrom: 0, chillUntil: 0, chillPct: 0, // Frosmoth's chill: slower attacks and steps through chillUntil
     pendingChill: null, // { duration, pct }: a chill that lands at the end of the tick
+    pendingTaunt: null, // { by, until }: Amoonguss's pull, landing at the end of the tick
     hold: 0, // ticks it can't move or attack (riding a Psywave); cooldowns still run
     landStun: 0, // stun applied when the hold ends (it has landed)
     pendingHeal: 0, healFrom: null, // healing lands at the end of the tick, like stuns; who it came from
@@ -564,10 +565,10 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
         sweetTreat(u);
         break;
       case 'taunt':
+        // Like stuns, the pull lands at the end of the tick, so the Pokémon it
+        // pulls acts this tick as it would have either way.
         record && emit('cast', { id: u.id, target: taunted.id });
-        taunted.tauntBy = u.id;
-        taunted.tauntUntil = t + p.duration;
-        taunted.target = u.id;
+        taunted.pendingTaunt = { by: u.id, until: t + p.duration };
         record && emit('taunt', { id: taunted.id, by: u.id, duration: p.duration });
         break;
       case 'boost': {
@@ -679,6 +680,9 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
       target.tauntBy = pal.id;
       target.tauntUntil = MAX_TICKS;
       target.target = pal.id;
+      // Whatever it was winding up is lost: once the stun wears off it turns on
+      // the Dreepy and attacks right away.
+      target.atkTimer = Math.min(target.atkTimer, 1);
       record && emit('taunt', { id: target.id, by: pal.id, duration: MAX_TICKS - t, dart: true });
     }
   }
@@ -1198,6 +1202,12 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
         u.chillPct = u.pendingChill.pct;
       }
       u.pendingChill = null;
+      if (u.pendingTaunt && u.hp > 0) {
+        u.tauntBy = u.pendingTaunt.by;
+        u.tauntUntil = u.pendingTaunt.until;
+        u.target = u.tauntBy;
+      }
+      u.pendingTaunt = null;
       u.pendingMana = 0;
       u.pendingStun = 0;
     }

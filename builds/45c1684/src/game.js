@@ -24,8 +24,8 @@
 //   { type: 'ready' }                         lock in planning; combat starts when all are ready
 //   { type: 'continue' }                      done watching combat; next round starts when all continue
 
-import { randInt } from './rng.js?v=0eb0cd2';
-import { simulate, COLS, HALF } from './combat.js?v=0eb0cd2';
+import { randInt } from './rng.js?v=45c1684';
+import { simulate, COLS, HALF } from './combat.js?v=45c1684';
 
 export const TEAM_SIZE = 6;
 export const COPIES_PER_TROOP = 4;
@@ -44,7 +44,8 @@ export const MAX_STAR = COPIES_PER_TROOP - 1; // stars = copies - 1
 export const copiesOf = (inst) => inst.star + 1;
 export const sellValue = (catalog, inst) => catalog[inst.unitId].cost * copiesOf(inst);
 // Pokémon players can pick; summoned-only units (e.g. Combee) are never in a team.
-export const troopIds = (catalog) => Object.keys(catalog).filter((id) => !catalog[id].summon).sort();
+// Pokémon you can pick. "disabled": true in units.json takes one out of the game for now.
+export const troopIds = (catalog) => Object.keys(catalog).filter((id) => !catalog[id].summon && !catalog[id].disabled).sort();
 // How many troops a team needs (fewer only if the catalog doesn't have enough).
 export const teamSize = (catalog) => Math.min(TEAM_SIZE, troopIds(catalog).length);
 // The troop of this species already on the board, if any (never more than one).
@@ -236,8 +237,9 @@ export function lostCount(result, side) {
 
 function beginCombat(state, catalog) {
   // Per-round combat seed derived from the match seed, so fights replay exactly.
-  const result = simulate(catalog, state.players.map((p) => p.board), (state.seed + Math.imul(state.round, 0x9e3779b9)) >>> 0);
-  state.combat = { round: state.round, result, damage: roundDamage(result, state.round) };
+  const seed = (state.seed + Math.imul(state.round, 0x9e3779b9)) >>> 0;
+  const result = simulate(catalog, state.players.map((p) => p.board), seed);
+  state.combat = { round: state.round, seed, result, damage: roundDamage(result, state.round) };
   for (const p of state.players) p.lastBoard = p.board.map(({ unitId, star, x, y }) => ({ unitId, star, x, y }));
   state.phase = 'combat';
   for (const p of state.players) p.ready = false;
