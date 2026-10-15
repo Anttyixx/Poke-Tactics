@@ -1,5 +1,18 @@
 [
   {
+    "id": "2026-10-15-hoopa-rings",
+    "version": "0.37.0",
+    "date": "2026-10-15",
+    "title": "Hoopa's rings hold until they break",
+    "intro": "Hoopa now picks who to bind, and the rings hold until the Pokémon struggles free. (The previous Hoopa is saved as hoopa-v1.)",
+    "changes": [
+      { "pokemon": "hoopa", "kind": "change", "text": "Binding Ring: after 5 attacks, Hoopa binds the Pokémon it's attacking (or the nearest enemy that isn't bound yet). It no longer waits for an enemy to try to move." },
+      { "pokemon": "hoopa", "kind": "change", "text": "The bind has no timer. A bound Pokémon still attacks, but each try to move weakens the rings, and the 3rd try breaks them. Being shoved, knocked back or knocked out breaks them at once." },
+      { "pokemon": "hoopa", "kind": "change", "text": "No more Hoopa Unbound form, and Hoopa no longer starts the fight charged." },
+      { "pokemon": "hoopa", "kind": "buff", "text": "Damage 75 at ★ (was 68), attacking every 1.0s (was 1.11s)." }
+    ]
+  },
+  {
     "id": "2026-10-15-dragapult-charge-home",
     "version": "0.36.2",
     "date": "2026-10-15",

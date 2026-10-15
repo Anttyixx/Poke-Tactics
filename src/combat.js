@@ -103,6 +103,7 @@ function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, in
     rage: 0, movedSinceHit: true, // Annihilape's Rage Fist: attacks in a row without moving
     darts: null, dartOf: null, dartSlot: 0, dartShots: 0, fullSince: null, // Dragapult's Dreepy: [{ readyAt, unit }] / which Dragapult a Dreepy belongs to
     bindingUntil: 0, hoopaForm: null, lastBound: null, // Hoopa: its own bind lasts through this tick; the form it has taken
+    boundBy: null, bindTries: 0, pendingBind: null, // Hoopa's targeted bind: who holds it, tries to move so far, closing at the end of the tick
     boundUntil: 0, // Hoopa's bind: it can't move (walk, zip or dash) through this tick; it can still attack
     guardUntil: 0, guardPct: 0, guardBrokeAt: -1, // Alcremie's Mint Cream shield: less damage; the first stun or shove only breaks it
     regen: null, // Alcremie's Matcha Cream: { src, per, left, next } healing once a second
@@ -188,12 +189,29 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
   // Hoopa's bind. A Hoopa whose counter is full waits; the first enemy that
   // tries to move after that is bound in place for `duration` ticks instead.
   // Returns true if `u` may not move this tick (already bound, or just bound).
-  const bound = (u) => u.boundUntil > 0 && t <= u.boundUntil;
+  // Hoopa's targeted bind (`targeted`): rings hold one Pokémon until it breaks
+  // free (`breakAfter` tries to move), is knocked out, or is moved by something
+  // else (a shove or a knockback).
+  const bound = (u) => u.boundBy !== null || (u.boundUntil > 0 && t <= u.boundUntil);
+  function unbind(u, why) {
+    if (u.boundBy === null) return;
+    u.boundBy = null;
+    u.bindTries = 0;
+    record && emit('unbind', { id: u.id, why });
+  }
   function heldBack(u) {
+    if (u.boundBy !== null) {
+      // Each try to move strains the rings (and takes as long as a step would).
+      u.bindTries++;
+      u.moveTimer = STEP_TICKS + slowed(u.moveCd, u);
+      if (u.bindTries >= units[u.boundBy].power.breakAfter) unbind(u, 'broke');
+      else record && emit('bindStrain', { id: u.id, tries: u.bindTries, of: units[u.boundBy].power.breakAfter });
+      return true;
+    }
     if (bound(u)) return true;
     if (immune(u)) return false;
     const ready = (h) => (h.power.noCounter ? !(t <= h.bindingUntil) : h.maxMana > 0 && h.mana >= h.maxMana);
-    const hoopa = units.find((h) => h.side !== u.side && standing(h) && h.powerKind === 'bind' && !h.copyOf && ready(h) && !(h.power.noRepeat && h.lastBound === u.id));
+    const hoopa = units.find((h) => h.side !== u.side && standing(h) && h.powerKind === 'bind' && !h.power.targeted && !h.copyOf && ready(h) && !(h.power.noRepeat && h.lastBound === u.id));
     if (!hoopa) return false;
     hoopa.lastBound = u.id;
     if (hoopa.maxMana > 0) hoopa.mana = 0;
@@ -390,6 +408,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
   // Shove `u` to (x, y) without walking: knockbacks and teleports.
   function relocate(u, cell, type, extra) {
     if (u.x === cell.x && u.y === cell.y) return;
+    unbind(u, 'moved'); // shoved or knocked to another square: the rings snap
     u.x = cell.x;
     u.y = cell.y;
     u.movedSinceHit = true;
@@ -525,6 +544,10 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     if (p.kind === 'summon' && !cells.length) return;
     const taunted = p.kind === 'taunt' ? tauntPick(u) : null;
     if (p.kind === 'taunt' && !taunted) return; // nobody to pull: stays charged
+    // Hoopa: the Pokémon it's attacking, or if that one is already bound, the
+    // nearest enemy that isn't.
+    const ringed = p.kind === 'bind' ? (target.boundBy === null && target.pendingBind === null && !immune(target) ? target : units.filter((e) => e.side !== u.side && visible(e) && e.boundBy === null && e.pendingBind === null && !immune(e)).sort((a, b) => dist(u, at(a)) - dist(u, at(b)) || a.slot - b.slot)[0]) : null;
+    if (p.kind === 'bind' && !ringed) return; // everyone's already bound: stays charged
     u.mana = 0;
     switch (p.kind) {
       case 'snipe': {
@@ -563,6 +586,11 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
       }
       case 'treat':
         sweetTreat(u);
+        break;
+      case 'bind':
+        // Like stuns, the rings close at the end of the tick.
+        record && emit('cast', { id: u.id, target: ringed.id });
+        ringed.pendingBind = u.id;
         break;
       case 'taunt':
         // Like stuns, the pull lands at the end of the tick, so the Pokémon it
@@ -1071,7 +1099,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
             if (o && o.side === u.side) heal(o, amount, u);
           }
         }
-        if (u.powerKind && u.powerKind !== 'empower' && u.powerKind !== 'bind' && u.powerKind !== 'darts' && u.maxMana > 0 && u.mana >= u.maxMana) instantPower(u, target);
+        if (u.powerKind && u.powerKind !== 'empower' && !(u.powerKind === 'bind' && !u.power.targeted) && u.powerKind !== 'darts' && u.maxMana > 0 && u.mana >= u.maxMana) instantPower(u, target);
       }
       u.atkTimer = cooldown(u);
     } else if (u.moveTimer === 0 && u.stepTimer === 0 && (u.blink || u.copyOf === null) && heldBack(u)) {
@@ -1211,6 +1239,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
       if (!u.alive) continue;
       if (u.hp === 0 && !(u.fuse > 0)) {
         u.alive = false; // knocked out this tick (a lit Golem stays)
+        u.boundBy = null;
         if (u.dartOf !== null) dartHome(u); // a Dreepy flies back to its Dragapult
       }
       u.mana = shownMana(u);
@@ -1227,6 +1256,14 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
         u.target = u.tauntBy;
       }
       u.pendingTaunt = null;
+      if (u.pendingBind !== null) {
+        if (u.hp > 0 && !immune(u) && u.boundBy === null) {
+          u.boundBy = u.pendingBind;
+          u.bindTries = 0;
+          record && emit('bind', { id: u.id, by: u.boundBy, breakAfter: units[u.boundBy].power.breakAfter });
+        }
+        u.pendingBind = null;
+      }
       u.pendingMana = 0;
       u.pendingStun = 0;
     }

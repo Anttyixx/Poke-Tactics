@@ -505,7 +505,7 @@ test('a shield also stops a shove: a Heat Crash breaks it instead of knocking th
   cat.ally = { ...cat.wall, hp: [1e5, 1e5, 1e5, 1e5] };
   // Alcremie (charged by every attack) shields the ally; then the enemy's Heat
   // Crash, which knocks back and stuns, hits that ally.
-  cat.crasher = { ...cat.wall, range: 1, secPerHit: 1, damage: [1, 1, 1, 1], energy: 3, ability: { name: 'Heat Crash', kind: 'empower', damagePct: 100, knockback: 2, stun: 10 } };
+  cat.crasher = { ...cat.wall, range: 9, secPerHit: 1, damage: [1, 1, 1, 1], energy: 3, ability: { name: 'Heat Crash', kind: 'empower', damagePct: 100, knockback: 2, stun: 10 } };
   const r = simulate(cat, [
     [{ uid: 1, unitId: 'alcremie', star: 0, x: 2, y: 1 }, { uid: 2, unitId: 'ally', star: 0, x: 2, y: 0 }],
     [{ uid: 3, unitId: 'crasher', star: 0, x: 2, y: 0 }],
@@ -705,34 +705,52 @@ test('teleport powers (no Pokémon uses one right now): the attack after 6 telep
   assert.equal(evs(r, 'heal', g).find((e) => e.t === cast.t).amount, Math.floor(dealt / 10));
 });
 
-test('Binding Ring (Hoopa): starts charged; the first enemy that tries to move is bound 3s; refills after 2 attacks; never the same Pokémon twice in a row', () => {
+test('Binding Ring (Hoopa): after 5 attacks it binds the Pokémon it is attacking; it still attacks but can\'t move, and breaks free after 3 tries to move', () => {
   const cat = powerCat();
-  cat.walker = { ...cat.wall, range: 1, moveSpeed: 'super slow' }; // long walks from the back
-  // Hoopa at combat (2,5) shoots a wall at (2,3); two walkers start at the back.
+  cat.walker = { ...cat.wall, range: 1, moveSpeed: 'super slow' };
+  cat.hoopa = { ...cat.hoopa, range: 9, moveSpeed: 'statue' }; // shoots from where it stands
+  // Hoopa at combat (2,5); a walker starts at (2,0) and slowly walks toward it.
   const r = simulate(cat, [
     [{ uid: 1, unitId: 'hoopa', star: 0, x: 2, y: 1 }],
-    [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'walker', star: 0, x: 0, y: 3 }, { uid: 4, unitId: 'walker', star: 0, x: 4, y: 3 }],
+    [{ uid: 2, unitId: 'walker', star: 0, x: 2, y: 3 }],
   ], 1);
   const h = unitOf(r, 1).id;
+  const w = unitOf(r, 2).id;
   const p = catalog.hoopa.ability;
-  assert.equal(unitOf(r, 1).mana, catalog.hoopa.energy, 'starts the fight charged');
-  const binds = evs(r, 'bind');
-  assert.ok(binds.length >= 2, 'binds both walkers');
-  assert.ok(evs(r, 'attack', h).filter((e) => e.t <= binds[0].t).length < catalog.hoopa.energy, 'the first bind comes before it could have charged by attacking');
-  assert.ok(binds.every((b) => b.by === h && b.duration === p.duration));
-  for (let k = 1; k < binds.length; k++) {
-    assert.notEqual(binds[k].id, binds[k - 1].id, 'never the same Pokémon twice in a row');
-    const refill = evs(r, 'attack', h).filter((e) => e.t > binds[k - 1].t && e.t <= binds[k].t).length;
-    assert.ok(refill >= catalog.hoopa.energy, 'each later bind needs a refill');
-  }
-  const first = binds[0];
-  const moves = evs(r, 'move', first.id).map((e) => e.t);
-  assert.ok(!moves.some((t) => t >= first.t && t <= first.t + first.duration), 'no steps while bound');
-  assert.ok(moves.some((t) => t > first.t + first.duration), 'it walks again once free');
-  // Charged, it shows as Hoopa Unbound; binding turns it back.
-  const forms = evs(r, 'transform', h);
-  assert.equal(forms[0].name, 'Hoopa Unbound');
-  assert.ok(forms.some((f) => f.revert && f.t === first.t), 'back to Hoopa when it binds');
+  const energy = catalog.hoopa.energy;
+  assert.equal(unitOf(r, 1).mana, 0, 'starts empty');
+  assert.equal(evs(r, 'transform', h).length, 0, 'no Hoopa Unbound form');
+  const bind = evs(r, 'bind')[0];
+  assert.ok(bind, 'it binds');
+  const attacks = evs(r, 'attack', h).filter((a) => a.t <= bind.t);
+  assert.equal(attacks.length, energy, `after ${energy} attacks`);
+  assert.equal(bind.id, attacks[attacks.length - 1].target, 'the Pokémon it was attacking');
+  assert.equal(bind.by, h);
+  const free = evs(r, 'unbind', w)[0];
+  assert.ok(free && free.why === 'broke', 'it breaks free by trying to move');
+  assert.equal(evs(r, 'bindStrain', w).filter((e) => e.t > bind.t && e.t < free.t).length, p.breakAfter - 1, `on its ${p.breakAfter}th try`);
+  assert.ok(!evs(r, 'move', w).some((m) => m.t > bind.t && m.t <= free.t), 'no steps while bound');
+  const again = evs(r, 'bind', w).find((b) => b.t > free.t);
+  assert.ok(evs(r, 'move', w).some((m) => m.t > free.t && (!again || m.t < again.t)) || again, 'once free it walks again (unless Hoopa, charged again, binds it first)');
+  if (again) assert.equal(evs(r, 'bindStrain', w).find((e) => e.t > again.t)?.tries ?? 1, 1, 'a new bind starts over at full strength');
+});
+
+test('Binding Ring (Hoopa): a bound Pokémon that is knocked to another square breaks free at once', () => {
+  const cat = powerCat();
+  cat.crasher = { ...cat.wall, range: 9, secPerHit: 1, damage: [1, 1, 1, 1], energy: 3, ability: { name: 'Heat Crash', kind: 'empower', damagePct: 100, knockback: 1 } };
+  cat.target = { ...cat.wall, moveSpeed: 'slow' };
+  // Hoopa at combat (2,5) and a crasher at (2,4) both hit the target at (2,3).
+  const r = simulate(cat, [
+    [{ uid: 1, unitId: 'hoopa', star: 0, x: 2, y: 1 }, { uid: 2, unitId: 'crasher', star: 0, x: 2, y: 0 }],
+    [{ uid: 3, unitId: 'target', star: 0, x: 2, y: 0 }],
+  ], 1);
+  const t3 = unitOf(r, 3).id;
+  const bind = evs(r, 'bind', t3)[0];
+  assert.ok(bind, 'it is bound');
+  const knock = evs(r, 'knock', t3).find((k) => k.t >= bind.t);
+  assert.ok(knock, 'then knocked back');
+  const free = evs(r, 'unbind', t3).find((u) => u.t >= bind.t);
+  assert.ok(free && free.why === 'moved' && free.t === knock.t, 'the rings snap as it is knocked away');
 });
 
 test('Rage Powder (Amoonguss): every 2 attacks, the hardest hitter within the 5x5 that is attacking someone else must attack Amoonguss', () => {

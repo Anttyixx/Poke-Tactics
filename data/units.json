@@ -32,9 +32,8 @@
   },
   "hoopa": {
     "name": "Hoopa", "sprite": "assets/sprites/hoopa.png", "fx": "#ff8ad8", "type": "mage", "cost": 3,
-    "hp": [840, 1365, 2184, 3500], "damage": [68, 113, 176, 284], "range": 2, "moveSpeed": "medium", "secPerHit": 1.11, "critChance": 15, "energy": 2,
-    "ability": {"name": "Binding Ring", "kind": "bind", "duration": 30, "startCharged": true, "noRepeat": true,
-      "chargedForm": {"name": "Hoopa Unbound", "sprite": "assets/sprites/hoopa-unbound.png"}}
+    "hp": [840, 1365, 2184, 3500], "damage": [75, 125, 195, 315], "range": 2, "moveSpeed": "medium", "secPerHit": 1.0, "critChance": 15, "energy": 5,
+    "ability": {"name": "Binding Ring", "kind": "bind", "targeted": true, "breakAfter": 3}
   },
   "infernape": {
     "name": "Infernape", "sprite": "assets/sprites/infernape.png", "fx": "#ff8a2a", "type": "warrior", "cost": 3,
