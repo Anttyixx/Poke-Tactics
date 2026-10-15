@@ -1,5 +1,14 @@
 [
   {
+    "id": "2026-10-15-dragapult-charge-home",
+    "version": "0.36.2",
+    "date": "2026-10-15",
+    "title": "Dragapult charges only with a Dreepy home",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "change", "text": "Dragapult only charges its power while at least one Dreepy is home. With both out, its attacks (and Toxtricity's Overdrive) no longer fill it, so when a Dreepy comes back it needs one more attack before firing it." }
+    ]
+  },
+  {
     "id": "2026-10-15-dreepy-landing-lv1",
     "version": "0.36.1",
     "date": "2026-10-15",

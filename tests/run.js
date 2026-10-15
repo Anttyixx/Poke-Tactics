@@ -797,8 +797,10 @@ test('Dragon Darts (Dragapult): each full charge fires one Dreepy at the farthes
   const out = (t) => darts.filter((x) => x.t < t && !r.events.some((k) => k.type === 'death' && k.id === x.unit.id && k.t < t)).length;
   assert.ok(darts.every((x) => out(x.t) < p.count), `never more than ${p.count} out at once`);
   const third = darts[2]?.t ?? Infinity;
-  const waiting = attacks.filter((a) => a.t > darts[1].t && a.t < third).slice(energy);
-  assert.ok(waiting.length > 0 && waiting.every((a) => a.mana === energy), 'its charge waits, full, while two are out');
+  const firstDown = Math.min(...r.events.filter((k) => k.type === 'death' && darts.some((x) => x.unit.id === k.id)).map((k) => k.t), third);
+  const waiting = attacks.filter((a) => a.t > darts[1].t && a.t < firstDown).slice(p.chargeHome ? 0 : energy);
+  if (p.chargeHome) assert.ok(waiting.length > 0 && waiting.every((a) => a.mana === 0), 'with both out, its attacks don\'t charge its power');
+  else assert.ok(waiting.length > 0 && waiting.every((a) => a.mana === energy), 'its charge waits, full, while two are out');
   const e = darts[0];
   const hit = Math.round(p.impactDamage[0] * STAT_SCALE);
   assert.ok(r.events.some((x) => x.type === 'damage' && x.src === e.unit.id && x.id === e.target && x.amount === hit && x.t === e.t), 'the Dreepy hits its target as it lands');

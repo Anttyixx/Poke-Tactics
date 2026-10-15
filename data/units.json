@@ -98,7 +98,7 @@
   "dragapult": {
     "name": "Dragapult", "sprite": "assets/sprites/dragapult.png", "fx": "#6fe0d8", "type": "ranger", "cost": 4,
     "hp": [800,  1360,  2312,  3930], "damage": [50,  85,  145,  245], "range": 3, "moveSpeed": "fast", "secPerHit": 0.8, "critChance": 15, "energy": 1,
-    "ability": {"name": "Dragon Darts", "kind": "darts", "unit": "dreepy", "count": 2, "perShot": 1, "impactDamage": [50, 96, 115, 138], "impactStun": 5, "displace": true, "lure": true, "returnSec": 0.5, "outside": 1}
+    "ability": {"name": "Dragon Darts", "kind": "darts", "unit": "dreepy", "count": 2, "perShot": 1, "impactDamage": [50, 96, 115, 138], "impactStun": 5, "displace": true, "lure": true, "returnSec": 0.5, "outside": 1, "chargeHome": true}
   },
   "dreepy": {
     "name": "Dreepy", "summon": true, "sprite": "assets/sprites/dreepy.png", "fx": "#7fe0a8", "type": "warrior", "cost": 0,
