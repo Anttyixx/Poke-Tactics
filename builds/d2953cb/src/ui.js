@@ -2,14 +2,17 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=305a902';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=d2953cb';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=305a902';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=305a902';
+} from './game.js?v=d2953cb';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=d2953cb';
 
-const TICK_MS = 100; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
+const TICK_MS = 100;
+// Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
+const TREAT_COLOR = { heal: '#6fe08a', haste: '#ff7fae', guard: '#8fd2ff' };
+const TREAT_TEXT = { heal: 'Sweet heal', haste: 'Attack speed up', guard: 'Shielded' }; // playback speed at 1x: one sim tick (0.1s of game time) per 100ms, i.e. real time
 // Attack-effect colour when a unit doesn't set its own "fx" colour in units.json.
 const TYPE_FX = { warrior: '#ffb36b', ranger: '#a6e37f', mage: '#b994ff', rogue: '#e0a3ff', cleric: '#ffe28a' };
 
@@ -61,6 +64,25 @@ export function powerText(def, star, catalog) {
       ].filter(Boolean);
       return { when: every, text: `Its next attack hits for ${hit}${extra.length ? `${extra.length === 1 ? ' and ' : ', '}${extra.join(' and ')}` : ''}.` };
     }
+    case 'bind': {
+      const start = p.startCharged ? 'It starts the fight charged and refills' : 'Its power fills';
+      return { when: `After ${def.energy} attacks`, text: `${start} after ${vNum(def.energy)} attacks, then waits until an enemy tries to move. Hoopa binds that Pokémon in place for ${vTime(p.duration)}: it can't walk, zip or dash, but it still attacks anything in range.${p.noRepeat ? ' It never binds the same Pokémon twice in a row.' : ''}${p.chargedForm ? ` While charged it becomes ${esc(p.chargedForm.name)}.` : ''}` };
+    }
+    case 'taunt': return { when: every, text: `Spreads its spores: the hardest-hitting enemy within the ${area(p.radius)} around it that is attacking someone else must attack ${esc(def.name)} for ${vTime(p.duration)}.` };
+    case 'rage': return { when: 'Every attack', text: `Each attack in a row without moving makes it attack ${vNum(`${p.stackPct}%`)} faster, up to ${vNum(`${p.stackPct * p.maxStacks}%`)} after ${vNum(p.maxStacks)} attacks. Moving resets it.` };
+    case 'darts': {
+      const name = catalog?.[p.unit]?.name ?? p.unit;
+      const shot = p.perShot ?? p.count;
+      const ready = p.fireDelay !== undefined
+        ? `${vTime(p.fireDelay)} after its counter fills (${vNum(def.energy)} attacks), it fires ${shot === 1 ? `a ${name}` : `${vNum(shot)} ${name}`} on its own, without using an attack (up to ${vNum(p.count)} can be out at once; with all out, it waits, full)`
+        : p.perShot
+        ? `After ${def.energy === 1 ? 'each attack' : `every ${vNum(def.energy)} attacks`}, if a ${name} is home (up to ${vNum(p.count)} can be out at once), its next action (an attack, or a step toward its target) fires ${shot === 1 ? `a ${name}` : `${vNum(shot)} ${name}`} instead`
+        : `With all ${name} home${def.energy ? ` and its counter full (${vNum(def.energy)} attacks)` : ''}, its next action (an attack, or a step toward its target) fires them instead`;
+      const at = `the farthest enemy${shot === 1 ? '' : 'ies'}${p.outside ? ` outside the ${area(p.outside)} around it (never one right next to it; with no enemy that far it just attacks)` : ''}`;
+      const impact = p.impactDamage ? `, hitting for ${vDmg(show(Math.round(p.impactDamage[lvl] * STAT_SCALE)))}` : p.impactPct ? `, hitting for ${vDmg(`${p.impactPct}%`)} damage (${vDmg(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.impactPct) / 100)))})` : '';
+      return { when: def.energy === 1 ? 'Every other action' : def.energy ? `Every ${def.energy} attacks` : 'All home', text: `${ready}, at ${at}${impact}${p.impactStun ? ` and stunning it for ${vTime(p.impactStun)}` : ''}. It ${p.displace ? 'crashes into its target, shoving it aside onto a square next to it, then stays' : 'lands beside its target'} and fights.${p.lure ? ` Once the stun wears off, its target drops whoever it was attacking and attacks the ${name} right away, until it faints.` : ''} A ${name} that faints flies back (${vTime(Math.round(p.returnSec * 10))}). They come at ${esc(def.name)}'s level.` };
+    }
+    case 'boost': return { when: every, text: `Charges up the allies directly left, right, in front of and behind it: each gains ${vNum(`+${p.charges}`)} toward its power (Pokémon without a power counter don't benefit).` };
     case 'snipe': return { when: every, text: `The attack also zaps the farthest enemy for ${hit}.` };
     case 'summon': {
       const name = catalog?.[p.unit]?.name ?? p.unit;
@@ -362,6 +384,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     else if (action === 'new-confirmed') { closeMenu(); onNewGame(); }
     else if (action === 'leave-confirmed') { closeMenu(); onLobby('leave'); }
     else if (action === 'copy-log') copyLog(btn);
+    else if (action === 'download-log') copyLog(btn, { download: true });
     else if (action === 'copy-text') copyText(btn.dataset.copy, btn);
     else if (action === 'profile-save') saveProfileForm();
     else if (action === 'profile-pick') togglePicker();
@@ -409,7 +432,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     if (e.target.id === 'open-dex') return openDex();
     if (e.target.id === 'continue') { e.target.disabled = true; onIntent({ type: 'continue' }); }
     if (e.target.id === 'play-again') { started = true; if (online) { e.target.disabled = true; e.target.textContent = 'Waiting for the host…'; } onNewGame(); }
-    if (e.target.id === 'leave-match') return onLobby('leave');
+    if (e.target.id === 'to-menu') return onLobby(online ? 'leave' : 'home');
     if (e.target.id === 'game-log') return openMenu('log');
     if (state?.phase !== 'team' || me().ready) return;
     const troop = e.target.closest('[data-pick-troop]');
@@ -543,7 +566,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         <p class="muted">Every move both players made this match. Paste it to Claude to analyse the match or test stat changes.</p>
         <label class="field log-notes" for="log-notes">Your notes (optional)
           <textarea id="log-notes" rows="4" placeholder="e.g. Mawile felt useless; Tapu Koko's dash won round 6"></textarea></label>
-        <button class="primary" data-menu="copy-log">Copy match log</button>
+        <div class="log-actions"><button class="primary" data-menu="copy-log">Copy match log</button>
+        <button data-menu="download-log">Download as a file</button></div>
         <p class="muted" id="log-status" aria-live="polite"></p>
         <textarea id="log-text" class="log-text" rows="6" readonly hidden></textarea>`;
     } else if (view === 'profile') {
@@ -576,7 +600,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       const text = getLastLog() ?? '';
       panel.innerHTML = `${close}${back}<h1>Last online match log</h1>
         <p class="muted">Every move of your last online match, and what happened to the connection. Copy it and paste it to Claude to look into a drop.</p>
-        <button class="primary" data-menu="copy-text" data-copy="${esc(text)}">Copy match log</button>
+        <div class="log-actions"><button class="primary" data-menu="copy-text" data-copy="${esc(text)}">Copy match log</button>
+        <button data-download="${esc(text)}">Download as a file</button></div>
         <textarea class="log-text" rows="6" readonly>${esc(text)}</textarea>`;
     } else if (view === 'leave') {
       panel.innerHTML = `${close}<h1>Leave the match?</h1>
@@ -637,7 +662,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       </section>`).join('')}</div>`;
   }
 
-  async function copyLog(btn) {
+  async function copyLog(btn, { download = false } = {}) {
     const status = menuEl.querySelector('#log-status');
     btn.disabled = true;
     status.textContent = 'Getting the match log…';
@@ -646,6 +671,11 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     if (!log?.intents?.length) { status.textContent = 'No moves recorded yet. Start a match first.'; return; }
     const notes = menuEl.querySelector('#log-notes').value.trim();
     const text = JSON.stringify({ ...log, notes, viewer: log.names[viewer], copied: new Date().toISOString() });
+    if (download) {
+      downloadText(text, logFileName(log));
+      status.textContent = `Downloaded ${logFileName(log)} (${log.intents.length} moves).`;
+      return;
+    }
     try {
       await navigator.clipboard.writeText(text);
       status.textContent = `Copied ${log.intents.length} moves. Paste them into your chat with Claude.`;
@@ -658,6 +688,29 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       status.textContent = 'Copying was blocked here. The log is selected below: copy it yourself.';
     }
   }
+
+  // Save text as a file (the match log), e.g. poke-tactics-2026-10-14-1530-vs-Sean.json.
+  function logFileName(log) {
+    const d = new Date(log.started ?? Date.now());
+    const pad = (n) => String(n).padStart(2, '0');
+    const foe = log.names?.[1 - viewer] ?? 'match';
+    return `poke-tactics-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}-vs-${String(foe).replace(/[^\w-]+/g, '_')}.json`;
+  }
+  function downloadText(text, name) {
+    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    const link = Object.assign(document.createElement('a'), { href: url, download: name });
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-download]');
+    if (!btn) return;
+    let log = null;
+    try { log = JSON.parse(btn.dataset.download); } catch {}
+    downloadText(btn.dataset.download, logFileName(log ?? {}));
+  });
 
   function closeMenu() {
     menuEl.hidden = true;
@@ -1021,6 +1074,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         if (a.stealthUntil && tick >= a.stealthUntil) { a.stealthUntil = 0; a.el.classList.remove('stealthed'); }
         if (a.hasteUntil && tick >= a.hasteUntil) { a.hasteUntil = 0; a.el.classList.remove('hasted'); }
         if (a.guardUntil && tick > a.guardUntil) { a.guardUntil = 0; a.el.classList.remove('guarded'); }
+        if (a.tauntUntil && (tick > a.tauntUntil || actors.get(a.tauntBy)?.el.classList.contains('dead'))) { a.tauntUntil = 0; a.el.classList.remove('taunted'); }
+        if (a.boundUntil && tick > a.boundUntil) { a.boundUntil = 0; a.el.classList.remove('bound'); }
+        if (a.treatUntil && tick > a.treatUntil) { a.treatUntil = 0; a.el.classList.remove('treated'); delete a.el.dataset.treat; }
       }
     };
     const finish = () => {
@@ -1144,6 +1200,25 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   }
 
   // Fly a projectile from one square to another; returns its flight time in ms.
+  // A white streak drawn behind something shooting from `from` to `to` (view
+  // squares), growing with it and then fading, like a trail through the air.
+  let streakId = 0;
+  function streak(from, to, ms, easing) {
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('class', 'streak');
+    svg.setAttribute('viewBox', `0 0 ${COLS * 100} ${ROWS * 100}`);
+    svg.setAttribute('preserveAspectRatio', 'none');
+    const [x1, y1, x2, y2] = [(from.x + 0.5) * 100, (from.y + 0.5) * 100, (to.x + 0.5) * 100, (to.y + 0.5) * 100];
+    const id = `streak${++streakId}`;
+    svg.innerHTML = `<defs><linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.7" stop-color="#fff" stop-opacity="0.55"/><stop offset="1" stop-color="#fff" stop-opacity="0.95"/></linearGradient></defs>`
+      + `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="url(#${id})" stroke-width="7" stroke-linecap="round" vector-effect="non-scaling-stroke" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1"/>`;
+    layer.append(svg);
+    const line = svg.querySelector('line');
+    line.animate([{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], { duration: ms, easing, fill: 'forwards' });
+    svg.animate([{ opacity: 1 }, { opacity: 1, offset: 0.55 }, { opacity: 0 }], { duration: ms + 380 / speed }).onfinish = () => svg.remove();
+  }
+
   function projectile(from, to, color, big) {
     const dx = to.x - from.x;
     const dy = to.y - from.y;
@@ -1266,9 +1341,92 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       }
       case 'summon': {
         const pal = ctx.addActor(ev.unit);
-        if (animate) { play(pal.el, 'spawned', 400); const p = viewPos(pal.x, pal.y); fx(p.x, p.y, 'ring', fxColor(pal.unitId), 1.3); }
+        if (!animate) break;
+        const p = viewPos(pal.x, pal.y);
+        if (ev.dart) {
+          // Dragapult's Dreepy: shot out of Dragapult like Tapu Koko's dash, a
+          // fast straight streak with sparks behind it, small at first and full
+          // size as it lands (onto its target, which is shoved aside on arrival).
+          pal.el.style.visibility = 'hidden';
+          const from = at();
+          const dx = p.x - from.x;
+          const dy = p.y - from.y;
+          const squares = Math.max(Math.abs(dx), Math.abs(dy));
+          const ms = Math.max(160, 55 * squares) / speed;
+          const color = fxColor(pal.unitId);
+          const flyer = document.createElement('div');
+          flyer.className = 'unit sprite-unit dart-flyer dashing';
+          flyer.style.setProperty('--fx', color);
+          flyer.dataset.facing = facingFor(Math.abs(dx) >= Math.abs(dy) ? dx : 0, Math.abs(dx) >= Math.abs(dy) ? 0 : dy, 'down');
+          flyer.innerHTML = `<div class="body"><div class="sprite" style="background-image:url('${catalog[pal.unitId]?.sprite ?? ''}')"></div></div>`;
+          place(flyer, from.x, from.y);
+          layer.append(flyer);
+          const ease = 'cubic-bezier(.6,0,.2,1)';
+          flyer.animate([{ translate: '0 0', scale: '0.35' }, { translate: `${dx * 100}% ${dy * 100}%`, scale: '1' }], { duration: ms, easing: ease }).onfinish = () => flyer.remove();
+          streak(from, p, ms, ease);
+          // Its hit, stun and shove all land when it arrives.
+          ctx.srcDelay.set(pal.id, ms);
+          ctx.hitDelay.set(ev.target, ms);
+          ctx.hitDelay.set(pal.id, ms);
+          later(ms, () => { pal.el.style.visibility = ''; play(pal.el, 'spawned', 300); fx(p.x, p.y, 'burst', fxColor(pal.unitId), 1.2); });
+        } else { play(pal.el, 'spawned', 400); fx(p.x, p.y, 'ring', fxColor(pal.unitId), 1.3); }
         break;
       }
+      case 'dartReturn': { // a fainted Dreepy is knocked away by the hit, then arcs back to Dragapult
+        if (!animate) break;
+        const dreepy = actors.get(ev.dreepy);
+        const hitter = dreepy?.lastHitBy;
+        const from = viewPos(ev.fromX, ev.fromY);
+        const home = at(); // Dragapult, in squares
+        const ms = Math.max(ev.duration * TICK_MS, 500) / speed;
+        later(ctx.hitDelay.get(ev.dreepy) ?? 0, () => {
+          const ghost = document.createElement('div');
+          ghost.className = 'unit sprite-unit dart-ghost';
+          ghost.dataset.facing = 'down';
+          ghost.innerHTML = `<div class="body"><div class="sprite" style="background-image:url('${catalog[ev.unitId]?.sprite ?? ''}')"></div></div>`;
+          place(ghost, from.x, from.y);
+          layer.append(ghost);
+          // Knocked a square away from whoever hit it (straight up if unknown)...
+          const by = hitter ? viewPos(hitter.x, hitter.y) : { x: from.x, y: from.y + 1 };
+          let dx = from.x - by.x;
+          let dy = from.y - by.y;
+          const len = Math.hypot(dx, dy) || 1;
+          dx = (dx / len) * 0.9;
+          dy = (dy / len) * 0.9;
+          // ...then a curve up and over back home (a quadratic arc).
+          const end = { x: home.x - from.x, y: home.y - from.y };
+          const peak = { x: (dx + end.x) / 2, y: Math.min(dy, end.y) - 1.2 - Math.hypot(end.x - dx, end.y - dy) * 0.25 };
+          const frames = [{ offset: 0, translate: '0 0', rotate: '0deg', opacity: 0.6 }];
+          frames.push({ offset: 0.3, translate: `${dx * 100}% ${dy * 100}%`, rotate: `${dx >= 0 ? 200 : -200}deg`, opacity: 0.45, easing: 'ease-in-out' });
+          for (let k = 1; k <= 8; k++) {
+            const q = k / 8;
+            const x = (1 - q) ** 2 * dx + 2 * (1 - q) * q * peak.x + q ** 2 * end.x;
+            const y = (1 - q) ** 2 * dy + 2 * (1 - q) * q * peak.y + q ** 2 * end.y;
+            frames.push({ offset: 0.3 + 0.7 * q, translate: `${x * 100}% ${y * 100}%`, rotate: `${(dx >= 0 ? 200 : -200) + (dx >= 0 ? 160 : -160) * q}deg`, opacity: 0.45 - 0.25 * q });
+          }
+          ghost.animate(frames, { duration: ms, easing: 'linear' }).onfinish = () => ghost.remove();
+        });
+        break;
+      }
+      case 'taunt': { // Amoonguss: this Pokémon must attack it for a while
+        a.tauntUntil = ev.t + ev.duration;
+        a.tauntBy = ev.by;
+        a.el.classList.add('taunted');
+        if (animate && ev.dart) {
+          later(ctx.hitDelay.get(ev.by) ?? 0, () => floatText(a, 'Distracted', 'taunt'));
+        } else if (animate) {
+          const from = actors.get(ev.by);
+          const ms = from ? projectile(viewPos(from.x, from.y), at(), '#ff6fa8', false) : 0;
+          later(ms, () => { floatText(a, 'Taunted', 'taunt'); fx(at().x, at().y, 'burst', '#ff6fa8', 1.2); });
+        }
+        break;
+      }
+      case 'rage': // Annihilape: faster with every attack in a row
+        a.el.dataset.rage = ev.stacks;
+        a.el.classList.toggle('raging', ev.stacks > 0);
+        a.el.style.setProperty('--rage', ev.stacks);
+        if (animate && ev.stacks) floatText(a, `+${ev.pct}% speed`, 'rage');
+        break;
       case 'knock': {
         a.x = ev.x;
         a.y = ev.y;
@@ -1421,6 +1579,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         const delay = animate ? ctx.srcDelay.get(ev.src) ?? 0 : 0;
         if (delay) ctx.hitDelay.set(a.id, delay);
         const src = actors.get(ev.src);
+        if (src) a.lastHitBy = src; // which way it flies if this knocks it out (Dreepy)
         later(delay, () => {
           if (newest()) {
             a.hp = ev.hp;
@@ -1457,24 +1616,48 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       case 'guard': // Alcremie's Mint Cream: a shield bubble for a while
         a.guardUntil = ev.t + ev.duration;
         a.el.classList.add('guarded');
-        if (animate) floatText(a, 'Shielded', 'guard');
         break;
       case 'guardBreak':
         a.guardUntil = 0;
         a.el.classList.remove('guarded');
+        if (a.el.dataset.treat === 'guard') { a.treatUntil = 0; a.el.classList.remove('treated'); delete a.el.dataset.treat; }
         if (animate) { floatText(a, 'Shield broke', 'guard'); fx(at().x, at().y, 'burst', '#9fd8ff', 1.2); }
         break;
-      case 'treat': { // Alcremie: who got the treat
+      case 'treat': { // Alcremie: the treat flies to the ally it picked, which wears it for the duration
         const to = actors.get(ev.target);
-        if (to && animate) {
-          const color = { heal: '#7fe08a', haste: '#ff8fb0', guard: '#9fd8ff' }[ev.flavor];
+        if (!to) break;
+        const color = TREAT_COLOR[ev.flavor];
+        const wear = () => {
+          to.treatUntil = ev.t + ev.duration;
+          to.el.dataset.treat = ev.flavor;
+          to.el.style.setProperty('--treat', color);
+          to.el.classList.add('treated');
+        };
+        if (!animate) { wear(); break; }
+        const ms = to === a ? 0 : projectile(at(), viewPos(to.x, to.y), color, true);
+        later(ms, () => {
+          wear();
           const p = viewPos(to.x, to.y);
           fx(p.x, p.y, 'burst', color, 1.4);
-          if (ev.flavor === 'heal') floatText(to, 'Sweet heal', 'heal');
-          if (ev.flavor === 'haste') floatText(to, 'Faster!', 'cast');
-        }
+          floatText(to, TREAT_TEXT[ev.flavor], ev.flavor === 'heal' ? 'heal' : ev.flavor === 'guard' ? 'guard' : 'cast');
+        });
         break;
       }
+      case 'bind': { // Hoopa: rings hold the Pokémon in place for a while
+        const from = actors.get(ev.by);
+        const wear = () => {
+          a.boundUntil = ev.t + ev.duration;
+          a.el.classList.add('bound');
+        };
+        if (!animate) { wear(); break; }
+        const ms = from ? projectile(viewPos(from.x, from.y), at(), '#ff8ad8', true) : 0;
+        later(ms, () => { wear(); floatText(a, 'Bound', 'bind'); fx(at().x, at().y, 'burst', '#ff8ad8', 1.3); });
+        break;
+      }
+      case 'boost': // Toxtricity's Overdrive: power charges for an ally beside it
+        if (newest()) { setMana(ev.mana); bars(a); }
+        if (animate) { floatText(a, `+${ev.amount} charge`, 'boost'); fx(at().x, at().y, 'burst', '#ffe14d', 1.1); }
+        break;
       case 'chill': { // Frosmoth: slower for a while (each hit restarts it)
         const fresh = !(a.chillUntil && ev.t < a.chillUntil);
         a.chillUntil = ev.t + ev.duration + 1;
@@ -1602,8 +1785,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       ${online && viewer === 1
         ? '<button id="play-again" class="primary">Ask for a rematch</button>'
         : `<button id="play-again" class="primary">${online ? 'Rematch' : 'Play again'}</button>`}
-      <button id="game-log" class="ghost">Copy match log</button>
-      ${online ? '<button id="leave-match" class="ghost">Leave</button>' : ''}`);
+      <button id="to-menu">Main menu</button>
+      <button id="game-log" class="ghost">Match log (copy or download)</button>`);
   }
 
   // ---- online lobby ----------------------------------------------------------
@@ -1680,7 +1863,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         <p>${esc(data.error)}</p>
         <button class="primary" data-lobby="home">Back to start</button>
         ${data.log ? `<p class="muted small">Did the connection drop? Copy the match log and send it in: it shows what happened to the connection.</p>
-        <button class="ghost" data-copy="${esc(data.log)}">Copy match log</button>` : ''}`,
+        <button class="ghost" data-copy="${esc(data.log)}">Copy match log</button>
+        <button class="ghost" data-download="${esc(data.log)}">Download match log</button>` : ''}`,
     }[view]();
     // No match has started for this player yet: the start screen stays behind
     // the pop-up (never an empty board).
@@ -1833,14 +2017,14 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   const summonIds = () => Object.keys(catalog).filter((id) => catalog[id].summon).sort();
   // A transformed form as a Pokémon of its own (HP carries over when the form has none).
   // A Pokémon's forms: Greninja's or Minior's one transformation, Alcremie's flavours.
-  const formsOf = (def) => (def.ability?.form ? [def.ability.form] : def.ability?.flavors ?? []);
+  const formsOf = (def) => (def.ability?.form ? [def.ability.form] : def.ability?.chargedForm ? [def.ability.chargedForm] : def.ability?.flavors ?? []);
   const formDef = (def, i = 0) => {
     const f = formsOf(def)[i];
     return { ...def, ...f, hp: f.hp ?? def.hp, energy: f.energy ?? 0, ability: null, form: true };
   };
   const formKey = (id, i) => `form:${id}:${i}`;
   // Who summons this Pokémon.
-  const summonersOf = (id) => troopIds(catalog).filter((t) => catalog[t].ability?.kind === 'summon' && catalog[t].ability.unit === id);
+  const summonersOf = (id) => troopIds(catalog).filter((t) => ['summon', 'darts'].includes(catalog[t].ability?.kind) && catalog[t].ability.unit === id);
 
   function dexCard(id) {
     const def = catalog[id];
@@ -1921,7 +2105,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     const st = unitStats(def, star);
     let power = '';
     const f = formOf && formsOf(formOf)[formIndex];
-    if (f?.flavor) {
+    if (f && f === formOf.ability.chargedForm) {
+      power = `${esc(formOf.name)} takes this form while its power is charged, and turns back when it binds a Pokémon. Same stats as ${esc(formOf.name)}.`;
+    } else if (f?.flavor) {
       // An Alcremie flavour: what its treat does.
       const p = formOf.ability;
       const amount = (pct) => show(Math.floor((formOf.damage[star] * STAT_SCALE * pct) / 100));
@@ -2061,7 +2247,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       if (isForm && i === dexForm) return;
       related.push([formDef(base, i), `data-dex-form="${dexPick}:${i}"`, `${isForm ? 'Also becomes' : forms.length > 1 ? 'Can become' : 'Transforms into'} ${f.name}`, formKey(dexPick, i)]);
     });
-    if (!isForm && def.ability?.kind === 'summon' && catalog[def.ability.unit]) related.push([catalog[def.ability.unit], `data-dex="${def.ability.unit}"`, `Summons ${catalog[def.ability.unit].name}`, def.ability.unit]);
+    if (!isForm && ['summon', 'darts'].includes(def.ability?.kind) && catalog[def.ability.unit]) related.push([catalog[def.ability.unit], `data-dex="${def.ability.unit}"`, `Summons ${catalog[def.ability.unit].name}`, def.ability.unit]);
     if (def.summon) for (const t of summonersOf(dexPick)) related.push([catalog[t], `data-dex="${t}"`, `Summoned by ${catalog[t].name}`, t]);
     const sprite = (d, cls, key) => `<span class="portrait ${cls}" data-facing="down" data-key="${key}"><span class="sprite" ${spriteStyle(d)}></span></span>`;
     const relatedHtml = related.map(([d, attrs, label, key]) => `<button class="dex-rel" ${attrs} title="${esc(label)}" aria-label="${esc(label)}">${sprite(d, 'dex-rel-sprite', key)}</button>`).join('');

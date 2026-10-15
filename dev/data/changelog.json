@@ -1,5 +1,17 @@
 [
   {
+    "id": "2026-10-15-dragapult-alternate",
+    "version": "0.36.0",
+    "date": "2026-10-15",
+    "title": "Dragapult: attack, Dreepy, attack, Dreepy",
+    "intro": "Dragapult now alternates: after each attack, its next action fires a Dreepy (when one is home). About 10 Dreepy a fight.",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "change", "text": "Its power fills with 1 attack (was 2). When it's full, its next action fires a Dreepy instead of attacking or stepping, after its usual 0.8s wait (was on its own, 0.5s after filling)." },
+      { "pokemon": "dragapult", "kind": "buff", "text": "800 HP at ★ (was 550), 50 damage (was 45), attacking every 0.8s (was 0.9s)." },
+      { "pokemon": "dreepy", "kind": "buff", "text": "HP 230 / 275 / 330 / 400 by level (was 150 / 180 / 215 / 260), so each one holds attention longer." }
+    ]
+  },
+  {
     "id": "2026-10-15-dragapult-heavier",
     "version": "0.35.1",
     "date": "2026-10-15",

@@ -1,8 +1,8 @@
 // Dummy opponent. It plays through the exact same intent API as a human, so
 // in Phase 3 a remote guest can take its seat without touching the rules.
 
-import { MAX_STAR, REROLL_COST, fielded, teamSize, troopIds } from './game.js?v=305a902';
-import { COLS, HALF } from './combat.js?v=305a902';
+import { MAX_STAR, REROLL_COST, fielded, teamSize, troopIds } from './game.js?v=d2953cb';
+import { COLS, HALF } from './combat.js?v=d2953cb';
 
 // Columns ordered from the centre outwards, e.g. [2, 1, 3, 0, 4] for 5 columns.
 const CENTER_OUT = [...Array(COLS).keys()].sort((a, b) => Math.abs(2 * a - (COLS - 1)) - Math.abs(2 * b - (COLS - 1)) || a - b);
@@ -53,7 +53,7 @@ export function botTurn(state, catalog, p, send, { arrange = true } = {}) {
 
 const STURDY_HP = 900;
 function roleOf(def) {
-  if (def.ability?.kind === 'splashHeal' || def.ability?.kind === 'treat') return 'healer';
+  if (['splashHeal', 'treat', 'boost'].includes(def.ability?.kind)) return 'healer';
   if (def.ability?.kind === 'copy' || def.ability?.teleport || def.ability?.dash) return 'rusher';
   if (def.range <= 1) return def.hp[0] >= STURDY_HP ? 'tank' : 'melee';
   return 'ranged';
