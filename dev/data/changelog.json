@@ -1,5 +1,14 @@
 [
   {
+    "id": "2026-10-15-hoopa-4-charges",
+    "version": "0.37.4",
+    "date": "2026-10-15",
+    "title": "Hoopa recharges faster",
+    "changes": [
+      { "pokemon": "hoopa", "kind": "buff", "text": "Binding Ring now needs 4 attacks instead of 5, so Hoopa gets its power back sooner." }
+    ]
+  },
+  {
     "id": "2026-10-15-hoopa-stop-move",
     "version": "0.37.3",
     "date": "2026-10-15",
