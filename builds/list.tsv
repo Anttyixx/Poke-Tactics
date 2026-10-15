@@ -1,3 +1,4 @@
+f8c4cb9	dev	2026-10-15 03:29 UTC	Save Dragapult + Dreepy as dragapult-v1 (stats, rules, win rates) to restore later
 45c1684	dev	2026-10-15 00:26 UTC	Dreepy launch leaves a white streak; target's hit/stun/shove shown on arrival; lured target attacks the Dreepy right after the stun; Dragapult every 1.6s; Amoonguss pull lands at end of tick (0.33.2)
 87501bd	dev	2026-10-14 22:46 UTC	Dreepy launch looks like a dash (fast straight streak with sparks, growing); firing waits for Dragapult's attack timer, so no launch before a full cooldown (0.33.1)
 b70b646	dev	2026-10-14 22:22 UTC	Dragapult fires both Dreepy on its next action (attack or step); Dreepy shot out of Dragapult in a growing arc; attacks every 1.7s (0.33.0)
@@ -27,4 +28,3 @@ d9ee80b	dev	2026-10-14 05:13 UTC	Bot: rearrange the board before every fight by 
 3a92dce	dev	2026-10-14 04:39 UTC	Match replay: write an HTML report with HP chart, boards per round and suggested layouts
 b8bc31b	dev	2026-10-14 04:10 UTC	Pokédex: label the movement chip Speed
 8c7fc48	dev	2026-10-14 04:10 UTC	Team selection: Pokédex-style cards, picked ones walk with a green border, update in place
-faf64fb	dev	2026-10-14 04:06 UTC	Stat shape: headroom so the best stat stops short of the edge
