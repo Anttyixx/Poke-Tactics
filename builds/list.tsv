@@ -1,3 +1,4 @@
+fa0c7eb	dev	2026-10-15 05:22 UTC	Dragapult 45 dmg every 0.9s, 2-charge power, 550 HP; Dreepy landing 80/96/115/138, Dreepy dmg 12/15/19/23 (0.35.1)
 580b5d4	dev	2026-10-15 05:00 UTC	Dragapult: ~9 Dreepy per fight: attacks every 0.6s for 27, landing hit 40/48/58/69 (0.35.0)
 cd50a55	dev	2026-10-15 04:41 UTC	Dreepy landing hit doubled: 100/120/144/172 (0.34.2)
 692f7ed	dev	2026-10-15 04:35 UTC	Dragapult fires a Dreepy on its own 0.5s after its power fills (no attack used); attacks every 0.9s (0.34.1)
@@ -27,4 +28,3 @@ dab82bd	dev	2026-10-14 06:41 UTC	Hoopa rework: Binding Ring holds the next enemy
 78e1eb4	dev	2026-10-14 06:31 UTC	Toxtricity rework: Overdrive gives +2 power charges to allies in the plus around it
 e8c3d5e	dev	2026-10-14 05:51 UTC	Alcremie treat visuals, Main menu after a match, downloadable match log with each fight's seed and chance outcomes
 305a902	dev	2026-10-14 05:34 UTC	New Pokémon: Alcremie (Sweet Treat: random flavour heals, hastes or shields an ally)
-d9ee80b	dev	2026-10-14 05:13 UTC	Bot: rearrange the board before every fight by explained layout rules

@@ -1,5 +1,19 @@
 [
   {
+    "id": "2026-10-15-dragapult-heavier",
+    "version": "0.35.1",
+    "date": "2026-10-15",
+    "title": "Dragapult hits harder, Dreepy crash harder",
+    "intro": "Bigger numbers where they count: Dragapult's attacks and the Dreepy crash. Still about 8 Dreepy a fight.",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "buff", "text": "Damage 45 at ★ (was 27), attacking every 0.9s (was 0.6s)." },
+      { "pokemon": "dreepy", "kind": "buff", "text": "Landing hit 80 / 96 / 115 / 138 by level (was 40 / 48 / 58 / 69). The 0.5s stun is unchanged." },
+      { "pokemon": "dragapult", "kind": "change", "text": "Its power fills with 2 attacks (was 3), so it still fires about 8 Dreepy a fight." },
+      { "pokemon": "dreepy", "kind": "nerf", "text": "Damage 12 / 15 / 19 / 23 by level (was 20 / 25 / 31 / 38): they're a distraction, not a damage dealer." },
+      { "pokemon": "dragapult", "kind": "nerf", "text": "HP 550 at ★ (was 750): more fragile to pay for the rest." }
+    ]
+  },
+  {
     "id": "2026-10-15-dragapult-more-shots",
     "version": "0.35.0",
     "date": "2026-10-15",
