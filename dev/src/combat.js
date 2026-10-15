@@ -216,8 +216,8 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     if (bound(u)) return true;
     if (immune(u)) return false;
     // Hoopa (`pick: 'move'`): a full charge rings the first enemy about to
-    // change squares by itself (a step, a zip, a dash, a teleport). That move
-    // still happens; the rings stop its next `breakAfter` tries.
+    // change squares by itself (a step, a zip, a dash, a teleport), just before
+    // it goes. That move is stopped and is already its first try against the rings.
     const ringer = ringers.length ? ringers.find((h) => h.side !== u.side && h.ringReady && h.ringUsed !== t) : null;
     if (ringer) {
       ringer.ringUsed = t;
@@ -226,7 +226,8 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
       u.boundBy = ringer.id;
       u.bindTries = 0;
       record && emit('bind', { id: u.id, by: ringer.id, breakAfter: ringer.power.breakAfter });
-      return false;
+      strain(u);
+      return true;
     }
     const ready = (h) => (h.power.noCounter ? !(t <= h.bindingUntil) : h.maxMana > 0 && h.mana >= h.maxMana);
     const hoopa = units.find((h) => h.side !== u.side && standing(h) && h.powerKind === 'bind' && !h.power.targeted && !h.copyOf && ready(h) && !(h.power.noRepeat && h.lastBound === u.id));
@@ -426,7 +427,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
   // Shove `u` to (x, y) without walking: knockbacks and teleports.
   function relocate(u, cell, type, extra) {
     if (u.x === cell.x && u.y === cell.y) return;
-    if (type === 'knock') unbind(u, 'moved'); // shoved or knocked to another square: the rings snap
+    unbind(u, 'moved'); // shoved or knocked to another square: the rings snap
     u.x = cell.x;
     u.y = cell.y;
     u.movedSinceHit = true;

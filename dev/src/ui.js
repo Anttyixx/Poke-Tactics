@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=9ed27e4';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=3d1c200';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=9ed27e4';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=9ed27e4';
+} from './game.js?v=3d1c200';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=3d1c200';
 
 const TICK_MS = 100;
 // Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
@@ -65,7 +65,7 @@ export function powerText(def, star, catalog) {
       return { when: every, text: `Its next attack hits for ${hit}${extra.length ? `${extra.length === 1 ? ' and ' : ', '}${extra.join(' and ')}` : ''}.` };
     }
     case 'bind': {
-      if (p.targeted) return { when: `After ${def.energy} attacks`, text: `${p.pick === 'move' ? 'Holds its full charge until an enemy tries to change squares by itself (a step, or an ability that moves it), then binds that one in rings as it moves. Being shoved by an enemy attack never triggers it.' : "Binds the Pokémon it's attacking in rings (if that one is already bound, the nearest enemy that isn't)."} A bound Pokémon still attacks anything in range, but can't walk, zip or dash. The rings stop its next ${vNum(p.breakAfter)} tries to move (each one weakens them), then break. They also snap at once if it's shoved or knocked to another square, or knocked out.` };
+      if (p.targeted) return { when: `After ${def.energy} attacks`, text: `${p.pick === 'move' ? 'Holds its full charge until an enemy tries to change squares by itself (a step, or an ability that moves it), then binds that one in rings just before it goes: the move (or moving power, like a dash) is stopped and counts as its first try to break free. Being shoved by an enemy attack never triggers it.' : "Binds the Pokémon it's attacking in rings (if that one is already bound, the nearest enemy that isn't)."} A bound Pokémon still attacks anything in range, but can't walk, zip or dash. The rings stop its next ${vNum(p.breakAfter)} tries to move (each one weakens them), then break. They also snap at once if it's shoved or knocked to another square, or knocked out.` };
       const start = p.startCharged ? 'It starts the fight charged and refills' : 'Its power fills';
       return { when: `After ${def.energy} attacks`, text: `${start} after ${vNum(def.energy)} attacks, then waits until an enemy tries to move. Hoopa binds that Pokémon in place for ${vTime(p.duration)}: it can't walk, zip or dash, but it still attacks anything in range.${p.noRepeat ? ' It never binds the same Pokémon twice in a row.' : ''}${p.chargedForm ? ` While charged it becomes ${esc(p.chargedForm.name)}.` : ''}` };
     }
