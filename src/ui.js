@@ -1654,7 +1654,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         break;
       }
       case 'morphStart': { // Minior (immune) or Ditto changing form
-        // Minior's Rock form breaking: Star Form's own, full HP bar.
+        // A form that starts with its own HP: a fresh, full HP bar.
         if (ev.maxHp && newest()) { a.maxHp = ev.maxHp; a.hp = ev.hp; a.shield = 0; later(ctx.hitDelay.get(a.id) ?? 0, () => bars(a)); }
         if (!animate) break;
         const immune = catalog[a.unitId].ability?.kind === 'transform';

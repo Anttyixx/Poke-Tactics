@@ -998,31 +998,35 @@ test('Self-Destruct (Golem): knocked out, it stays put 3s, then explodes on adja
   assert.ok(!r.events.some((e) => e.type === 'damage' && e.id === g && e.t > fuse.t), 'it cannot be hit while the fuse burns');
 });
 
-test('Shining Star (Minior): knocked out in Rock form, it comes back as Star Form with its own HP after 0.5s immune', () => {
+test('Shining Star (Minior): at 35% HP Rock form becomes Star Form, keeping its HP, after 0.5s immune; a knockout is a real knockout', () => {
   const cat = powerCat();
   cat.brute = { ...cat.wall, range: 1, secPerHit: 1, damage: [125, 125, 125, 125] };
   cat.stunner = { ...cat.brute, energy: 1, ability: { name: 'Stun', kind: 'empower', damagePct: 100, stun: 10 } };
-  const form = catalog.minior.ability.form;
+  const p = catalog.minior.ability;
+  assert.equal(p.trigger, 'lowHp');
+  assert.ok(!p.form.hp, 'Star Form has no HP of its own: it keeps what Rock form had left');
   for (const foe of ['brute', 'stunner']) {
     const r = simulate(cat, [[{ uid: 1, unitId: 'minior', star: 0, x: 2, y: 0 }], [{ uid: 2, unitId: foe, star: 0, x: 2, y: 0 }]], 1);
-    const m = unitOf(r, 1).id;
+    const u = unitOf(r, 1);
+    const m = u.id;
     const hits = r.events.filter((e) => e.type === 'damage' && e.id === m);
-    const ko = hits.find((e) => e.hp === 0);
     const start = evs(r, 'morphStart', m)[0];
-    assert.ok(ko && start, 'Rock form is knocked out, then starts transforming');
-    assert.equal(start.t, ko.t, 'in the same tick');
-    assert.ok(hits.filter((e) => e.t < ko.t).every((e) => e.hp > 0), 'only once its Rock form HP is gone');
-    assert.equal(start.hp, form.hp[0], 'with Star Form\'s own HP');
-    assert.equal(start.maxHp, form.hp[0]);
-    const deaths = evs(r, 'death', m);
-    assert.ok(deaths.every((e) => e.t > start.t), 'Rock form breaking is not a knockout');
+    assert.ok(start, 'it starts transforming');
+    const cross = hits.find((e) => e.hp * 100 <= u.maxHp * p.hpPct);
+    assert.equal(start.t, cross.t, 'in the tick it drops to 35% HP');
+    assert.ok(hits.filter((e) => e.t < cross.t).every((e) => e.hp * 100 > u.maxHp * p.hpPct), 'not before');
     const tf = evs(r, 'transform', m)[0];
-    assert.equal(tf.t, start.t + 5, 'takes 0.5s');
-    assert.equal(tf.sprite, form.sprite);
+    assert.equal(tf.t, start.t + p.morph, 'takes 0.5s');
+    assert.equal(tf.sprite, p.form.sprite);
     assert.ok(!hits.some((e) => e.t > start.t && e.t <= tf.t), 'no damage while transforming');
     assert.ok(!evs(r, 'stun', m).some((e) => e.t > start.t && e.t <= tf.t), 'no stuns while transforming');
     assert.ok(!r.events.some((e) => e.src === m && e.t > start.t && e.t <= tf.t), 'it does nothing while transforming');
-    assert.equal(evs(r, 'morphStart', m).length, 1, 'Star Form doesn\'t come back again');
+    const after = hits.find((e) => e.t > tf.t);
+    assert.ok(after.hp < cross.hp, 'Star Form carries on from the HP it had (no refill)');
+    const ko = hits.find((e) => e.hp === 0);
+    assert.ok(ko && ko.t > tf.t, 'Star Form is knocked out in the end');
+    assert.equal(evs(r, 'death', m)[0]?.t, ko.t, 'and that is a real knockout');
+    assert.equal(evs(r, 'morphStart', m).length, 1, 'it transforms once');
   }
 });
 

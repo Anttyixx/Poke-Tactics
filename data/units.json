@@ -62,8 +62,8 @@
   },
   "minior": {
     "name": "Minior", "sprite": "assets/sprites/minior.png", "fx": "#ff7aa8", "type": "mage", "cost": 4,
-    "hp": [1100, 1870, 3179, 5390], "damage": [30, 51, 87, 147], "range": 1, "moveSpeed": "very slow", "secPerHit": 3.0, "critChance": 15, "energy": 0,
-    "ability": {"name": "Shining Star", "kind": "transform", "trigger": "knockedOut", "morph": 5, "form": {"name": "Minior (Star Form)", "sprite": "assets/sprites/minior-star.png", "hp": [600, 1020, 1734, 2940], "moveSpeed": "very fast", "secPerHit": 0.3, "damage": [20, 34, 58, 98], "range": 1, "blink": true, "shockwave": {"radius": 1, "stun": 10}, "hop": true, "energy": 10}}
+    "hp": [1700, 2890, 4913, 8330], "damage": [30, 51, 87, 147], "range": 1, "moveSpeed": "very slow", "secPerHit": 3.0, "critChance": 15, "energy": 0,
+    "ability": {"name": "Shining Star", "kind": "transform", "trigger": "lowHp", "hpPct": 35, "morph": 5, "form": {"name": "Minior (Star Form)", "sprite": "assets/sprites/minior-star.png", "moveSpeed": "very fast", "secPerHit": 0.3, "damage": [20, 34, 58, 98], "range": 1, "blink": true, "shockwave": {"radius": 1, "stun": 10}, "hop": true, "energy": 10}}
   },
   "tapukoko": {
     "name": "Tapu Koko", "sprite": "assets/sprites/tapukoko.png", "fx": "#ffe14d", "type": "rogue", "cost": 4,
