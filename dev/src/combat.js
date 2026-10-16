@@ -1112,7 +1112,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
         // Annihilape: every attack in a row without moving makes the next ones faster.
         if (u.powerKind === 'rage') {
           const was = u.rage;
-          u.rage = u.movedSinceHit ? 0 : Math.min(u.power.maxStacks, u.rage + 1);
+          u.rage = u.movedSinceHit ? 0 : u.power.maxStacks ? Math.min(u.power.maxStacks, u.rage + 1) : u.rage + 1; // no cap unless the power sets one
           u.movedSinceHit = false;
           if (u.rage !== was) record && emit('rage', { id: u.id, stacks: u.rage, pct: u.rage * u.power.stackPct });
         }

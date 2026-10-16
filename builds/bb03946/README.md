@@ -162,7 +162,7 @@ test a set of changes together. Team styles to pit against each other live in `A
 ## How to play
 
 - **Start:** the game opens on a start screen; **Battle** plays a friend online (above); **Training** plays the bot. Pokémon are shown as
-  cards (cost in the corner); tap one to pick it, or its **i** for its stats and power.
+  cards (cost in the corner); tap one to pick it, or its **i** for its stats and ability.
 - **Profile:** the chip at the top left of the start screen (or Menu → Profile) sets your name and
   a profile picture from a fixed list (the Pokémon sprites' front frame, cropped and centred into
   `assets/avatars/`; to change the list, edit `AVATARS` in `src/profile.js` and run
@@ -202,44 +202,45 @@ test a set of changes together. Team styles to pit against each other live in `A
   it, diagonals included; range 2 the 5x5; and so on. Each step takes 0.5s; movement speed is how long a unit waits before each
   step (before its first one too): very fast 0.35s, fast 0.5s, medium 0.8s, slow 1.0s, very slow 1.3s,
   super slow 2.0s. So a medium unit covers a square every 1.3s. A unit can't attack until it finishes its step. A unit attacks every `secPerHit` seconds; each basic attack
-  has a `critChance`% chance to crit for 50% more damage (powers never crit). Each tick resolves
+  has a `critChance`% chance to crit for 50% more damage (abilities never crit). Each tick resolves
   simultaneously, and crit luck is shared slot for slot between the sides, so neither side gets an edge.
-- **Powers:** every Pokémon has one. Most count attacks (the purple bar). Every fight starts with the bar
+- **Abilities:** every Pokémon has one. Most count attacks (the purple bar). Every fight starts with the bar
   empty and a full attack cooldown before anyone's first hit, and progress is never lost mid-fight:
   - Mawile, **Jaw Lock**: after 8 attacks, the next hits for 130% and stuns for 1s. *Disabled for now*
     (`"disabled": true` in units.json keeps a Pokémon out of team picks, shops and the Pokédex).
   - Beheeyem, **Psywave**: at the start of battle, a wave flies down its column to the other end of the
     board. The first enemy it hits takes 50% and is carried to that end, then is stunned for 1s; anyone
     already there is pushed to the side. Both sit out until the wave lands.
-  - Toxtricity (cost 3, ranger, range 2, attacks every 1.25s), **Overdrive**: every 3 attacks, each ally
-    directly left, right, in front of and behind it that has a power counter gains +2 toward its power
-    (never past full; at the end of the tick, like all power progress).
+  - Toxtricity (cost 3, Ranged, range 2, attacks every 1.25s), **Overdrive**: every 3 attacks, each ally
+    directly left, right, in front of and behind it that has an ability counter gains +2 toward its ability
+    (never past full; at the end of the tick, like all ability progress).
   - Vespiquen, **Attack Order**: every 6 attacks, summons 2 Combee beside it: its sides first, then
     behind, in front, and the diagonals from back to front. Combee come at Vespiquen's star level. They fight but never count as survivors for round damage. With no free square,
-    the power stays charged and tries again after the next attack.
+    the ability stays charged and tries again after the next attack.
   - Coalossal, **Heat Crash**: after 6 attacks, the next hits for 130%, knocks the target back 2 squares
     and stuns it for 1s.
   - Decidueye, **Phantom Force**: after 8 attacks, invisible for 3s and attacks 30% faster. Enemies can't
     target or follow an invisible unit.
   - Infernape, **Blaze**: after 7 attacks, attacks 50% faster for 3s.
-  - Hoopa (cost 3, mage, range 2, attacks every 1.11s), **Binding Ring**: it starts the fight charged
-    (shown as Hoopa Unbound) and waits until an enemy tries to move (walk, zip or dash). That Pokémon
-    is bound in place for 3s: it can't move, but it still attacks anything in range. Hoopa turns back,
-    refills after 2 attacks, and never binds the same Pokémon twice in a row.
-  - Amoonguss (cost 4, warrior, tank), **Rage Powder**: every 2 attacks, the hardest-hitting enemy
+  - Hoopa (cost 3, Special, range 2, attacks every 1.0s), **Binding Ring**: after 4 attacks it holds its
+    charge until an enemy is about to change squares by itself (a step, or an ability that moves it, like
+    a dash or a zip), and binds that one just before it goes, so the move (or the dash or zip) never happens; being
+    shoved by an attack doesn't count. A bound Pokémon still attacks anything in range, but the rings
+    stop 3 tries to move in all (that first one included, walking or moving abilities), then break. They also snap at once if it's shoved or knocked to another
+    square, or knocked out.
+  - Amoonguss (cost 4, Tank), **Rage Powder**: every 2 attacks, the hardest-hitting enemy
     within the 5x5 around it that is attacking someone else must attack Amoonguss for 5s.
-  - Annihilape (cost 4, warrior), **Rage Fist**: each attack in a row without moving makes it attack
-    20% faster, up to +100% after 5 attacks. Moving (or being moved) resets it.
-  - Dragapult (cost 4, ranger, range 3), **Dragon Darts**: a power counter of 2 attacks. When it's
-    full, it fires one Dreepy on its own 0.5s later (no attack is used), as long as a Dreepy is home
-    (at most 2 can be out at once), at the farthest enemy outside the 3x3 around it (never at a Pokémon
-    right next to it; with none that far, it just attacks). The Dreepy crashes into its target for 80
-    damage (growing slowly with level) and a 0.5s stun, taking its square and shoving it aside (a
+  - Annihilape (cost 4, Tank), **Rage Fist**: each attack in a row without moving makes it attack
+    10% faster, with no cap. Moving (or being moved) resets it.
+  - Dragapult (cost 4, Ranged, range 3), **Dragon Darts**: after each attack made while a Dreepy is
+    home (at most 2 can be out at once; with both out, attacks don't charge it), its next action (an attack or a step, after its usual 0.8s wait)
+    fires one Dreepy instead, at the farthest enemy outside the 3x3 around it (never at a Pokémon
+    right next to it; with none that far, it just attacks). The Dreepy crashes into its target for 50
+    damage at ★ (96 / 115 / 138 at higher levels) and a 0.5s stun, taking its square and shoving it aside (a
     shield breaks instead); once the stun wears off the target attacks that Dreepy right away until
-    it faints. Dreepy have 150 HP and hit for 12 every 0.5s at ★, growing slowly with level. A fainted
-    Dreepy flies back (0.5s). With 2 out, the charge waits, full. Dragapult attacks fast (45 every
-    0.9s) but is fragile (550 HP). Darts fire at the end of the tick, aiming and landing from where everyone stood when it
-    began, so neither side gets an edge.
+    it faints. Dreepy have 230 HP and hit for 12 every 0.5s at ★, growing slowly with level. A fainted
+    Dreepy flies back (0.5s). Dragapult: 800 HP, 50 damage every 0.8s. Darts fire at the end of the
+    tick, aiming and landing from where everyone stood when it began, so neither side gets an edge.
   - Greninja, **Battle Bond**: after 5 attacks, becomes Ash-Greninja for the rest of the fight: fast
     movement, attacks every 0.8s, more damage, range 3 (same HP).
   - Torterra, **Earthquake**: with every 5th attack, every enemy on the board takes 30% and is stunned 1s.
@@ -247,24 +248,24 @@ test a set of changes together. Team styles to pit against each other live in `A
     (diagonals too), for 60% of its damage.
   - Golem, **Self-Destruct**: when knocked out it stays on its square for 3s (it can't be hit), then
     explodes for 300% on enemies in the 3x3 square around it. The fight waits for it.
-  - Frosmoth (cost 3, mage, range 2, attacks every 1.25s), **Frostbite**: no charged power. Every
+  - Frosmoth (cost 3, Special, range 2, attacks every 1.25s), **Frostbite**: no charged ability. Every
     hit chills the target for 3s: it attacks 30% slower and waits 30% longer between steps; another
     hit restarts the timer. Chills land at the end of the tick, like stuns. Chilled Pokémon are
     tinted blue with a snowflake badge.
-  - Alcremie (cost 3, cleric, range 2, attacks every 1.25s), **Sweet Treat**: every 4 attacks it
+  - Alcremie (cost 3, Healer, range 2, attacks every 1.25s), **Sweet Treat**: every 4 attacks it
     changes into a random flavour (seeded, so replays match) and treats one ally for 3s. Matcha
     Cream heals the ally with the lowest share of HP for 600% of its damage, a chunk every second;
     Ruby Cream makes the hardest-hitting ally attack 100% faster; Mint Cream shields the ally most
     enemies are attacking: 40% less damage, and the first stun or shove (knockback, Psywave) that
     would land breaks the shield instead, blocking anything else in that same tick. Treats land
     at the end of the tick. Shielded Pokémon show a bubble.
-  - Minior, **Shining Star**: two lives. Rock form is a slow, soft-hitting wall (very slow, 30 damage
-    every 3.0s, 1100 HP). When it would be knocked out it doesn't faint: at the end of that tick it gets
-    Star Form's own HP (600), spends 0.5s transforming, immune to everything (damage, stuns, knockbacks,
-    sudden death), then becomes Star Form for the rest of the fight. Changing sends out a shock wave
+  - Minior, **Shining Star**: Rock form is a slow, soft-hitting wall (very slow, 30 damage every 3.0s)
+    with a 1100 **shield** over its 600 HP. When the shield breaks (at the end of that tick) it spends
+    0.5s transforming, immune to everything (damage, stuns, knockbacks, sudden death), then becomes Star
+    Form for the rest of the fight, with its HP untouched. Being knocked out is a real knockout. Changing sends out a shock wave
     that stuns every enemy in the 3x3 around it for 1s. Star Form attacks every 0.3s for 20 and doesn't
     walk: it zips straight to the open square beside its target (if all are taken, it walks). Its own
-    power, every 10 attacks: it picks a different enemy (a seeded pick among those with a free square
+    ability, every 10 attacks: it picks a different enemy (a seeded pick among those with a free square
     beside them) and zips there; with no other enemy to reach it moves to another square beside its
     target, and with none free it stays. The purple bar counts toward the next hop. A form with a
     faster attack speed doesn't wait out the old form's attack timer.
@@ -274,7 +275,7 @@ test a set of changes together. Team styles to pit against each other live in `A
     every enemy it passed through are stunned for 1s.
   - Ditto, **Transform**: walks (medium speed) toward the nearest enemy until it's within that enemy's
     range, then takes 1s to transform into it, copying its max HP, damage, attack speed, range and crit
-    (not its power or movement). It keeps its share of HP across the change, shows the copied sprite in
+    (not its ability or movement). It keeps its share of HP across the change, shows the copied sprite in
     Ditto's colours, and doesn't move while transformed. When the copied Pokémon faints or no enemy is in
     range, it turns back into Ditto and walks to the next nearest.
 - **Healing** (Lilligant, Alcremie) lands at the end of each tick, like stuns, so it never depends on who
@@ -286,8 +287,11 @@ test a set of changes together. Team styles to pit against each other live in `A
   forward, else a diagonal (back ones first). If all of those are taken, the launched Pokémon lands
   on the closest free square instead.
 - **Sudden death:** fights have a 30-second timer. When it runs out, every Pokémon still standing loses
-  300 HP per second (the same for everyone, ignoring shields) while the fight carries on, so the weakest
-  fall first until one side is knocked out.
+  300 HP per second (the same for everyone; a shield wears down first, like any damage) while the fight
+  carries on, so the weakest fall first until one side is knocked out.
+- **Shields:** some Pokémon (Minior) start with a shield, a second bar above their HP. While it lasts it
+  takes every hit and HP can't go down; a hit bigger than what's left breaks it and the rest is wasted.
+  A broken shield is gone for the fight, and healing only ever restores HP.
 - **Damage:** the loser takes `round + 2 × (copies in the winner's surviving troops)`. A draw (the last
   Pokémon on both sides fall at the same moment) costs each player `ceil(round / 2)`. Everyone starts at 100 HP.
 - **Keys:** `D` reroll, `F` fight, `E` sell the selected troop, `Space` skip the combat replay, `P` Pokédex,
@@ -301,7 +305,7 @@ styles.css
 assets/sprites/     walk sheets: 256x256, 4x4 grid of 64px frames;
                     rows = facing down, left, right, up; columns = walk cycle
 data/units.json     unit catalog: cost, hp and damage per star, range, moveSpeed tier,
-                    secPerHit, critChance, energy (attacks per power) and the power
+                    secPerHit, critChance, energy (attacks per ability) and the ability
                     ("ability"). "summon": true units (Combee) only appear in battle
 src/rng.js          seeded PRNG whose state is stored in game state
 src/combat.js       simulate(catalog, boards). Pure and deterministic, returns an event log
