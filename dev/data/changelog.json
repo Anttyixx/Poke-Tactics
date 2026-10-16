@@ -1,5 +1,14 @@
 [
   {
+    "id": "2026-10-16-ability-short-numbers",
+    "version": "0.40.4",
+    "date": "2026-10-16",
+    "title": "Key numbers in short ability descriptions",
+    "changes": [
+      { "kind": "change", "text": "Short ability descriptions now include the basic numbers, like how much damage it deals, heals, slows or speeds up. For example, Golem: Explodes after fainting and deals 300% damage to the enemies around it." }
+    ]
+  },
+  {
     "id": "2026-10-16-ability-button-corner",
     "version": "0.40.3",
     "date": "2026-10-16",

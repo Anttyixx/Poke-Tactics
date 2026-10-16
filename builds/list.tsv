@@ -1,3 +1,4 @@
+db441e1	dev	2026-10-16 02:18 UTC	Show the key numbers in short ability descriptions (0.40.4)
 f860b0a	dev	2026-10-16 02:06 UTC	Put the More details button in the ability box's top-right corner (0.40.3)
 1832476	dev	2026-10-16 01:41 UTC	Animate the swap between short and full ability text (0.40.2)
 fdd7577	dev	2026-10-16 01:33 UTC	More details swaps the ability text in place (0.40.1)
@@ -27,4 +28,3 @@ cd50a55	dev	2026-10-15 04:41 UTC	Dreepy landing hit doubled: 100/120/144/172 (0.
 f8c4cb9	dev	2026-10-15 03:29 UTC	Save Dragapult + Dreepy as dragapult-v1 (stats, rules, win rates) to restore later
 45c1684	dev	2026-10-15 00:26 UTC	Dreepy launch leaves a white streak; target's hit/stun/shove shown on arrival; lured target attacks the Dreepy right after the stun; Dragapult every 1.6s; Amoonguss pull lands at end of tick (0.33.2)
 87501bd	dev	2026-10-14 22:46 UTC	Dreepy launch looks like a dash (fast straight streak with sparks, growing); firing waits for Dragapult's attack timer, so no launch before a full cooldown (0.33.1)
-b70b646	dev	2026-10-14 22:22 UTC	Dragapult fires both Dreepy on its next action (attack or step); Dreepy shot out of Dragapult in a growing arc; attacks every 1.7s (0.33.0)
