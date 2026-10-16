@@ -166,7 +166,7 @@ function abilityTexts(def, star, catalog) {
       const morph = p.morph ? ` It takes ${vTime(p.morph)} and can't be hurt while it does.` : '';
       const wave = f.shockwave ? ` A shock wave stuns every enemy in the ${area(f.shockwave.radius)} around it for ${vTime(f.shockwave.stun)}.` : '';
       // Only how it transforms: the form's own stats are in its Pokédex entry.
-      return { when, text: `${into} into ${esc(f.name)} for the rest of the fight.`, more: `${into} into ${esc(f.name)} for the rest of the fight.${morph}${wave}` };
+      return { when, text: `${into} into ${esc(f.name)} for the rest of the fight${f.shockwave ? ', stunning nearby enemies' : ''}.`, more: `${into} into ${esc(f.name)} for the rest of the fight.${morph}${wave}` };
     }
     case 'treat': {
       const fl = Object.fromEntries(p.flavors.map((f) => [f.flavor, f]));

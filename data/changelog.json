@@ -1,5 +1,14 @@
 [
   {
+    "id": "2026-10-16-minior-short-stun",
+    "version": "0.43.4",
+    "date": "2026-10-16",
+    "title": "Shining Star mentions its stun",
+    "changes": [
+      { "pokemon": "minior", "kind": "change", "text": "Shining Star's short description now mentions the stun: Transforms into Minior (Star Form) for the rest of the fight, stunning nearby enemies." }
+    ]
+  },
+  {
     "id": "2026-10-16-star-form-text",
     "version": "0.43.3",
     "date": "2026-10-16",
