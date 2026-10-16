@@ -934,6 +934,9 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .ability p { margin: 0; line-height: 1.45; }
 /* An ability's short text and its full one: the More details button swaps them. */
 .pw-text:not(.full) .pw-full, .pw-text.full .pw-short { display: none; }
+.pw-text { position: relative; }
+.pw-ghost { position: absolute; top: 0; left: 0; margin: 0; pointer-events: none; }
+.pw-toggle::after { display: inline-block; transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1); }
 .pw-toggle {
   display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; min-width: 0;
   font: inherit; font-size: 13px; font-weight: 800; color: var(--mana); padding: 4px 10px; border-radius: 99px; cursor: pointer;
@@ -941,7 +944,7 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 }
 .pw-toggle:hover { background: color-mix(in srgb, var(--mana) 20%, transparent); }
 .pw-toggle::after { content: '▸'; }
-.pw-text.full .pw-toggle::after { content: '◂'; }
+.pw-text.full .pw-toggle::after { transform: rotate(180deg); }
 .pw-text:not(.full) .pw-hide, .pw-text.full .pw-show { display: none; }
 .pw-toggle:focus-visible { outline: 2px solid var(--mana); outline-offset: 2px; }
 
