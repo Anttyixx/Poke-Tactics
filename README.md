@@ -162,7 +162,7 @@ test a set of changes together. Team styles to pit against each other live in `A
 ## How to play
 
 - **Start:** the game opens on a start screen; **Battle** plays a friend online (above); **Training** plays the bot. Pokémon are shown as
-  cards (cost in the corner); tap one to pick it, or its **i** for its stats and power.
+  cards (cost in the corner); tap one to pick it, or its **i** for its stats and ability.
 - **Profile:** the chip at the top left of the start screen (or Menu → Profile) sets your name and
   a profile picture from a fixed list (the Pokémon sprites' front frame, cropped and centred into
   `assets/avatars/`; to change the list, edit `AVATARS` in `src/profile.js` and run
@@ -202,9 +202,9 @@ test a set of changes together. Team styles to pit against each other live in `A
   it, diagonals included; range 2 the 5x5; and so on. Each step takes 0.5s; movement speed is how long a unit waits before each
   step (before its first one too): very fast 0.35s, fast 0.5s, medium 0.8s, slow 1.0s, very slow 1.3s,
   super slow 2.0s. So a medium unit covers a square every 1.3s. A unit can't attack until it finishes its step. A unit attacks every `secPerHit` seconds; each basic attack
-  has a `critChance`% chance to crit for 50% more damage (powers never crit). Each tick resolves
+  has a `critChance`% chance to crit for 50% more damage (abilities never crit). Each tick resolves
   simultaneously, and crit luck is shared slot for slot between the sides, so neither side gets an edge.
-- **Powers:** every Pokémon has one. Most count attacks (the purple bar). Every fight starts with the bar
+- **Abilities:** every Pokémon has one. Most count attacks (the purple bar). Every fight starts with the bar
   empty and a full attack cooldown before anyone's first hit, and progress is never lost mid-fight:
   - Mawile, **Jaw Lock**: after 8 attacks, the next hits for 130% and stuns for 1s. *Disabled for now*
     (`"disabled": true` in units.json keeps a Pokémon out of team picks, shops and the Pokédex).
@@ -212,11 +212,11 @@ test a set of changes together. Team styles to pit against each other live in `A
     board. The first enemy it hits takes 50% and is carried to that end, then is stunned for 1s; anyone
     already there is pushed to the side. Both sit out until the wave lands.
   - Toxtricity (cost 3, ranger, range 2, attacks every 1.25s), **Overdrive**: every 3 attacks, each ally
-    directly left, right, in front of and behind it that has a power counter gains +2 toward its power
-    (never past full; at the end of the tick, like all power progress).
+    directly left, right, in front of and behind it that has an ability counter gains +2 toward its ability
+    (never past full; at the end of the tick, like all ability progress).
   - Vespiquen, **Attack Order**: every 6 attacks, summons 2 Combee beside it: its sides first, then
     behind, in front, and the diagonals from back to front. Combee come at Vespiquen's star level. They fight but never count as survivors for round damage. With no free square,
-    the power stays charged and tries again after the next attack.
+    the ability stays charged and tries again after the next attack.
   - Coalossal, **Heat Crash**: after 6 attacks, the next hits for 130%, knocks the target back 2 squares
     and stuns it for 1s.
   - Decidueye, **Phantom Force**: after 8 attacks, invisible for 3s and attacks 30% faster. Enemies can't
@@ -248,7 +248,7 @@ test a set of changes together. Team styles to pit against each other live in `A
     (diagonals too), for 60% of its damage.
   - Golem, **Self-Destruct**: when knocked out it stays on its square for 3s (it can't be hit), then
     explodes for 300% on enemies in the 3x3 square around it. The fight waits for it.
-  - Frosmoth (cost 3, mage, range 2, attacks every 1.25s), **Frostbite**: no charged power. Every
+  - Frosmoth (cost 3, mage, range 2, attacks every 1.25s), **Frostbite**: no charged ability. Every
     hit chills the target for 3s: it attacks 30% slower and waits 30% longer between steps; another
     hit restarts the timer. Chills land at the end of the tick, like stuns. Chilled Pokémon are
     tinted blue with a snowflake badge.
@@ -265,7 +265,7 @@ test a set of changes together. Team styles to pit against each other live in `A
     sudden death), then becomes Star Form for the rest of the fight. Changing sends out a shock wave
     that stuns every enemy in the 3x3 around it for 1s. Star Form attacks every 0.3s for 20 and doesn't
     walk: it zips straight to the open square beside its target (if all are taken, it walks). Its own
-    power, every 10 attacks: it picks a different enemy (a seeded pick among those with a free square
+    ability, every 10 attacks: it picks a different enemy (a seeded pick among those with a free square
     beside them) and zips there; with no other enemy to reach it moves to another square beside its
     target, and with none free it stays. The purple bar counts toward the next hop. A form with a
     faster attack speed doesn't wait out the old form's attack timer.
@@ -275,7 +275,7 @@ test a set of changes together. Team styles to pit against each other live in `A
     every enemy it passed through are stunned for 1s.
   - Ditto, **Transform**: walks (medium speed) toward the nearest enemy until it's within that enemy's
     range, then takes 1s to transform into it, copying its max HP, damage, attack speed, range and crit
-    (not its power or movement). It keeps its share of HP across the change, shows the copied sprite in
+    (not its ability or movement). It keeps its share of HP across the change, shows the copied sprite in
     Ditto's colours, and doesn't move while transformed. When the copied Pokémon faints or no enemy is in
     range, it turns back into Ditto and walks to the next nearest.
 - **Healing** (Lilligant, Alcremie) lands at the end of each tick, like stuns, so it never depends on who
@@ -302,7 +302,7 @@ styles.css
 assets/sprites/     walk sheets: 256x256, 4x4 grid of 64px frames;
                     rows = facing down, left, right, up; columns = walk cycle
 data/units.json     unit catalog: cost, hp and damage per star, range, moveSpeed tier,
-                    secPerHit, critChance, energy (attacks per power) and the power
+                    secPerHit, critChance, energy (attacks per ability) and the ability
                     ("ability"). "summon": true units (Combee) only appear in battle
 src/rng.js          seeded PRNG whose state is stored in game state
 src/combat.js       simulate(catalog, boards). Pure and deterministic, returns an event log
