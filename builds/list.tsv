@@ -1,3 +1,4 @@
+44d5560	dev	2026-10-16 05:16 UTC	Shining Star's short text mentions the stun (0.43.4)
 10b3ea9	dev	2026-10-16 05:11 UTC	Form entries only say what the form does differently (0.43.3)
 dccde69	dev	2026-10-16 04:56 UTC	Sort the Pokédex by cost by default, with sort buttons (0.43.2)
 ea23259	dev	2026-10-16 04:44 UTC	Pokédex entries: fixed chip slots, open and swap animations (0.43.1)
@@ -27,4 +28,3 @@ e49419b	dev	2026-10-15 18:42 UTC	Hoopa rework: after 5 attacks it binds the Pok�
 ba4e0a1	dev	2026-10-15 05:48 UTC	Dreepy landing hit at ★ 80 -&gt; 50 (0.36.1)
 d2953cb	dev	2026-10-15 05:37 UTC	Dragapult: 800 HP, 50 dmg every 0.8s; 1-charge power: after each attack its next action fires a Dreepy (if one is home); Dreepy HP 230-400 (0.36.0)
 fa0c7eb	dev	2026-10-15 05:22 UTC	Dragapult 45 dmg every 0.9s, 2-charge power, 550 HP; Dreepy landing 80/96/115/138, Dreepy dmg 12/15/19/23 (0.35.1)
-580b5d4	dev	2026-10-15 05:00 UTC	Dragapult: ~9 Dreepy per fight: attacks every 0.6s for 27, landing hit 40/48/58/69 (0.35.0)

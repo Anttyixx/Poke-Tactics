@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=10b3ea9';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=44d5560';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=10b3ea9';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=10b3ea9';
+} from './game.js?v=44d5560';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=44d5560';
 
 const TICK_MS = 100;
 // Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
@@ -166,7 +166,7 @@ function abilityTexts(def, star, catalog) {
       const morph = p.morph ? ` It takes ${vTime(p.morph)} and can't be hurt while it does.` : '';
       const wave = f.shockwave ? ` A shock wave stuns every enemy in the ${area(f.shockwave.radius)} around it for ${vTime(f.shockwave.stun)}.` : '';
       // Only how it transforms: the form's own stats are in its Pokédex entry.
-      return { when, text: `${into} into ${esc(f.name)} for the rest of the fight.`, more: `${into} into ${esc(f.name)} for the rest of the fight.${morph}${wave}` };
+      return { when, text: `${into} into ${esc(f.name)} for the rest of the fight${f.shockwave ? ', stunning nearby enemies' : ''}.`, more: `${into} into ${esc(f.name)} for the rest of the fight.${morph}${wave}` };
     }
     case 'treat': {
       const fl = Object.fromEntries(p.flavors.map((f) => [f.flavor, f]));
