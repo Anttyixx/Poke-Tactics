@@ -1725,7 +1725,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       <span class="info-btn" data-dex-info="${id}" role="button" aria-label="${esc(def.name)} info">i</span>
       <span class="dex-card-art">${portrait(def)}</span>
       <b>${esc(def.name)}</b>
-      <small>${def.cost} 🪙 · ${def.type[0].toUpperCase() + def.type.slice(1)}</small>
+      <small>${def.cost} <i class="coin-icon" aria-label="coins"></i> · ${def.type[0].toUpperCase() + def.type.slice(1)}</small>
     </button>`;
   }
 
@@ -2040,7 +2040,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     return `<button class="dex-card" data-dex="${id}" data-type="${def.type}">
       <span class="dex-card-art">${portrait(def)}</span>
       <b>${esc(def.name)}</b>
-      <small>${def.summon ? 'Summon' : `${def.cost} 🪙`} · ${typeName(def.type)}</small>
+      <small>${def.summon ? 'Summon' : `${def.cost} <i class="coin-icon" aria-label="coins"></i>`} · ${typeName(def.type)}</small>
     </button>`;
   }
 

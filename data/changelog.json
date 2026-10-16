@@ -1,5 +1,14 @@
 [
   {
+    "id": "2026-10-16-coin-sprite",
+    "version": "0.37.6",
+    "date": "2026-10-16",
+    "title": "New coin art",
+    "changes": [
+      { "kind": "change", "text": "Coins now use a proper coin sprite: next to your coin count, on shop card prices, and in the team picker and Pokédex." }
+    ]
+  },
+  {
     "id": "2026-10-16-hoopa-attack",
     "version": "0.37.5",
     "date": "2026-10-16",
