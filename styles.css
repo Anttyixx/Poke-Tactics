@@ -270,6 +270,7 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .unit.shield-break .sprite { animation: shield-break 0.42s ease-out; }
 @keyframes shield-break { 30% { filter: var(--tint) brightness(2.2) drop-shadow(0 0 6px #bfe3ff); scale: 1.08; } }
 @media (prefers-reduced-motion: reduce) { .unit.shield-break .sprite { animation: none; } }
+.unit.no-mana .bars .mana { display: none; }
 .bars .mana { height: 3px; margin-top: 2px; background: #0b1630; border-radius: 99px; overflow: hidden; box-shadow: 0 0 0 1px #000a; }
 .bars .mana i { display: block; height: 100%; background: linear-gradient(90deg, #4fa3ff, var(--mana)); transition: width 0.2s; }
 .bars .mana i[style*="100%"] { background: linear-gradient(90deg, #ffd85a, #fff3b0); box-shadow: 0 0 6px var(--gold); }

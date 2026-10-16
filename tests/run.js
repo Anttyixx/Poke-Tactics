@@ -799,16 +799,17 @@ test('Rage Powder (Amoonguss): every 2 attacks, the hardest hitter within the 5x
   assert.ok(evs(r, 'attack', hitter).some((e) => e.t < taunt.t && e.target === unitOf(r, 2).id), 'it was attacking the decoy before');
 });
 
-test('Rage Fist (Annihilape): each attack in a row without moving makes the next ones faster, up to the cap', () => {
+test('Rage Fist (Annihilape): each attack in a row without moving makes the next ones faster, with no cap', () => {
   const r = simulate(powerCat(), [[{ uid: 1, unitId: 'annihilape', star: 0, x: 2, y: 0 }], [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }]], 1);
   const a = unitOf(r, 1).id;
   const p = catalog.annihilape.ability;
   const cd = Math.round(catalog.annihilape.secPerHit / TICK_SECONDS);
-  const times = evs(r, 'attack', a).map((e) => e.t).slice(0, p.maxStacks + 4);
+  assert.equal(p.maxStacks, undefined, 'no cap');
+  const times = evs(r, 'attack', a).map((e) => e.t).slice(0, 25);
   const gaps = times.slice(1).map((t, k) => t - times[k]);
   // The first attack starts the streak (0 stacks); each one after adds a stack.
-  gaps.forEach((g, k) => assert.equal(g, Math.round((cd * 100) / (100 + Math.min(k, p.maxStacks) * p.stackPct)), `gap ${k}`));
-  assert.equal(Math.max(...evs(r, 'rage', a).map((e) => e.stacks)), p.maxStacks);
+  gaps.forEach((g, k) => assert.equal(g, Math.max(1, Math.round((cd * 100) / (100 + k * p.stackPct))), `gap ${k}`));
+  assert.ok(Math.max(...evs(r, 'rage', a).map((e) => e.stacks)) >= 24, 'it keeps stacking');
 });
 
 test('Dragon Darts (Dragapult): each full charge fires one Dreepy at the farthest enemy, which crashes in, stuns and shoves it, and must be attacked; at most 2 are out at once', () => {

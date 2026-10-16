@@ -124,7 +124,9 @@ function abilityTexts(def, star, catalog) {
       return { when: `After ${def.energy} attacks`, text: `Pins the next enemy that tries to move in place for ${vTime(p.duration)}.`, more: `${start} after ${vNum(def.energy)} attacks, then waits until an enemy tries to move. Hoopa binds that Pokémon in place for ${vTime(p.duration)}: it can't walk, zip, or dash, but it still attacks anything in range.${p.noRepeat ? ' It never binds the same Pokémon twice in a row.' : ''}${p.chargedForm ? ` While charged it becomes ${esc(p.chargedForm.name)}.` : ''}` };
     }
     case 'taunt': return { when: every, text: `Makes a nearby enemy attack ${esc(def.name)} instead of its friends.`, more: `Spreads its spores: the hardest-hitting enemy within the ${area(p.radius)} around it that is attacking someone else must attack ${esc(def.name)} for ${vTime(p.duration)}.` };
-    case 'rage': return { when: 'Every attack', text: `Attacks faster with every hit while it stands still, up to ${vNum(`${p.stackPct * p.maxStacks}%`)} faster.`, more: `Each attack in a row without moving makes it attack ${vNum(`${p.stackPct}%`)} faster, up to ${vNum(`${p.stackPct * p.maxStacks}%`)} after ${vNum(p.maxStacks)} attacks. Moving resets it.` };
+    case 'rage': return p.maxStacks
+      ? { when: 'Every attack', text: `Attacks faster with every hit while it stands still, up to ${vNum(`${p.stackPct * p.maxStacks}%`)} faster.`, more: `Each attack in a row without moving makes it attack ${vNum(`${p.stackPct}%`)} faster, up to ${vNum(`${p.stackPct * p.maxStacks}%`)} after ${vNum(p.maxStacks)} attacks. Moving resets it.` }
+      : { when: 'Every attack', text: `Attacks ${vNum(`${p.stackPct}%`)} faster with every hit while it stands still, with no limit.`, more: `Each attack in a row without moving makes it attack ${vNum(`${p.stackPct}%`)} faster, with no limit. Moving resets it.` };
     case 'darts': {
       const name = catalog?.[p.unit]?.name ?? p.unit;
       const shot = p.perShot ?? p.count;
@@ -1244,6 +1246,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     a.el.querySelector('.hp').style.setProperty('--hp-trail', `${(100 * a.hp) / a.maxHp}%`);
     a.el.querySelector('.sh i').style.width = `${a.maxShield ? (100 * a.shield) / a.maxShield : 0}%`;
     a.el.querySelector('.mana i').style.width = `${a.maxMana ? (100 * a.mana) / a.maxMana : 0}%`;
+    // No ability counter (no ability, or one that's always on): no bar.
+    a.el.classList.toggle('no-mana', !a.maxMana);
   }
 
   function floatText(a, text, kind) {
@@ -1547,7 +1551,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       case 'rage': // Annihilape: faster with every attack in a row
         a.el.dataset.rage = ev.stacks;
         a.el.classList.toggle('raging', ev.stacks > 0);
-        a.el.style.setProperty('--rage', ev.stacks);
+        a.el.style.setProperty('--rage', Math.min(ev.stacks, 10)); // the glow stops growing at some point
         if (animate && ev.stacks) floatText(a, `+${ev.pct}% speed`, 'rage');
         break;
       case 'knock': {
