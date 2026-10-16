@@ -998,31 +998,69 @@ test('Self-Destruct (Golem): knocked out, it stays put 3s, then explodes on adja
   assert.ok(!r.events.some((e) => e.type === 'damage' && e.id === g && e.t > fuse.t), 'it cannot be hit while the fuse burns');
 });
 
-test('Shining Star (Minior): at 35% HP Rock form becomes Star Form, keeping its HP, after 0.5s immune; a knockout is a real knockout', () => {
+test('Shields: a shield takes every hit while it lasts (HP untouched, overflow wasted), then breaks for good', () => {
+  const cat = powerCat();
+  cat.shelly = { ...cat.wall, hp: [1000, 1000, 1000, 1000], shield: [300, 300, 300, 300] };
+  cat.brute = { ...cat.wall, range: 1, secPerHit: 1, damage: [125, 125, 125, 125] };
+  const r = simulate(cat, [[{ uid: 1, unitId: 'shelly', star: 0, x: 2, y: 0 }], [{ uid: 2, unitId: 'brute', star: 0, x: 2, y: 0 }]], 1);
+  const u = unitOf(r, 1);
+  assert.equal(u.shield, Math.round(300 * STAT_SCALE), 'it starts with its shield');
+  assert.equal(u.maxShield, u.shield);
+  const hits = evs(r, 'damage', u.id);
+  const brk = evs(r, 'shieldBreak', u.id)[0];
+  assert.ok(brk, 'the shield breaks');
+  const onShield = hits.filter((e) => e.t <= brk.t);
+  assert.ok(onShield.every((e) => e.hp === u.maxHp), 'HP never drops while the shield is up');
+  assert.equal(onShield.at(-1).shield, 0, 'the breaking hit empties it');
+  const sum = onShield.reduce((n, e) => n + e.amount, 0);
+  assert.ok(sum > u.maxShield, 'the last hit was bigger than what was left');
+  const after = hits.filter((e) => e.t > brk.t);
+  assert.equal(after[0].hp, u.maxHp - after[0].amount, 'the overflow was wasted: the next hit is the first on HP');
+  assert.ok(after.every((e) => e.shield === 0), 'it never comes back');
+  assert.equal(evs(r, 'shieldBreak', u.id).length, 1);
+});
+
+test('Shields: healing restores HP only, never a shield', () => {
+  const cat = powerCat();
+  cat.shelly = { ...cat.wall, hp: [1000, 1000, 1000, 1000], shield: [300, 300, 300, 300] };
+  cat.brute = { ...cat.wall, range: 1, secPerHit: 1, damage: [125, 125, 125, 125] };
+  // Lilligant heals everyone around its target, Shelly included.
+  const r = simulate(cat, [
+    [{ uid: 1, unitId: 'shelly', star: 0, x: 2, y: 0 }, { uid: 3, unitId: 'lilligant', star: 0, x: 2, y: 3 }],
+    [{ uid: 2, unitId: 'brute', star: 0, x: 2, y: 0 }],
+  ], 1);
+  const u = unitOf(r, 1);
+  let last = u.shield;
+  for (const e of r.events.filter((x) => x.id === u.id && x.shield !== undefined)) {
+    assert.ok(e.shield <= last, 'the shield only ever goes down');
+    last = e.shield;
+  }
+  assert.ok(evs(r, 'heal', u.id).some((e) => e.amount > 0), 'it is healed (HP)');
+});
+
+test('Shining Star (Minior): Rock form is its shield; when it breaks, Minior becomes Star Form after 0.5s immune; a knockout is a real knockout', () => {
   const cat = powerCat();
   cat.brute = { ...cat.wall, range: 1, secPerHit: 1, damage: [125, 125, 125, 125] };
   cat.stunner = { ...cat.brute, energy: 1, ability: { name: 'Stun', kind: 'empower', damagePct: 100, stun: 10 } };
   const p = catalog.minior.ability;
-  assert.equal(p.trigger, 'lowHp');
-  assert.ok(!p.form.hp, 'Star Form has no HP of its own: it keeps what Rock form had left');
+  assert.equal(p.trigger, 'shieldBreak');
   for (const foe of ['brute', 'stunner']) {
     const r = simulate(cat, [[{ uid: 1, unitId: 'minior', star: 0, x: 2, y: 0 }], [{ uid: 2, unitId: foe, star: 0, x: 2, y: 0 }]], 1);
     const u = unitOf(r, 1);
     const m = u.id;
-    const hits = r.events.filter((e) => e.type === 'damage' && e.id === m);
+    assert.equal(u.maxShield, Math.round(catalog.minior.shield[0] * STAT_SCALE));
+    const hits = evs(r, 'damage', m);
+    const brk = evs(r, 'shieldBreak', m)[0];
     const start = evs(r, 'morphStart', m)[0];
-    assert.ok(start, 'it starts transforming');
-    const cross = hits.find((e) => e.hp * 100 <= u.maxHp * p.hpPct);
-    assert.equal(start.t, cross.t, 'in the tick it drops to 35% HP');
-    assert.ok(hits.filter((e) => e.t < cross.t).every((e) => e.hp * 100 > u.maxHp * p.hpPct), 'not before');
+    assert.ok(brk && start, 'its shield breaks and it starts transforming');
+    assert.equal(start.t, brk.t, 'in the same tick');
+    assert.ok(hits.filter((e) => e.t <= brk.t).every((e) => e.hp === u.maxHp), 'its HP is untouched until then');
     const tf = evs(r, 'transform', m)[0];
     assert.equal(tf.t, start.t + p.morph, 'takes 0.5s');
     assert.equal(tf.sprite, p.form.sprite);
     assert.ok(!hits.some((e) => e.t > start.t && e.t <= tf.t), 'no damage while transforming');
     assert.ok(!evs(r, 'stun', m).some((e) => e.t > start.t && e.t <= tf.t), 'no stuns while transforming');
     assert.ok(!r.events.some((e) => e.src === m && e.t > start.t && e.t <= tf.t), 'it does nothing while transforming');
-    const after = hits.find((e) => e.t > tf.t);
-    assert.ok(after.hp < cross.hp, 'Star Form carries on from the HP it had (no refill)');
     const ko = hits.find((e) => e.hp === 0);
     assert.ok(ko && ko.t > tf.t, 'Star Form is knocked out in the end');
     assert.equal(evs(r, 'death', m)[0]?.t, ko.t, 'and that is a real knockout');

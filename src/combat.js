@@ -33,6 +33,7 @@ export function unitStats(def, star) {
   return {
     hp: Math.round(def.hp[star] * STAT_SCALE),
     atk: Math.round(def.damage[star] * STAT_SCALE),
+    shield: def.shield ? Math.round(def.shield[star] * STAT_SCALE) : 0, // a second bar that takes all damage first
     attackCd: ticksOf(def.secPerHit), // ticks per attack
     moveCd: ticksOf(MOVE_SPEEDS[def.moveSpeed]), // ticks of waiting before each step
     crit: def.critChance ?? 0, // percent
@@ -93,7 +94,7 @@ function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, in
     // attack cooldown before the first hit.
     mana: def.ability?.startCharged ? stats.energy : 0, maxMana: stats.energy, // mana counts attacks toward the power; 0 = no counter
     power: def.ability, powerKind: def.ability?.kind ?? null, // read every tick: kept on the unit itself (faster)
-    shield: 0, stun: 0,
+    shield: stats.shield, maxShield: stats.shield, stun: 0,
     pendingMana: 0, pendingStun: 0, // applied at the end of the tick
     atkTimer: stats.attackCd,
     moveTimer: stats.moveCd, // waiting before the next step (it waits before its first one too)
@@ -133,6 +134,7 @@ function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, in
 const snapshot = (u) => ({
   id: u.id, side: u.side, uid: u.uid, unitId: u.unitId, star: u.star,
   x: u.x, y: u.y, hp: u.hp, maxHp: u.maxHp, mana: u.mana, maxMana: u.maxMana,
+  ...(u.maxShield && { shield: u.shield, maxShield: u.maxShield }),
   ...(u.summoned && { summoned: true }),
 });
 
@@ -320,17 +322,28 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
   function damage(target, amount, src, crit = false) {
     if (!standing(target) || immune(target)) return 0;
     if (guarded(target)) amount = Math.max(1, Math.floor((amount * (100 - target.guardPct)) / 100));
-    const absorbed = Math.min(target.shield, amount);
-    target.shield -= absorbed;
     const before = target.hp;
-    target.hp = Math.max(0, target.hp - (amount - absorbed));
+    // A shield takes the whole hit while it lasts: HP can't go down, and
+    // whatever the shield couldn't hold is wasted.
+    const shielded = target.shield > 0;
+    if (shielded) target.shield = Math.max(0, target.shield - amount);
+    else target.hp = Math.max(0, target.hp - amount);
     if (target.hp > 0) target.pendingMana += MANA_PER_HIT;
     record && emit('damage', { id: target.id, src: src.id, amount, hp: target.hp, shield: target.shield, mana: shownMana(target), ...(crit && { crit }) });
     if (target.hp === 0) knockedOut(target);
+    if (shielded && target.shield === 0) shieldBroke(target);
     // Minior: dropping to its HP threshold transforms it (at the end of the tick).
     const p = target.power;
     if (target.hp > 0 && p?.kind === 'transform' && p.trigger === 'lowHp' && !target.form && !target.morphUntil && target.hp * 100 <= target.maxHp * p.hpPct) target.pendingForm = true;
     return before - target.hp;
+  }
+
+  // A shield that runs out breaks for good (nothing refills it). Minior's
+  // Rock form is its shield: losing it starts the change to Star Form.
+  function shieldBroke(u) {
+    record && emit('shieldBreak', { id: u.id });
+    const p = u.power;
+    if (p?.kind === 'transform' && p.trigger === 'shieldBreak' && !u.form && !u.morphUntil) u.pendingForm = true;
   }
 
   // Healing lands at the end of the tick (see the main loop), so it never
@@ -1192,11 +1205,18 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     for (const u of order) if (u.alive) act(u);
     if (t === SUDDEN_DEATH_TICK) record && emit('suddenDeath', {});
     if (t >= SUDDEN_DEATH_TICK) {
-      // The drain lands at the end of the tick, after everyone has acted, and
-      // ignores shields. Same amount for everyone: the weakest fall first.
+      // The drain lands at the end of the tick, after everyone has acted.
+      // Same amount for everyone: the weakest fall first. Like any damage,
+      // it wears a shield down before HP.
       const drain = Math.round((SUDDEN_DEATH_HP_PER_SECOND * STAT_SCALE) * TICK_SECONDS);
       for (const u of units) {
         if (!standing(u) || immune(u)) continue;
+        if (u.shield > 0) {
+          u.shield = Math.max(0, u.shield - drain);
+          record && emit('drain', { id: u.id, amount: drain, hp: u.hp, shield: u.shield });
+          if (u.shield === 0) shieldBroke(u);
+          continue;
+        }
         u.hp = Math.max(0, u.hp - drain);
         record && emit('drain', { id: u.id, amount: drain, hp: u.hp });
         if (u.hp === 0) knockedOut(u);
@@ -1300,7 +1320,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
   if (winner === undefined && maxTicks < MAX_TICKS) {
     const hpShare = [0, 1].map((side) => {
       const mine = units.filter((u) => u.side === side && !u.summoned);
-      return mine.reduce((sum, u) => sum + (u.alive ? u.hp / u.maxHp : 0), 0) / Math.max(1, mine.length);
+      return mine.reduce((sum, u) => sum + (u.alive ? (u.hp + u.shield) / (u.maxHp + u.maxShield) : 0), 0) / Math.max(1, mine.length);
     });
     return { initial, events, winner: undefined, ticks: t, cut: true, hpShare, survivors: [] };
   }
