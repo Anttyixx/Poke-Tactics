@@ -1,5 +1,14 @@
 [
   {
+    "id": "2026-10-16-dex-cards-cost-only",
+    "version": "0.39.1",
+    "date": "2026-10-16",
+    "title": "Cleaner Pokédex cards",
+    "changes": [
+      { "kind": "change", "text": "Pokédex cards no longer show the class: just the cost in the corner. The class is on each Pokémon's Pokédex entry." }
+    ]
+  },
+  {
     "id": "2026-10-16-dex-links-classes",
     "version": "0.39.0",
     "date": "2026-10-16",

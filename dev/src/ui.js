@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=788716c';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=2c5c749';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=788716c';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=788716c';
+} from './game.js?v=2c5c749';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=2c5c749';
 
 const TICK_MS = 100;
 // Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
@@ -2083,7 +2083,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   function dexCard(id) {
     const def = catalog[id];
     return `<button class="dex-card dex-grid-card" data-dex="${id}" data-type="${def.type}">
-      <span class="dex-corners"><span class="dex-corner dex-cost">${def.summon ? 'Summon' : `<i class="coin-icon" aria-hidden="true"></i>${def.cost}`}</span><span class="dex-corner dex-class">${typeName(def.type)}</span></span>
+      <span class="dex-corners"><span class="dex-corner dex-cost">${def.summon ? 'Summon' : `<i class="coin-icon" aria-hidden="true"></i>${def.cost}`}</span></span>
       <span class="dex-card-art">${portrait(def)}</span>
       <b>${esc(def.name)}</b>
     </button>`;
