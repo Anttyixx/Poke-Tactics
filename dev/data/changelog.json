@@ -1,5 +1,14 @@
 [
   {
+    "id": "2026-10-16-ability-swap",
+    "version": "0.40.1",
+    "date": "2026-10-16",
+    "title": "More details, in place",
+    "changes": [
+      { "kind": "change", "text": "The More details button now swaps the short ability description for the full one right where it is, instead of opening a section underneath. Fewer details swaps it back." }
+    ]
+  },
+  {
     "id": "2026-10-16-ability-summaries",
     "version": "0.40.0",
     "date": "2026-10-16",

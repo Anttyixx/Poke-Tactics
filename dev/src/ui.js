@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=fc41cb1';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=fdd7577';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=fc41cb1';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=fc41cb1';
+} from './game.js?v=fdd7577';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=fdd7577';
 
 const TICK_MS = 100;
 // Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
@@ -180,14 +180,31 @@ function abilityTexts(def, star, catalog) {
 
 export function describePower(def, star, catalog) {
   const pt = powerText(def, star, catalog);
-  return pt ? `<p><b>${esc(def.ability.name)}:</b> <span class="pw-when">${pt.when}</span> ${pt.text}</p>${moreBox(pt.more)}` : '';
+  return pt ? abilityBody(pt.text, pt.more, { lead: `<b>${esc(def.ability.name)}:</b> <span class="pw-when">${pt.when}</span> ` }) : '';
 }
 
-// The full details of an ability, folded away. Whether it is open is
-// remembered, so a player who likes the details keeps seeing them.
+// An ability's short text, swapped in place for the full one by its More
+// details button. Which one shows is remembered, so a player who likes the
+// details keeps seeing them on every Pokémon.
 let moreOpen = false;
-if (typeof document !== 'undefined') document.addEventListener('toggle', (e) => { if (e.target.classList?.contains('pw-more')) moreOpen = e.target.open; }, true);
-export const moreBox = (more, attrs = '') => (more ? `<details class="pw-more"${moreOpen ? ' open' : ''}><summary><span class="pw-show">More details</span><span class="pw-hide">Fewer details</span></summary><p${attrs}>${more}</p></details>` : '');
+if (typeof document !== 'undefined') {
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest?.('.pw-toggle')) return;
+    moreOpen = !moreOpen;
+    for (const box of document.querySelectorAll('.pw-text')) {
+      box.classList.toggle('full', moreOpen);
+      box.querySelector('.pw-toggle').setAttribute('aria-expanded', String(moreOpen));
+      box.querySelector(moreOpen ? '.pw-full' : '.pw-short').animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: 'ease-out' });
+    }
+  });
+}
+// `lead` goes before either text (the name in the info panel); `keyed` marks
+// the texts so a level change in the Pokédex can count their numbers.
+export function abilityBody(short, more, { lead = '', keyed = false } = {}) {
+  const p = (cls, html, k) => `<p class="${cls}"${keyed ? ` data-k="${k}"` : ''}>${lead}${html}</p>`;
+  if (!more) return p('pw-short', short, 'power');
+  return `<div class="pw-text${moreOpen ? ' full' : ''}">${p('pw-short', short, 'power')}${p('pw-full', more, 'more')}<button type="button" class="pw-toggle" aria-expanded="${moreOpen}"><span class="pw-show">More details</span><span class="pw-hide">Fewer details</span></button></div>`;
+}
 
 // Ditto has no fighting stats of its own: it copies the nearest enemy's.
 const isCopycat = (def) => def.ability?.kind === 'copy';
@@ -2392,7 +2409,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     ].filter(Boolean).join('');
     const power = isForm
       ? `<div class="dex-power"><h3>${esc(base.ability.name)} ${formsOf(base)[dexForm].flavor ? 'flavour' : 'form'}</h3><p data-k="power">${v.power}</p></div>`
-      : def.ability ? `<div class="dex-power"><h3>${esc(def.ability.name)} <span class="pw-when">${powerText(def, star, catalog).when}</span></h3><p data-k="power">${v.power}</p>${moreBox(v.more, ' data-k="more"')}</div>` : '';
+      : def.ability ? `<div class="dex-power"><h3>${esc(def.ability.name)} <span class="pw-when">${powerText(def, star, catalog).when}</span></h3>${abilityBody(v.power, v.more, { keyed: true })}</div>` : '';
 
     // Related Pokémon: [def, attributes, label, key].
     const related = [];
