@@ -1,0 +1,45 @@
+{
+  "name": "Hoopa (Binding Ring, Hoopa Unbound form), saved 2026-10-15",
+  "commit": "8a8a88d",
+  "rules": [
+    "Starts each fight charged (shown as Hoopa Unbound) and refills after 2 attacks.",
+    "When charged, the first enemy that tries to move is bound in place for 3s: it can't walk, zip or dash, but still attacks. Never the same Pokémon twice in a row."
+  ],
+  "units": {
+    "hoopa": {
+      "name": "Hoopa",
+      "sprite": "assets/sprites/hoopa.png",
+      "fx": "#ff8ad8",
+      "type": "mage",
+      "cost": 3,
+      "hp": [
+        840,
+        1365,
+        2184,
+        3500
+      ],
+      "damage": [
+        68,
+        113,
+        176,
+        284
+      ],
+      "range": 2,
+      "moveSpeed": "medium",
+      "secPerHit": 1.11,
+      "critChance": 15,
+      "energy": 2,
+      "ability": {
+        "name": "Binding Ring",
+        "kind": "bind",
+        "duration": 30,
+        "startCharged": true,
+        "noRepeat": true,
+        "chargedForm": {
+          "name": "Hoopa Unbound",
+          "sprite": "assets/sprites/hoopa-unbound.png"
+        }
+      }
+    }
+  }
+}

@@ -1,5 +1,17 @@
 [
   {
+    "id": "2026-10-16-shields",
+    "version": "0.43.0",
+    "date": "2026-10-16",
+    "title": "Shields",
+    "intro": "New: shields. A shield is a second bar above a Pokémon's HP that takes every hit first.",
+    "changes": [
+      { "kind": "new", "text": "Shields: while a Pokémon's shield lasts, its HP can't go down. A hit bigger than what's left breaks the shield, and the extra damage is wasted. A broken shield is gone for the fight, and healing only restores HP." },
+      { "pokemon": "minior", "kind": "change", "text": "Rock form is now a shield: Minior starts with a 1100 / 1870 / 3179 / 5390 shield over its 600 / 1020 / 1734 / 2940 HP. When the shield breaks, it becomes Star Form with its HP untouched." },
+      { "pokemon": "minior", "kind": "change", "text": "When Star Form is knocked out, Minior faints for real." }
+    ]
+  },
+  {
     "id": "2026-10-16-minior-low-hp",
     "version": "0.42.0",
     "date": "2026-10-16",

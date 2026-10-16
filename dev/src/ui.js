@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=3512198';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=47bdeea';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=3512198';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=3512198';
+} from './game.js?v=47bdeea';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=47bdeea';
 
 const TICK_MS = 100;
 // Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
@@ -161,7 +161,7 @@ function abilityTexts(def, star, catalog) {
     case 'copy': return { when: 'Always', text: `Transforms into the nearest enemy and copies its stats.`, more: `Walks to the nearest enemy and takes ${vTime(p.morph)} to transform into it, copying its HP, damage, attack speed, range, and crit (not its ability or movement). It keeps its share of HP and stands still while transformed. When that Pokémon faints, it turns back and walks to the next one.` };
     case 'transform': {
       const f = p.form;
-      const when = p.trigger === 'knockedOut' ? 'When knocked out' : p.trigger === 'lowHp' ? `At ${p.hpPct}% HP` : every;
+      const when = p.trigger === 'knockedOut' ? 'When knocked out' : p.trigger === 'lowHp' ? `At ${p.hpPct}% HP` : p.trigger === 'shieldBreak' ? 'When its shield breaks' : every;
       const into = p.trigger === 'knockedOut' ? 'Instead of fainting, it transforms' : 'Transforms';
       const morph = p.morph ? ` It takes ${vTime(p.morph)} and can't be hurt while it does.` : '';
       const wave = f.shockwave ? ` A shock wave stuns every enemy in the ${area(f.shockwave.radius)} around it for ${vTime(f.shockwave.stun)}.` : '';
@@ -357,7 +357,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     const el = document.createElement('div');
     el.className = `unit ${side}${def.sprite ? ' sprite-unit' : ''}${def.summon ? ' summon' : ''}`;
     el.dataset.type = def.type;
-    const bars = '<div class="bars"><div class="hp"><i></i><b></b></div><div class="mana"><i></i></div></div>';
+    const bars = '<div class="bars"><div class="sh"><i></i></div><div class="hp"><i></i></div><div class="mana"><i></i></div></div>';
     const stars = `<div class="stars s${star}">${levelMark(star)}</div>`;
     if (def.sprite) {
       el.dataset.facing = facing;
@@ -1122,6 +1122,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       ${hint}
       <dl class="stats">
         <dt>HP</dt><dd>${show(stats.hp)}</dd>
+        ${stats.shield ? `<dt>Shield</dt><dd>${show(stats.shield)}</dd>` : ''}
         ${isCopycat(def) ? `<dt>Movement</dt><dd>${SPEED_NAME[def.moveSpeed]}</dd><dt>Everything else</dt><dd>Copies its target</dd>` : `
         <dt>Damage per hit</dt><dd>${show(stats.atk)}</dd>
         <dt>Attacks every</dt><dd>${attackTime(stats)}s</dd>
@@ -1154,7 +1155,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     layer.replaceChildren();
     const addActor = (u) => {
       const ally = u.side === viewer;
-      const a = { ...u, shield: 0, stunUntil: 0, el: unitEl(u.unitId, u.star, ally ? 'ally' : 'enemy', ally ? 'up' : 'down') };
+      const a = { ...u, shield: u.shield ?? 0, maxShield: u.maxShield ?? 0, stunUntil: 0, el: unitEl(u.unitId, u.star, ally ? 'ally' : 'enemy', ally ? 'up' : 'down') };
+      if (a.shield > 0) a.el.classList.add('shielded');
       const p = viewPos(u.x, u.y);
       place(a.el, p.x, p.y);
       layer.append(a.el);
@@ -1240,7 +1242,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   function bars(a) {
     a.el.querySelector('.hp i').style.width = `${(100 * a.hp) / a.maxHp}%`;
     a.el.querySelector('.hp').style.setProperty('--hp-trail', `${(100 * a.hp) / a.maxHp}%`);
-    a.el.querySelector('.hp b').style.width = `${Math.min(100, (100 * a.shield) / a.maxHp)}%`;
+    a.el.querySelector('.sh i').style.width = `${a.maxShield ? (100 * a.shield) / a.maxShield : 0}%`;
     a.el.querySelector('.mana i').style.width = `${a.maxMana ? (100 * a.mana) / a.maxMana : 0}%`;
   }
 
@@ -1722,8 +1724,18 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         });
         break;
       }
-      case 'drain': // sudden death: everyone loses the same HP each tick
-        if (newest()) { a.hp = ev.hp; bars(a); }
+      case 'drain': // sudden death: everyone loses the same HP (or shield) each tick
+        if (newest()) { a.hp = ev.hp; if (ev.shield !== undefined) a.shield = ev.shield; bars(a); }
+        break;
+      case 'shieldBreak': // the shield is gone: its bar shatters and folds away
+        later(ctx.hitDelay.get(a.id) ?? 0, () => {
+          if (newest()) { a.shield = 0; bars(a); }
+          a.el.classList.remove('shielded');
+          if (!animate) return;
+          floatText(a, 'Shield broke!', 'shield');
+          fx(at().x, at().y, 'shield', '#bfe3ff', 1.6);
+          play(a.el, 'shield-break', 420);
+        });
         break;
       case 'heal':
         if (newest()) { a.hp = ev.hp; bars(a); }
@@ -2158,7 +2170,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   const formsOf = (def) => (def.ability?.form ? [def.ability.form] : def.ability?.chargedForm ? [def.ability.chargedForm] : def.ability?.flavors ?? []);
   const formDef = (def, i = 0) => {
     const f = formsOf(def)[i];
-    return { ...def, ...f, hp: f.hp ?? def.hp, energy: f.energy ?? 0, ability: null, form: true };
+    return { ...def, ...f, hp: f.hp ?? def.hp, shield: f.shield ?? null, energy: f.energy ?? 0, ability: null, form: true };
   };
   const formKey = (id, i) => `form:${id}:${i}`;
   // Who summons this Pokémon.
@@ -2192,7 +2204,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   const radarRaw = (def, star) => {
     const st = unitStats(def, star);
     return {
-      hp: st.hp, atk: st.atk, spd: 1 / attackTime(st),
+      hp: st.hp + st.shield, atk: st.atk, spd: 1 / attackTime(st), // a shield counts as more HP
       move: 1 / (MOVE_SPEEDS[def.moveSpeed] + STEP_TICKS * TICK_SECONDS),
     };
   };
@@ -2275,7 +2287,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     // Numbers in the text get their own spans so a level change can count them.
     const counted = (html) => html.split(/(<[^>]+>)/).map((part) => (part.startsWith('<') ? part : part.replace(/\d+(?:\.\d+)?/g, '<span class="pn">$&</span>'))).join('');
     return {
-      hp: String(show(st.hp)), dmg: String(show(st.atk)), power: counted(power), more: counted(more),
+      hp: String(show(st.hp)), shield: st.shield ? String(show(st.shield)) : null, dmg: String(show(st.atk)), power: counted(power), more: counted(more),
     };
   }
 
@@ -2451,6 +2463,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     const chip = (k, label, value) => `<span class="dex-chip"${k ? ` data-k="${k}"` : ''}><small>${label}</small><b${k ? ` style="min-width:${width(k)}ch"` : ''}>${value}</b></span>`;
     const chips = [
       chip('hp', 'HP', v.hp),
+      st.shield && chip('shield', 'Shield', v.shield),
       !copycat && chip('dmg', 'Damage', v.dmg),
       !copycat && chip('', 'Attacks every', `${attackTime(st)}s`),
       !copycat && chip('', 'Range', def.range > 1 ? `${def.range} tiles` : 'Melee'),

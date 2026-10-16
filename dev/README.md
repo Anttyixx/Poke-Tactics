@@ -259,10 +259,10 @@ test a set of changes together. Team styles to pit against each other live in `A
     enemies are attacking: 40% less damage, and the first stun or shove (knockback, Psywave) that
     would land breaks the shield instead, blocking anything else in that same tick. Treats land
     at the end of the tick. Shielded Pokémon show a bubble.
-  - Minior, **Shining Star**: Rock form is a slow, soft-hitting wall (very slow, 30 damage every 3.0s,
-    1700 HP). At 35% HP (at the end of that tick) it spends 0.5s transforming, immune to everything
-    (damage, stuns, knockbacks, sudden death), then becomes Star Form for the rest of the fight, keeping
-    the HP it has left. Being knocked out is a real knockout, in either form. Changing sends out a shock wave
+  - Minior, **Shining Star**: Rock form is a slow, soft-hitting wall (very slow, 30 damage every 3.0s)
+    with a 1100 **shield** over its 600 HP. When the shield breaks (at the end of that tick) it spends
+    0.5s transforming, immune to everything (damage, stuns, knockbacks, sudden death), then becomes Star
+    Form for the rest of the fight, with its HP untouched. Being knocked out is a real knockout. Changing sends out a shock wave
     that stuns every enemy in the 3x3 around it for 1s. Star Form attacks every 0.3s for 20 and doesn't
     walk: it zips straight to the open square beside its target (if all are taken, it walks). Its own
     ability, every 10 attacks: it picks a different enemy (a seeded pick among those with a free square
@@ -287,8 +287,11 @@ test a set of changes together. Team styles to pit against each other live in `A
   forward, else a diagonal (back ones first). If all of those are taken, the launched Pokémon lands
   on the closest free square instead.
 - **Sudden death:** fights have a 30-second timer. When it runs out, every Pokémon still standing loses
-  300 HP per second (the same for everyone, ignoring shields) while the fight carries on, so the weakest
-  fall first until one side is knocked out.
+  300 HP per second (the same for everyone; a shield wears down first, like any damage) while the fight
+  carries on, so the weakest fall first until one side is knocked out.
+- **Shields:** some Pokémon (Minior) start with a shield, a second bar above their HP. While it lasts it
+  takes every hit and HP can't go down; a hit bigger than what's left breaks it and the rest is wasted.
+  A broken shield is gone for the fight, and healing only ever restores HP.
 - **Damage:** the loser takes `round + 2 × (copies in the winner's surviving troops)`. A draw (the last
   Pokémon on both sides fall at the same moment) costs each player `ceil(round / 2)`. Everyone starts at 100 HP.
 - **Keys:** `D` reroll, `F` fight, `E` sell the selected troop, `Space` skip the combat replay, `P` Pokédex,
