@@ -6,20 +6,20 @@
 //            the player does and shows the state the server sends back
 //            (connection: src/online.js).
 
-import { createGame, applyIntent } from './game.js?v=ec880a5';
-import { botTurn } from './bot.js?v=ec880a5';
-import { fightSummary } from './matchlog.js?v=ec880a5';
-import { createUI } from './ui.js?v=ec880a5';
-import { hashSeed } from './rng.js?v=ec880a5';
-import { connect, isCode, playerId, serverUrl, checkServer, netLog, note } from './online.js?v=ec880a5';
-import { loadProfile, saveProfile, recordBattle, recordMatch, BOT_AVATAR } from './profile.js?v=ec880a5';
+import { createGame, applyIntent } from './game.js?v=4359a81';
+import { botTurn } from './bot.js?v=4359a81';
+import { fightSummary } from './matchlog.js?v=4359a81';
+import { createUI } from './ui.js?v=4359a81';
+import { hashSeed } from './rng.js?v=4359a81';
+import { connect, isCode, playerId, serverUrl, checkServer, netLog, note } from './online.js?v=4359a81';
+import { loadProfile, saveProfile, recordBattle, recordMatch, BOT_AVATAR } from './profile.js?v=4359a81';
 
 const BOT = 1;
 
-const catalogText = await (await fetch('data/units.json?v=ec880a5')).text();
+const catalogText = await (await fetch('data/units.json?v=4359a81')).text();
 const catalog = JSON.parse(catalogText);
 // What's new: newest first. Add an entry to data/changelog.json with each update.
-const changelog = await fetch('data/changelog.json?v=ec880a5').then((r) => (r.ok ? r.json() : [])).catch(() => []);
+const changelog = await fetch('data/changelog.json?v=4359a81').then((r) => (r.ok ? r.json() : [])).catch(() => []);
 // Which deploy this is (the deploy tags every file with ?v=<commit>). The
 // server only lets in players on its own build, so everyone runs the same rules.
 const BUILD = new URL(import.meta.url).searchParams.get('v') ?? 'local';
