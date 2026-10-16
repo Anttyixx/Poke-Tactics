@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=1832476';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=f860b0a';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=1832476';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=1832476';
+} from './game.js?v=f860b0a';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=f860b0a';
 
 const TICK_MS = 100;
 // Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
@@ -180,7 +180,7 @@ function abilityTexts(def, star, catalog) {
 
 export function describePower(def, star, catalog) {
   const pt = powerText(def, star, catalog);
-  return pt ? abilityBody(pt.text, pt.more, { lead: `<b>${esc(def.ability.name)}:</b> <span class="pw-when">${pt.when}</span> ` }) : '';
+  return pt ? abilityHead(def.ability.name, pt.when, pt.more) + abilityBody(pt.text, pt.more) : '';
 }
 
 // An ability's short text, swapped in place for the full one by its More
@@ -191,14 +191,16 @@ if (typeof document !== 'undefined') {
   document.addEventListener('click', (e) => {
     if (!e.target.closest?.('.pw-toggle')) return;
     moreOpen = !moreOpen;
+    for (const btn of document.querySelectorAll('.pw-toggle')) btn.setAttribute('aria-expanded', String(moreOpen));
     for (const box of document.querySelectorAll('.pw-text')) swapAbilityText(box);
+    if (!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      e.target.closest('.pw-toggle').animate?.([{ transform: 'scale(0.92)' }, { transform: 'scale(1.04)' }, { transform: 'none' }], { duration: 260, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' });
+    }
   });
 }
 // The box grows or shrinks to the new text while the old text drifts up and
 // fades, and the new one unrolls from the top, line by line as the box opens.
 function swapAbilityText(box) {
-  const btn = box.querySelector('.pw-toggle');
-  btn.setAttribute('aria-expanded', String(moreOpen));
   const calm = !box.animate || !box.offsetParent || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   for (const a of box.getAnimations?.({ subtree: true }) ?? []) a.finish();
   box.querySelector('.pw-ghost')?.remove();
@@ -210,7 +212,7 @@ function swapAbilityText(box) {
   const inText = box.querySelector(moreOpen ? '.pw-full' : '.pw-short');
   const ease = 'cubic-bezier(0.22, 1, 0.36, 1)';
   const ms = Math.min(520, 280 + Math.abs(to - from) * 0.8);
-  box.style.overflow = 'hidden'; // only while it resizes, so the button's focus ring shows
+  box.style.overflow = 'hidden'; // only while it resizes, so links' focus rings show
   box.animate([{ height: `${from}px` }, { height: `${to}px` }], { duration: ms, easing: ease }).onfinish = () => { box.style.overflow = ''; };
   // The old text, as a ghost on top, leaving.
   const ghost = outText.cloneNode(true);
@@ -230,14 +232,18 @@ function swapAbilityText(box) {
   inText.querySelectorAll('.v').forEach((v, i) => v.animate([
     { textShadow: '0 0 0 transparent' }, { textShadow: '0 0 10px currentColor' }, { textShadow: '0 0 0 transparent' },
   ], { duration: 600, delay: 200 + i * 60, easing: 'ease-out' }));
-  btn.animate([{ transform: 'scale(0.92)' }, { transform: 'scale(1.04)' }, { transform: 'none' }], { duration: 260, easing: ease });
 }
-// `lead` goes before either text (the name in the info panel); `keyed` marks
-// the texts so a level change in the Pokédex can count their numbers.
-export function abilityBody(short, more, { lead = '', keyed = false } = {}) {
-  const p = (cls, html, k) => `<p class="${cls}"${keyed ? ` data-k="${k}"` : ''}>${lead}${html}</p>`;
+// `keyed` marks the texts so a level change in the Pokédex can count their numbers.
+export function abilityBody(short, more, { keyed = false } = {}) {
+  const p = (cls, html, k) => `<p class="${cls}"${keyed ? ` data-k="${k}"` : ''}>${html}</p>`;
   if (!more) return p('pw-short', short, 'power');
-  return `<div class="pw-text${moreOpen ? ' full' : ''}">${p('pw-short', short, 'power')}${p('pw-full', more, 'more')}<button type="button" class="pw-toggle" aria-expanded="${moreOpen}"><span class="pw-show">More details</span><span class="pw-hide">Fewer details</span></button></div>`;
+  return `<div class="pw-text${moreOpen ? ' full' : ''}">${p('pw-short', short, 'power')}${p('pw-full', more, 'more')}</div>`;
+}
+// The ability's name and when it goes off, with the More details button in
+// the top-right corner, where it stays put however long the text gets.
+export function abilityHead(name, when, more) {
+  const toggle = more ? `<button type="button" class="pw-toggle" aria-expanded="${moreOpen}"><span class="pw-labels"><span class="pw-show">More details</span><span class="pw-hide">Fewer details</span></span></button>` : '';
+  return `<div class="pw-head"><h3>${esc(name)} <span class="pw-when">${when}</span></h3>${toggle}</div>`;
 }
 
 // Ditto has no fighting stats of its own: it copies the nearest enemy's.
@@ -2443,7 +2449,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     ].filter(Boolean).join('');
     const power = isForm
       ? `<div class="dex-power"><h3>${esc(base.ability.name)} ${formsOf(base)[dexForm].flavor ? 'flavour' : 'form'}</h3><p data-k="power">${v.power}</p></div>`
-      : def.ability ? `<div class="dex-power"><h3>${esc(def.ability.name)} <span class="pw-when">${powerText(def, star, catalog).when}</span></h3>${abilityBody(v.power, v.more, { keyed: true })}</div>` : '';
+      : def.ability ? `<div class="dex-power">${abilityHead(def.ability.name, powerText(def, star, catalog).when, v.more)}${abilityBody(v.power, v.more, { keyed: true })}</div>` : '';
 
     // Related Pokémon: [def, attributes, label, key].
     const related = [];

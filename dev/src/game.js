@@ -24,8 +24,8 @@
 //   { type: 'ready' }                         lock in planning; combat starts when all are ready
 //   { type: 'continue' }                      done watching combat; next round starts when all continue
 
-import { randInt } from './rng.js?v=1832476';
-import { simulate, COLS, HALF } from './combat.js?v=1832476';
+import { randInt } from './rng.js?v=f860b0a';
+import { simulate, COLS, HALF } from './combat.js?v=f860b0a';
 
 export const TEAM_SIZE = 6;
 export const COPIES_PER_TROOP = 4;
