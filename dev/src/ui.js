@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=7bd2a40';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=de87d5a';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=7bd2a40';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=7bd2a40';
+} from './game.js?v=de87d5a';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=de87d5a';
 
 const TICK_MS = 100;
 // Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
@@ -102,6 +102,10 @@ function abilityTexts(def, star, catalog) {
   const every = `Every ${def.energy} attacks`;
   switch (p.kind) {
     case 'empower': {
+      if (p.dash && p.crash) {
+        const pass = p.passPct ? `Enemies it passes through take ${vDmg(`${p.passPct}%`)} damage (${vDmg(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.passPct) / 100)))}) and are stunned for ${vTime(p.passStun ?? p.stun)}.` : '';
+        return { when: every, text: `Crashes into the farthest enemy, knocking it aside and dealing ${pct} to it.`, more: `Dashes in a straight line to the farthest enemy, immune to everything on the way, lands on its square and shoves it aside, then hits it for ${hit} and stuns it for ${vTime(p.stun)}. ${pass}`.trim() };
+      }
       if (p.dash) return { when: every, text: `Dashes to the farthest enemy and deals ${pct} to it, stunning every enemy in its path.`, more: `Dashes in a straight line to the farthest enemy, immune to everything on the way, and hits it for ${hit}. The target and every enemy it passes through are stunned for ${vTime(p.stun)}.` };
       if (p.teleport) return { when: every, text: `Teleports next to the farthest enemy and deals ${pct} to it.`, more: `Teleports next to the farthest enemy and hits it for ${hit}${p.lifestealPct ? `, healing for ${vHeal(`${p.lifestealPct}%`)} of the damage dealt` : ''}.` };
       const extra = [
@@ -123,6 +127,7 @@ function abilityTexts(def, star, catalog) {
       const start = p.startCharged ? 'It starts the fight charged and refills' : 'Its ability charges';
       return { when: `After ${def.energy} attacks`, text: `Pins the next enemy that tries to move in place for ${vTime(p.duration)}.`, more: `${start} after ${vNum(def.energy)} attacks, then waits until an enemy tries to move. Hoopa binds that Pokémon in place for ${vTime(p.duration)}: it can't walk, zip, or dash, but it still attacks anything in range.${p.noRepeat ? ' It never binds the same Pokémon twice in a row.' : ''}${p.chargedForm ? ` While charged it becomes ${esc(p.chargedForm.name)}.` : ''}` };
     }
+    case 'lure': return { when: 'Always', text: `Enemies that can hit ${esc(def.name)} without moving pick it as their next target.`, more: `Its spores draw attention: whenever an enemy picks a new target and ${esc(def.name)} is already within its reach, it goes for ${esc(def.name)}. An enemy that would have to move to reach it picks as usual.` };
     case 'taunt': return { when: every, text: `Makes a nearby enemy attack ${esc(def.name)} instead of its friends.`, more: `Spreads its spores: the hardest-hitting enemy within the ${area(p.radius)} around it that is attacking someone else must attack ${esc(def.name)} for ${vTime(p.duration)}.` };
     case 'rage': return p.maxStacks
       ? { when: 'Every attack', text: `Attacks faster with every hit while it stands still, up to ${vNum(`${p.stackPct * p.maxStacks}%`)} faster.`, more: `Each attack in a row without moving makes it attack ${vNum(`${p.stackPct}%`)} faster, up to ${vNum(`${p.stackPct * p.maxStacks}%`)} after ${vNum(p.maxStacks)} attacks. Moving resets it.` }
@@ -152,7 +157,11 @@ function abilityTexts(def, star, catalog) {
       return { when: every, text: `Summons ${vNum(n)} ${name} to fight beside it.`, more: `Summons ${vNum(n)} ${name} beside it. ${level}` };
     }
     case 'stealth': return { when: every, text: `Turns invisible for ${vTime(p.duration)}${p.hastePct ? ` and attacks ${vNum(`${p.hastePct}%`)} faster` : ''}.`, more: `Turns invisible for ${vTime(p.duration)}${p.hastePct ? ` and attacks ${vNum(`${p.hastePct}%`)} faster` : ''}. Enemies can't target or follow it while it's invisible.` };
-    case 'haste': return { when: every, text: `Attacks ${vNum(`${p.hastePct}%`)} faster for ${vTime(p.duration)}.` };
+    case 'haste': {
+      if (!p.burnPct) return { when: every, text: `Attacks ${vNum(`${p.hastePct}%`)} faster for ${vTime(p.duration)}.` };
+      const burn = show(Math.floor((def.damage[lvl] * STAT_SCALE * p.burnPct) / 100));
+      return { when: every, text: `Attacks ${vNum(`${p.hastePct}%`)} faster for ${vTime(p.duration)}, and its hits set enemies burning.`, more: `Attacks ${vNum(`${p.hastePct}%`)} faster for ${vTime(p.duration)}. Each hit while it lasts burns the target for ${vDmg(`${p.burnPct}%`)} of its damage (${vDmg(burn)}) every second for ${vTime(p.burnDuration)}. Another hit restarts the burn.` };
+    }
     case 'quake': return { when: every, text: `Shakes the whole board, dealing ${pct} to every enemy${p.stun ? ' and stunning them' : ''}.`, more: `Every enemy takes ${hit}${p.stun ? ` and is stunned for ${vTime(p.stun)}` : ''}.` };
     case 'chill': return { when: 'Every attack', text: `Slows the enemy it hits by ${vNum(`${p.slowPct}%`)}.`, more: `Chills the target for ${vTime(p.duration)}: it attacks and moves ${vNum(`${p.slowPct}%`)} slower. Another hit restarts the timer.` };
     case 'splashHeal': {
@@ -160,7 +169,10 @@ function abilityTexts(def, star, catalog) {
       return { when: 'Every attack', text: `Each attack also heals your Pokémon near its target for ${vHeal(`${p.healPct}%`)} of its damage.`, more: `Heals your Pokémon ${where} for ${vHeal(`${p.healPct}%`)} of its damage (${vHeal(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.healPct) / 100)))}).` };
     }
     case 'selfdestruct': return { when: 'When knocked out', text: `Explodes after fainting and deals ${pct} to the enemies around it.`, more: `Stays on its square for ${vTime(p.delay)}, then explodes: enemies in the ${area(p.radius)} around it take ${hit}.` };
-    case 'copy': return { when: 'Always', text: `Transforms into the nearest enemy and copies its stats.`, more: `Walks to the nearest enemy and takes ${vTime(p.morph)} to transform into it, copying its HP, damage, attack speed, range, and crit (not its ability or movement). It keeps its share of HP and stands still while transformed. When that Pokémon faints, it turns back and walks to the next one.` };
+    case 'copy': {
+      const share = p.copyPct ? ` The copy has ${vNum(`${p.copyPct[lvl]}%`)} of the original's HP and damage (more at higher levels).` : '';
+      return { when: 'Always', text: p.copyPct ? `Transforms into the nearest enemy and copies its stats at ${vNum(`${p.copyPct[lvl]}%`)}.` : `Transforms into the nearest enemy and copies its stats.`, more: `Walks to the nearest enemy and takes ${vTime(p.morph)} to transform into it, copying its HP, damage, attack speed, range, and crit (not its ability or movement).${share} It keeps its share of HP and stands still while transformed. When that Pokémon faints, it turns back and walks to the next one.` };
+    }
     case 'transform': {
       const f = p.form;
       const when = p.trigger === 'knockedOut' ? 'When knocked out' : p.trigger === 'lowHp' ? `At ${p.hpPct}% HP` : p.trigger === 'shieldBreak' ? 'When its shield breaks' : every;
@@ -1548,6 +1560,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         }
         break;
       }
+      case 'burn': // Infernape's Blaze set it burning
+        if (animate) floatText(a, 'Burn', 'rage');
+        break;
       case 'rage': // Annihilape: faster with every attack in a row
         a.el.dataset.rage = ev.stacks;
         a.el.classList.toggle('raging', ev.stacks > 0);
