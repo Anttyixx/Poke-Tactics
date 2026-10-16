@@ -928,8 +928,10 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 @keyframes level-bump { from { transform: scale(0.6); opacity: 0.3; } }
 @media (prefers-reduced-motion: reduce) { .dex-level.bump .stars { animation: none; } }
 .dex-power { padding: 12px 14px; border-radius: 14px; background: var(--panel-2); border-left: 4px solid var(--type); margin-bottom: 12px; }
-.dex-power h3 { margin: 0 0 4px; font-size: 16px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
-.dex-power h3 .pw-when { font-size: 12px; }
+.pw-head { display: flex; align-items: flex-start; gap: 10px; margin: 0 0 6px; }
+.pw-head h3 { margin: 0; font-size: 16px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; flex: 1; min-width: 0; }
+.ability .pw-head h3 { font-size: 15px; }
+.pw-head .pw-when { font-size: 12px; }
 .dex-power p { margin: 0; color: #d4d8e8; line-height: 1.45; }
 .ability p { margin: 0; line-height: 1.45; }
 /* An ability's short text and its full one: the More details button swaps them. */
@@ -938,14 +940,17 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .pw-ghost { position: absolute; top: 0; left: 0; margin: 0; pointer-events: none; }
 .pw-toggle::after { display: inline-block; transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1); }
 .pw-toggle {
-  display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; min-width: 0;
+  display: inline-flex; align-items: center; gap: 6px; flex: none; margin: -1px 0 0 auto; min-width: 0; white-space: nowrap;
   font: inherit; font-size: 13px; font-weight: 800; color: var(--mana); padding: 4px 10px; border-radius: 99px; cursor: pointer;
   background: color-mix(in srgb, var(--mana) 12%, transparent); border: 1px solid color-mix(in srgb, var(--mana) 30%, transparent);
 }
 .pw-toggle:hover { background: color-mix(in srgb, var(--mana) 20%, transparent); }
 .pw-toggle::after { content: '▸'; }
-.pw-text.full .pw-toggle::after { transform: rotate(180deg); }
-.pw-text:not(.full) .pw-hide, .pw-text.full .pw-show { display: none; }
+.pw-toggle[aria-expanded="true"]::after { transform: rotate(180deg); }
+/* Both labels share one cell so the button keeps its width when it flips. */
+.pw-toggle .pw-labels { display: grid; }
+.pw-toggle .pw-show, .pw-toggle .pw-hide { grid-area: 1 / 1; text-align: center; }
+.pw-toggle[aria-expanded="false"] .pw-hide, .pw-toggle[aria-expanded="true"] .pw-show { visibility: hidden; }
 .pw-toggle:focus-visible { outline: 2px solid var(--mana); outline-offset: 2px; }
 
 /* ---- Toast ---- */

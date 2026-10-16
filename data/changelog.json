@@ -1,5 +1,14 @@
 [
   {
+    "id": "2026-10-16-ability-button-corner",
+    "version": "0.40.3",
+    "date": "2026-10-16",
+    "title": "More details button stays put",
+    "changes": [
+      { "kind": "change", "text": "The More details button now sits in the top-right corner of the ability box, next to the ability's name, so it stays in the same spot when the text grows or shrinks." }
+    ]
+  },
+  {
     "id": "2026-10-16-ability-swap-animation",
     "version": "0.40.2",
     "date": "2026-10-16",
