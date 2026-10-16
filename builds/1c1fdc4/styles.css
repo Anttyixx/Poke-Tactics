@@ -121,8 +121,10 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 }
 .chip .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
 .chip b { font-size: 17px; font-weight: 900; font-variant-numeric: tabular-nums; }
-.chip.coins b::before { content: ""; display: inline-block; width: 0.8em; height: 0.8em; margin-right: 5px; border-radius: 50%; vertical-align: -0.05em;
-  background: radial-gradient(circle at 35% 35%, #fff6c8, var(--gold) 45%, #c98a12); box-shadow: 0 0 6px #ffc93c66; }
+.chip.coins b::before { content: ""; display: inline-block; width: 1.15em; height: 1.15em; margin-right: 5px; vertical-align: -0.22em;
+  background: url(assets/ui/coin.png) center / contain no-repeat; filter: drop-shadow(0 0 4px #ffc93c55); }
+/* The coin sprite, sized to the text around it. */
+.coin-icon { display: inline-block; width: 1.1em; height: 1.1em; vertical-align: -0.2em; background: url(assets/ui/coin.png) center / contain no-repeat; }
 .bump { animation: bump 0.45s var(--spring); }
 @keyframes bump { 0% { transform: scale(1); } 35% { transform: scale(1.25); } 100% { transform: scale(1); } }
 .duel { flex: 1; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; min-width: 0; margin: 0 6px; }
@@ -712,8 +714,10 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 #shop .card .cost {
   position: absolute; top: 8px; right: 8px;
   font-weight: 900; color: #2a1d00; font-size: 13px;
-  background: linear-gradient(180deg, #ffe07a, var(--gold)); border-radius: 99px; padding: 0 8px; box-shadow: 0 2px 6px #0006;
+  background: linear-gradient(180deg, #ffe07a, var(--gold)); border-radius: 99px; padding: 0 8px 0 3px; box-shadow: 0 2px 6px #0006;
+  display: inline-flex; align-items: center; gap: 2px;
 }
+#shop .card .cost::before { content: ""; width: 1.15em; height: 1.15em; background: url(assets/ui/coin.png) center / contain no-repeat; }
 #shop .card .left { font-size: 11px; color: var(--muted); }
 #shop .card .levelup { font-size: 11px; font-weight: 900; color: var(--gold); }
 #shop-actions { display: flex; flex-direction: column; gap: 8px; width: 150px; }
@@ -975,7 +979,7 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   #shop { gap: 6px; }
   #shop .card { padding: 8px 2px 6px; font-size: 13px; }
   #shop .card .portrait { width: 42px; height: 42px; }
-  #shop .card .cost { top: 5px; right: 5px; font-size: 12px; padding: 0 6px; }
+  #shop .card .cost { top: 5px; right: 5px; font-size: 12px; padding: 0 6px 0 2px; }
   #shop-actions { flex-direction: row; width: 100%; }
   #shop-actions button { padding: 10px; }
   .pick-grid { grid-template-columns: 1fr; }
@@ -1027,6 +1031,9 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 }
 
 /* ---- Start screen ---- */
+/* While the game loads (html.booting, removed by main.js), and while the start
+   screen is up, the game screen behind it stays hidden. */
+.booting #app, .booting #toast, body:has(#overlay.start-screen:not([hidden])) #app { visibility: hidden; }
 #overlay.start-screen {
   background:
     radial-gradient(800px 500px at 50% 20%, #2a3a6e, transparent 70%),
@@ -1260,7 +1267,15 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   position: fixed; z-index: 2; margin: 0; min-width: 0;
   top: max(14px, env(safe-area-inset-top)); right: max(14px, env(safe-area-inset-right));
 }
-#overlay:not(.start-screen) .start-menu, #overlay:not(.start-screen) .start-version { display: none; }
+#overlay:not(.start-screen) .start-menu, #overlay:not(.start-screen) .start-version, #overlay:not(.start-screen) .start-corner { display: none; }
+/* Start screen: Pokédex and menu buttons together in the top right. */
+#overlay .start-corner {
+  position: fixed; z-index: 2; display: flex; gap: 8px;
+  top: max(14px, env(safe-area-inset-top)); right: max(14px, env(safe-area-inset-right));
+}
+#overlay .start-corner .start-menu { position: static; }
+#overlay .start-corner button { margin: 0; min-width: 0; }
+@media (max-width: 520px) { #overlay .start-corner .label-text { display: none; } }
 .start-version {
   position: fixed; z-index: 2;
   left: max(14px, env(safe-area-inset-left)); bottom: max(12px, env(safe-area-inset-bottom));
@@ -1287,7 +1302,20 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 }
 :is(#overlay, #lobby) .profile-chip span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 :is(#overlay, #lobby) .profile-chip .avatar { width: 36px; height: 36px; background-color: #ffffff14; border-radius: 8px; background-size: 80%; }
-#overlay:not(.start-screen) .profile-chip { display: none; }
+#overlay:not(.start-screen) .profile-chip, #overlay:not(.start-screen) .start-people { display: none; }
+/* Start screen: profile chip and the Friends button, top left. */
+#overlay .start-people {
+  position: fixed; z-index: 2; display: flex; align-items: stretch; gap: 8px;
+  top: max(14px, env(safe-area-inset-top)); left: max(14px, env(safe-area-inset-left));
+}
+#overlay .start-people .profile-chip { position: static; max-width: calc(100vw - 240px); }
+#overlay .start-people .friends-btn { position: relative; margin: 0; min-width: 0; padding: 0 12px; }
+.friends-btn svg { width: 22px; height: 22px; }
+.friends-btn .online-count {
+  position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 99px;
+  background: #3ecf6b; color: #062312; font: 900 11px/18px var(--font); text-align: center; box-shadow: 0 0 0 2px var(--bg);
+}
+.friends-btn .asks-dot { position: absolute; top: -3px; left: -3px; width: 10px; height: 10px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 0 2px var(--bg); }
 
 /* Profile screen. */
 /* Profile screen: picture + name, then stats and friends. */
@@ -1411,6 +1439,8 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 /* Annihilape's rage: a red glow that grows with each attack in a row. */
 .unit.sprite-unit.raging .sprite { filter: var(--tint) drop-shadow(0 0 calc(var(--rage, 1) * 1.6px) #ff4a2e) saturate(calc(1 + var(--rage, 1) * 0.12)); }
 /* A fainted Dreepy drifting back to Dragapult. */
+.dart-flyer { pointer-events: none; z-index: 16 !important; }
+.streak { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 15; overflow: visible; }
 .dart-ghost { opacity: 0.22; pointer-events: none; z-index: 1 !important; filter: grayscale(0.8) blur(0.5px); }
 /* Bound by Hoopa: golden rings around it, turning slowly, until the bind wears off. */
 .unit.bound .body::before {
@@ -1445,3 +1475,8 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 }
 @keyframes bubble { 50% { transform: scale(1.04); } }
 @media (prefers-reduced-motion: reduce) { .unit.guarded::after { animation: none; } }
+
+/* Hoopa's rings strain as a bound Pokémon tries to move */
+.unit.strain .body { animation: strain .3s ease-in-out; }
+@keyframes strain { 0%, 100% { translate: 0 0; } 25% { translate: -4% 0; } 75% { translate: 4% 0; } }
+@media (prefers-reduced-motion: reduce) { .unit.strain .body { animation: none; } }

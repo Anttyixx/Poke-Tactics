@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=1441bb9';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=1c1fdc4';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=1441bb9';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=1441bb9';
+} from './game.js?v=1c1fdc4';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=1c1fdc4';
 
 const TICK_MS = 100;
 // Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
@@ -65,8 +65,8 @@ export function powerText(def, star, catalog) {
       return { when: every, text: `Its next attack hits for ${hit}${extra.length ? `${extra.length === 1 ? ' and ' : ', '}${extra.join(' and ')}` : ''}.` };
     }
     case 'bind': {
-      if (p.targeted) return { when: `After ${def.energy} attacks`, text: `${p.pick === 'move' ? 'Holds its full charge until an enemy tries to change squares by itself (a step, or an ability that moves it), then binds that one in rings just before it goes: the move (or moving power, like a dash) is stopped and counts as its first try to break free. Being shoved by an enemy attack never triggers it.' : "Binds the Pokémon it's attacking in rings (if that one is already bound, the nearest enemy that isn't)."} A bound Pokémon still attacks anything in range, but can't walk, zip or dash. The rings stop its next ${vNum(p.breakAfter)} tries to move (each one weakens them), then break. They also snap at once if it's shoved or knocked to another square, or knocked out.` };
-      const start = p.startCharged ? 'It starts the fight charged and refills' : 'Its power fills';
+      if (p.targeted) return { when: `After ${def.energy} attacks`, text: `${p.pick === 'move' ? 'Holds its full charge until an enemy tries to change squares by itself (a step, or an ability that moves it), then binds that one in rings just before it goes: the move (or moving ability, like a dash) is stopped and counts as its first try to break free. Being shoved by an enemy attack never triggers it.' : "Binds the Pokémon it's attacking in rings (if that one is already bound, the nearest enemy that isn't)."} A bound Pokémon still attacks anything in range, but can't walk, zip or dash. The rings stop its next ${vNum(p.breakAfter)} tries to move (each one weakens them), then break. They also snap at once if it's shoved or knocked to another square, or knocked out.` };
+      const start = p.startCharged ? 'It starts the fight charged and refills' : 'Its ability charges';
       return { when: `After ${def.energy} attacks`, text: `${start} after ${vNum(def.energy)} attacks, then waits until an enemy tries to move. Hoopa binds that Pokémon in place for ${vTime(p.duration)}: it can't walk, zip or dash, but it still attacks anything in range.${p.noRepeat ? ' It never binds the same Pokémon twice in a row.' : ''}${p.chargedForm ? ` While charged it becomes ${esc(p.chargedForm.name)}.` : ''}` };
     }
     case 'taunt': return { when: every, text: `Spreads its spores: the hardest-hitting enemy within the ${area(p.radius)} around it that is attacking someone else must attack ${esc(def.name)} for ${vTime(p.duration)}.` };
@@ -83,7 +83,7 @@ export function powerText(def, star, catalog) {
       const impact = p.impactDamage ? `, hitting for ${vDmg(show(Math.round(p.impactDamage[lvl] * STAT_SCALE)))}` : p.impactPct ? `, hitting for ${vDmg(`${p.impactPct}%`)} damage (${vDmg(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.impactPct) / 100)))})` : '';
       return { when: def.energy === 1 ? 'Every other action' : def.energy ? `Every ${def.energy} attacks` : 'All home', text: `${ready}, at ${at}${impact}${p.impactStun ? ` and stunning it for ${vTime(p.impactStun)}` : ''}. It ${p.displace ? 'crashes into its target, shoving it aside onto a square next to it, then stays' : 'lands beside its target'} and fights.${p.lure ? ` Once the stun wears off, its target drops whoever it was attacking and attacks the ${name} right away, until it faints.` : ''} A ${name} that faints flies back (${vTime(Math.round(p.returnSec * 10))}). They come at ${esc(def.name)}'s level.` };
     }
-    case 'boost': return { when: every, text: `Charges up the allies directly left, right, in front of and behind it: each gains ${vNum(`+${p.charges}`)} toward its power (Pokémon without a power counter don't benefit).` };
+    case 'boost': return { when: every, text: `Charges up the allies directly left, right, in front of and behind it: each gains ${vNum(`+${p.charges}`)} toward its ability (Pokémon without an ability counter don't benefit).` };
     case 'snipe': return { when: every, text: `The attack also zaps the farthest enemy for ${hit}.` };
     case 'summon': {
       const name = catalog?.[p.unit]?.name ?? p.unit;
@@ -100,15 +100,15 @@ export function powerText(def, star, catalog) {
       return { when: 'Every attack', text: `Heals your Pokémon ${where} for ${vHeal(`${p.healPct}%`)} of its damage (${vHeal(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.healPct) / 100)))}).` };
     }
     case 'selfdestruct': return { when: 'When knocked out', text: `Stays on its square for ${vTime(p.delay)}, then explodes: enemies in the ${area(p.radius)} around it take ${hit}.` };
-    case 'copy': return { when: 'Always', text: `Walks to the nearest enemy and takes ${vTime(p.morph)} to transform into it, copying its HP, damage, attack speed, range and crit (not its power or movement). It keeps its share of HP and stands still while transformed. When that Pokémon faints, it turns back and walks to the next one.` };
+    case 'copy': return { when: 'Always', text: `Walks to the nearest enemy and takes ${vTime(p.morph)} to transform into it, copying its HP, damage, attack speed, range and crit (not its ability or movement). It keeps its share of HP and stands still while transformed. When that Pokémon faints, it turns back and walks to the next one.` };
     case 'transform': {
       const f = p.form;
       const when = p.trigger === 'knockedOut' ? 'When knocked out' : p.trigger === 'lowHp' ? `At ${p.hpPct}% HP` : every;
       const into = p.trigger === 'knockedOut' ? 'Instead of fainting, it transforms' : 'Transforms';
-      const stats = `${f.hp ? `${vNum(show(Math.round(f.hp[lvl] * STAT_SCALE)))} HP, ` : ''}${vDmg(show(Math.round(f.damage[lvl] * STAT_SCALE)))} damage every ${vNum(`${f.secPerHit}s`)}, range ${vNum(f.range)}`;
       const morph = p.morph ? ` It takes ${vTime(p.morph)} and can't be hurt while it does.` : '';
       const wave = f.shockwave ? ` A shock wave stuns every enemy in the ${area(f.shockwave.radius)} around it for ${vTime(f.shockwave.stun)}.` : '';
-      return { when, text: `${into} into ${f.name} for the rest of the fight: ${stats}${f.hp ? '' : ' (HP stays the same)'}.${morph}${wave}` };
+      // Only how it transforms: the form's own stats are in its Pokédex entry.
+      return { when, text: `${into} into ${esc(f.name)} for the rest of the fight.${morph}${wave}` };
     }
     case 'treat': {
       const fl = Object.fromEntries(p.flavors.map((f) => [f.flavor, f]));
@@ -548,7 +548,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
           <li><b>Position</b>: the row nearest the middle is your front line. Tap a Pokémon, then a square, to move it (onto another Pokémon swaps them).</li>
           <li><b>Sell</b>: drag a Pokémon onto the shop, or tap it and press Sell. Its copies go back to your pool.</li>
           <li><b>Fight</b>: the battle plays out by itself. After 30 seconds, sudden death drains everyone until one side falls.</li>
-          <li><b>Powers</b>: every Pokémon has one; the blue bar under it fills with each attack. See them all in the Pokédex.</li>
+          <li><b>Abilities</b>: every Pokémon has one; the blue bar under it fills with each attack. See them all in the Pokédex.</li>
           <li><b>Scouting</b>: from round 2, the faded Pokémon on the enemy side show where your opponent placed theirs last round.</li>
           <li><b>Coins</b>: you start with ${START_COINS}. Every round after that: +${ROUND_COINS}, plus ${LOST_COIN} for each of your Pokémon knocked out in the last battle. Coins carry over.</li>
           <li><b>Shop</b>: it refreshes for free every time you buy, and after every battle. A reroll costs ${REROLL_COST} coin.</li>
@@ -2053,7 +2053,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     dexEl.querySelector('.dex-panel').innerHTML = `
       <button id="dex-close" class="ghost" aria-label="Close">✕</button>
       <h1>Pokédex</h1>
-      <p class="muted dex-sub">Tap a Pokémon to see its stats and power.</p>
+      <p class="muted dex-sub">Tap a Pokémon to see its stats and ability.</p>
       <div class="dex-grid">${troopIds(catalog).map(dexCard).join('')}</div>
       ${summons.length ? `<h3 class="dex-section">Summoned in battle</h3><div class="dex-grid">${summons.map(dexCard).join('')}</div>` : ''}`;
   }
@@ -2119,7 +2119,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     let power = '';
     const f = formOf && formsOf(formOf)[formIndex];
     if (f && f === formOf.ability.chargedForm) {
-      power = `${esc(formOf.name)} takes this form while its power is charged, and turns back when it binds a Pokémon. Same stats as ${esc(formOf.name)}.`;
+      power = `${esc(formOf.name)} takes this form while its ability is charged, and turns back when it binds a Pokémon. Same stats as ${esc(formOf.name)}.`;
     } else if (f?.flavor) {
       // An Alcremie flavour: what its treat does.
       const p = formOf.ability;

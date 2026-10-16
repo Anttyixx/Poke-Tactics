@@ -1,5 +1,16 @@
 [
   {
+    "id": "2026-10-16-abilities",
+    "version": "0.38.0",
+    "date": "2026-10-16",
+    "title": "Powers are now Abilities",
+    "changes": [
+      { "kind": "change", "text": "Powers are now called abilities, like in the real games." },
+      { "pokemon": "greninja", "kind": "change", "text": "Battle Bond now just says when and how Greninja transforms. Ash-Greninja's stats are on its own Pokédex entry." },
+      { "pokemon": "minior", "kind": "change", "text": "Shining Star now just says when and how Minior transforms. Star Form's stats are on its own Pokédex entry." }
+    ]
+  },
+  {
     "id": "2026-10-16-friends-button",
     "version": "0.37.9",
     "date": "2026-10-16",
