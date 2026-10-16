@@ -1,3 +1,4 @@
+9881481	dev	2026-10-16 00:09 UTC	Use the coin sprite for coins: coin count, shop prices, team picker and Pokédex (0.37.6)
 4359a81	dev	2026-10-16 00:02 UTC	Hoopa's attack lowered about 5% (75 -&gt; 71 at level 1) (0.37.5)
 06a4d53	dev	2026-10-15 23:57 UTC	Hoopa's Binding Ring needs 4 attacks instead of 5 (0.37.4)
 3d1c200	dev	2026-10-15 23:50 UTC	Hoopa binds a Pokémon just before it moves, stopping the move or moving power (0.37.3)
@@ -27,4 +28,3 @@ c67ca26	dev	2026-10-14 16:54 UTC	Dreepy fly home in 0.5s; Dragapult needs 3 atta
 83a493a	dev	2026-10-14 16:47 UTC	Dreepy landing: 40 damage + 0.5s stun; Dreepy 15 dmg / 55 HP; Dragapult damage 55; Dreepy back in 3s (0.28.0)
 0868dc9	dev	2026-10-14 16:39 UTC	Dreepy crash into their target: take its square and shove it aside (shields break instead); Dragapult damage 55 -&gt; 45 (0.27.0)
 b2dbf54	dev	2026-10-14 15:30 UTC	Dreepy damage 6 -&gt; 20, Dragapult damage 65 -&gt; 55 (option N, 0.26.0)
-0f0b43a	dev	2026-10-14 15:23 UTC	Dragapult: fires both Dreepy in place of an attack, only when both are home; attacks normally otherwise; damage 25 -&gt; 65 (0.25.0)
