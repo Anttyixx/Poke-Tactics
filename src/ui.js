@@ -2083,7 +2083,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   function dexCard(id) {
     const def = catalog[id];
     return `<button class="dex-card dex-grid-card" data-dex="${id}" data-type="${def.type}">
-      <span class="dex-corners"><span class="dex-corner dex-cost">${def.summon ? 'Summon' : `<i class="coin-icon" aria-hidden="true"></i>${def.cost}`}</span><span class="dex-corner dex-class">${typeName(def.type)}</span></span>
+      <span class="dex-corners"><span class="dex-corner dex-cost">${def.summon ? 'Summon' : `<i class="coin-icon" aria-hidden="true"></i>${def.cost}`}</span></span>
       <span class="dex-card-art">${portrait(def)}</span>
       <b>${esc(def.name)}</b>
     </button>`;

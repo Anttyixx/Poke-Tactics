@@ -838,7 +838,7 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .dex-card:hover .sprite { animation: walk 0.7s steps(4) infinite; }
 .dex-card b { font-size: 15px; color: var(--text); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dex-card small { color: var(--muted); font-size: 12px; }
-/* Main Pokédex cards: cost in the top left corner, class in the top right. */
+/* Main Pokédex cards: cost in the top left corner. */
 .dex-grid-card { position: relative; padding-top: 26px; }
 .dex-corners { position: absolute; top: 6px; left: 6px; right: 6px; display: flex; justify-content: space-between; gap: 3px; }
 .dex-corner {
@@ -848,7 +848,6 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .dex-cost { flex: none; color: #2a1d00; background: linear-gradient(180deg, #ffe07a, var(--gold)); padding-left: 3px; }
 .dex-cost .coin-icon { width: 1.25em; height: 1.25em; vertical-align: 0; }
 .dex-grid-card .dex-cost:not(:has(.coin-icon)) { padding-left: 7px; color: var(--text); background: var(--panel-3); }
-.dex-class { display: block; overflow: hidden; text-overflow: ellipsis; color: var(--text); background: color-mix(in srgb, var(--type) 45%, var(--panel-3)); border: 1px solid var(--type); text-transform: uppercase; letter-spacing: 0.04em; font-size: 10px; }
 /* A Pokémon or form named in an ability: tap it for its Pokédex entry. */
 .poke-link {
   display: inline; padding: 0; margin: 0; min-width: 0; border: 0; background: none; font: inherit; font-weight: 800;
@@ -1008,7 +1007,6 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   .dex-corners { top: 5px; left: 5px; right: 5px; }
   .dex-corner { padding: 3px 5px; }
   .dex-cost { padding-left: 2px; }
-  .dex-class { font-size: 8.5px; letter-spacing: 0; }
   .dex-hero { gap: 10px; padding: 10px; }
   .dex-portrait { width: 84px; height: 84px; }
   .dex-rel-sprite { width: 44px; height: 44px; }
