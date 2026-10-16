@@ -1,5 +1,22 @@
 [
   {
+    "id": "2026-10-16-ability-summaries",
+    "version": "0.40.0",
+    "date": "2026-10-16",
+    "title": "Easier ability descriptions",
+    "intro": "Every ability now opens with a short, plain description. Want the exact numbers and rules? Tap More details.",
+    "changes": [
+      {
+        "kind": "change",
+        "text": "Ability descriptions in the Pokédex and the info panel are now a short summary of what the ability does."
+      },
+      {
+        "kind": "new",
+        "text": "Abilities with more to know have a More details button that unfolds the full description, with all the numbers. Once opened, it stays open as you look at other Pokémon."
+      }
+    ]
+  },
+  {
     "id": "2026-10-16-dex-cards-cost-only",
     "version": "0.39.1",
     "date": "2026-10-16",

@@ -931,6 +931,23 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .dex-power h3 { margin: 0 0 4px; font-size: 16px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
 .dex-power h3 .pw-when { font-size: 12px; }
 .dex-power p { margin: 0; color: #d4d8e8; line-height: 1.45; }
+.ability p { margin: 0; line-height: 1.45; }
+/* An ability's full details, folded under its short description. */
+.pw-more { margin-top: 8px; }
+.pw-more summary {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer; list-style: none;
+  font-size: 13px; font-weight: 800; color: var(--mana); padding: 4px 10px; border-radius: 99px;
+  background: color-mix(in srgb, var(--mana) 12%, transparent); border: 1px solid color-mix(in srgb, var(--mana) 30%, transparent);
+}
+.pw-more summary::-webkit-details-marker { display: none; }
+.pw-more summary::after { content: '▾'; transition: transform 0.2s; }
+.pw-more[open] summary::after { transform: rotate(180deg); }
+.pw-more:not([open]) .pw-hide, .pw-more[open] .pw-show { display: none; }
+.pw-more summary:focus-visible { outline: 2px solid var(--mana); outline-offset: 2px; }
+.pw-more > p { margin: 8px 0 0; padding-top: 8px; border-top: 1px dashed var(--line); color: #c3c8da; font-size: 0.95em; line-height: 1.45; }
+.pw-more[open] > p { animation: pw-open 0.22s ease-out; }
+@keyframes pw-open { from { opacity: 0; transform: translateY(-4px); } }
+@media (prefers-reduced-motion: reduce) { .pw-more[open] > p { animation: none; } .pw-more summary::after { transition: none; } }
 
 /* ---- Toast ---- */
 #toast {

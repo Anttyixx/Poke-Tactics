@@ -80,10 +80,19 @@ function abilityRefs(def, catalog) {
 
 export function powerText(def, star, catalog) {
   const out = powerTextPlain(def, star, catalog);
-  return out && { ...out, text: linkNames(out.text, abilityRefs(def, catalog)) };
+  const refs = abilityRefs(def, catalog);
+  return out && { ...out, text: linkNames(out.text, refs), more: out.more && linkNames(out.more, refs) };
 }
 
+// An ability's text: `text` is the short version everyone sees, `more` (when
+// there is more to know) the full details behind the "More details" toggle.
 function powerTextPlain(def, star, catalog) {
+  const out = abilityTexts(def, star, catalog);
+  if (out && out.more === out.text) delete out.more;
+  return out;
+}
+
+function abilityTexts(def, star, catalog) {
   const p = def.ability;
   if (!p) return null;
   const lvl = star ?? 0;
@@ -92,22 +101,28 @@ function powerTextPlain(def, star, catalog) {
   const every = `Every ${def.energy} attacks`;
   switch (p.kind) {
     case 'empower': {
-      if (p.dash) return { when: every, text: `Dashes in a straight line to the farthest enemy, immune to everything on the way, and hits it for ${hit}. The target and every enemy it passes through are stunned for ${vTime(p.stun)}.` };
-      if (p.teleport) return { when: every, text: `Teleports next to the farthest enemy and hits it for ${hit}${p.lifestealPct ? `, healing for ${vHeal(`${p.lifestealPct}%`)} of the damage dealt` : ''}.` };
+      if (p.dash) return { when: every, text: `Dashes to the farthest enemy and hits it hard, stunning everything in its path.`, more: `Dashes in a straight line to the farthest enemy, immune to everything on the way, and hits it for ${hit}. The target and every enemy it passes through are stunned for ${vTime(p.stun)}.` };
+      if (p.teleport) return { when: every, text: `Teleports next to the farthest enemy and hits it hard.`, more: `Teleports next to the farthest enemy and hits it for ${hit}${p.lifestealPct ? `, healing for ${vHeal(`${p.lifestealPct}%`)} of the damage dealt` : ''}.` };
       const extra = [
         p.knockback && `knocks the target back ${vNum(p.knockback)} squares`,
         p.stun && `stuns ${p.knockback ? 'it' : 'the target'} for ${vTime(p.stun)}`,
         p.lifestealPct && `heals it for ${vHeal(`${p.lifestealPct}%`)} of the damage dealt`,
       ].filter(Boolean);
-      return { when: every, text: `Its next attack hits for ${hit}${extra.length ? `${extra.length === 1 ? ' and ' : ', '}${extra.join(' and ')}` : ''}.` };
+      const short = [p.knockback && 'knocks the target back', p.stun && (p.knockback ? 'stuns it' : 'stuns the target'), p.lifestealPct && 'heals it'].filter(Boolean);
+      const join = (xs) => (xs.length ? `${xs.length === 1 ? ' and ' : ', '}${xs.join(' and ')}` : '');
+      return { when: every, text: `Its next attack hits much harder${join(short)}.`, more: `Its next attack hits for ${hit}${join(extra)}.` };
     }
     case 'bind': {
-      if (p.targeted) return { when: `After ${def.energy} attacks`, text: `${p.pick === 'move' ? 'Holds its full charge until an enemy tries to change squares by itself (a step, or an ability that moves it), then binds that one in rings just before it goes: the move (or moving ability, like a dash) is stopped and counts as its first try to break free. Being shoved by an enemy attack never triggers it.' : "Binds the Pokémon it's attacking in rings (if that one is already bound, the nearest enemy that isn't)."} A bound Pokémon still attacks anything in range, but can't walk, zip or dash. The rings stop its next ${vNum(p.breakAfter)} tries to move (each one weakens them), then break. They also snap at once if it's shoved or knocked to another square, or knocked out.` };
+      if (p.targeted) {
+        const rest = `A bound Pokémon still attacks anything in range, but can't walk, zip or dash. The rings stop its next ${vNum(p.breakAfter)} tries to move (each one weakens them), then break. They also snap at once if it's shoved or knocked to another square, or knocked out.`;
+        if (p.pick === 'move') return { when: `After ${def.energy} attacks`, text: `Traps the next enemy that tries to move in rings. It can still attack, but can't move until it breaks free.`, more: `Holds its full charge until an enemy tries to change squares by itself (a step, or an ability that moves it), then binds that one in rings just before it goes: the move (or moving ability, like a dash) is stopped and counts as its first try to break free. Being shoved by an enemy attack never triggers it. ${rest}` };
+        return { when: `After ${def.energy} attacks`, text: `Traps the Pokémon it's attacking in rings. It can still attack, but can't move until it breaks free.`, more: `Binds the Pokémon it's attacking in rings (if that one is already bound, the nearest enemy that isn't). ${rest}` };
+      }
       const start = p.startCharged ? 'It starts the fight charged and refills' : 'Its ability charges';
-      return { when: `After ${def.energy} attacks`, text: `${start} after ${vNum(def.energy)} attacks, then waits until an enemy tries to move. Hoopa binds that Pokémon in place for ${vTime(p.duration)}: it can't walk, zip or dash, but it still attacks anything in range.${p.noRepeat ? ' It never binds the same Pokémon twice in a row.' : ''}${p.chargedForm ? ` While charged it becomes ${esc(p.chargedForm.name)}.` : ''}` };
+      return { when: `After ${def.energy} attacks`, text: `Pins the next enemy that tries to move in place for ${vTime(p.duration)}.`, more: `${start} after ${vNum(def.energy)} attacks, then waits until an enemy tries to move. Hoopa binds that Pokémon in place for ${vTime(p.duration)}: it can't walk, zip or dash, but it still attacks anything in range.${p.noRepeat ? ' It never binds the same Pokémon twice in a row.' : ''}${p.chargedForm ? ` While charged it becomes ${esc(p.chargedForm.name)}.` : ''}` };
     }
-    case 'taunt': return { when: every, text: `Spreads its spores: the hardest-hitting enemy within the ${area(p.radius)} around it that is attacking someone else must attack ${esc(def.name)} for ${vTime(p.duration)}.` };
-    case 'rage': return { when: 'Every attack', text: `Each attack in a row without moving makes it attack ${vNum(`${p.stackPct}%`)} faster, up to ${vNum(`${p.stackPct * p.maxStacks}%`)} after ${vNum(p.maxStacks)} attacks. Moving resets it.` };
+    case 'taunt': return { when: every, text: `Makes a nearby enemy attack ${esc(def.name)} instead of its friends.`, more: `Spreads its spores: the hardest-hitting enemy within the ${area(p.radius)} around it that is attacking someone else must attack ${esc(def.name)} for ${vTime(p.duration)}.` };
+    case 'rage': return { when: 'Every attack', text: `Attacks faster with every hit while it stands still.`, more: `Each attack in a row without moving makes it attack ${vNum(`${p.stackPct}%`)} faster, up to ${vNum(`${p.stackPct * p.maxStacks}%`)} after ${vNum(p.maxStacks)} attacks. Moving resets it.` };
     case 'darts': {
       const name = catalog?.[p.unit]?.name ?? p.unit;
       const shot = p.perShot ?? p.count;
@@ -118,26 +133,30 @@ function powerTextPlain(def, star, catalog) {
         : `With all ${name} home${def.energy ? ` and its counter full (${vNum(def.energy)} attacks)` : ''}, its next action (an attack, or a step toward its target) fires them instead`;
       const at = `the farthest enemy${shot === 1 ? '' : 'ies'}${p.outside ? ` outside the ${area(p.outside)} around it (never one right next to it; with no enemy that far it just attacks)` : ''}`;
       const impact = p.impactDamage ? `, hitting for ${vDmg(show(Math.round(p.impactDamage[lvl] * STAT_SCALE)))}` : p.impactPct ? `, hitting for ${vDmg(`${p.impactPct}%`)} damage (${vDmg(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.impactPct) / 100)))})` : '';
-      return { when: def.energy === 1 ? 'Every other action' : def.energy ? `Every ${def.energy} attacks` : 'All home', text: `${ready}, at ${at}${impact}${p.impactStun ? ` and stunning it for ${vTime(p.impactStun)}` : ''}. It ${p.displace ? 'crashes into its target, shoving it aside onto a square next to it, then stays' : 'lands beside its target'} and fights.${p.lure ? ` Once the stun wears off, its target drops whoever it was attacking and attacks the ${name} right away, until it faints.` : ''} A ${name} that faints flies back (${vTime(Math.round(p.returnSec * 10))}). They come at ${esc(def.name)}'s level.` };
+      return {
+        when: def.energy === 1 ? 'Every other action' : def.energy ? `Every ${def.energy} attacks` : 'All home',
+        text: `Launches ${shot === 1 ? `a ${name}` : `${name}`} at a far-away enemy. It crashes in${p.impactStun ? ', stuns its target' : ''} and stays to fight.`,
+        more: `${ready}, at ${at}${impact}${p.impactStun ? ` and stunning it for ${vTime(p.impactStun)}` : ''}. It ${p.displace ? 'crashes into its target, shoving it aside onto a square next to it, then stays' : 'lands beside its target'} and fights.${p.lure ? ` Once the stun wears off, its target drops whoever it was attacking and attacks the ${name} right away, until it faints.` : ''} A ${name} that faints flies back (${vTime(Math.round(p.returnSec * 10))}). They come at ${esc(def.name)}'s level.`,
+      };
     }
-    case 'boost': return { when: every, text: `Charges up the allies directly left, right, in front of and behind it: each gains ${vNum(`+${p.charges}`)} toward its ability (Pokémon without an ability counter don't benefit).` };
+    case 'boost': return { when: every, text: `Charges up the abilities of the allies next to it.`, more: `Charges up the allies directly left, right, in front of and behind it: each gains ${vNum(`+${p.charges}`)} toward its ability (Pokémon without an ability counter don't benefit).` };
     case 'snipe': return { when: every, text: `The attack also zaps the farthest enemy for ${hit}.` };
     case 'summon': {
       const name = catalog?.[p.unit]?.name ?? p.unit;
       const n = (p.countByStar ?? [1, 1, 1, 1])[lvl];
       const level = p.summonStar !== undefined ? `They are always ${levelMark(p.summonStar)}.` : `They come at ${def.name}'s level.`;
-      return { when: every, text: `Summons ${vNum(n)} ${name} beside it. ${level}` };
+      return { when: every, text: `Summons ${vNum(n)} ${name} to fight beside it.`, more: `Summons ${vNum(n)} ${name} beside it. ${level}` };
     }
-    case 'stealth': return { when: every, text: `Turns invisible for ${vTime(p.duration)}${p.hastePct ? ` and attacks ${vNum(`${p.hastePct}%`)} faster` : ''}. Enemies can't target or follow it while it's invisible.` };
+    case 'stealth': return { when: every, text: `Turns invisible for a while${p.hastePct ? ' and attacks faster' : ''}.`, more: `Turns invisible for ${vTime(p.duration)}${p.hastePct ? ` and attacks ${vNum(`${p.hastePct}%`)} faster` : ''}. Enemies can't target or follow it while it's invisible.` };
     case 'haste': return { when: every, text: `Attacks ${vNum(`${p.hastePct}%`)} faster for ${vTime(p.duration)}.` };
-    case 'quake': return { when: every, text: `Shakes the whole board: every enemy takes ${hit}${p.stun ? ` and is stunned for ${vTime(p.stun)}` : ''}.` };
-    case 'chill': return { when: 'Every attack', text: `Chills the target for ${vTime(p.duration)}: it attacks and moves ${vNum(`${p.slowPct}%`)} slower. Another hit restarts the timer.` };
+    case 'quake': return { when: every, text: `Shakes the whole board, hurting${p.stun ? ' and stunning' : ''} every enemy.`, more: `Every enemy takes ${hit}${p.stun ? ` and is stunned for ${vTime(p.stun)}` : ''}.` };
+    case 'chill': return { when: 'Every attack', text: `Slows down the enemy it hits.`, more: `Chills the target for ${vTime(p.duration)}: it attacks and moves ${vNum(`${p.slowPct}%`)} slower. Another hit restarts the timer.` };
     case 'splashHeal': {
       const where = p.radius ? `in the ${area(p.radius)} around its target` : 'directly left, right, above and below its target';
-      return { when: 'Every attack', text: `Heals your Pokémon ${where} for ${vHeal(`${p.healPct}%`)} of its damage (${vHeal(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.healPct) / 100)))}).` };
+      return { when: 'Every attack', text: `Each attack also heals your Pokémon near its target.`, more: `Heals your Pokémon ${where} for ${vHeal(`${p.healPct}%`)} of its damage (${vHeal(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.healPct) / 100)))}).` };
     }
-    case 'selfdestruct': return { when: 'When knocked out', text: `Stays on its square for ${vTime(p.delay)}, then explodes: enemies in the ${area(p.radius)} around it take ${hit}.` };
-    case 'copy': return { when: 'Always', text: `Walks to the nearest enemy and takes ${vTime(p.morph)} to transform into it, copying its HP, damage, attack speed, range and crit (not its ability or movement). It keeps its share of HP and stands still while transformed. When that Pokémon faints, it turns back and walks to the next one.` };
+    case 'selfdestruct': return { when: 'When knocked out', text: `Explodes a moment later, hurting the enemies around it.`, more: `Stays on its square for ${vTime(p.delay)}, then explodes: enemies in the ${area(p.radius)} around it take ${hit}.` };
+    case 'copy': return { when: 'Always', text: `Transforms into the nearest enemy and copies its stats.`, more: `Walks to the nearest enemy and takes ${vTime(p.morph)} to transform into it, copying its HP, damage, attack speed, range and crit (not its ability or movement). It keeps its share of HP and stands still while transformed. When that Pokémon faints, it turns back and walks to the next one.` };
     case 'transform': {
       const f = p.form;
       const when = p.trigger === 'knockedOut' ? 'When knocked out' : p.trigger === 'lowHp' ? `At ${p.hpPct}% HP` : every;
@@ -145,24 +164,30 @@ function powerTextPlain(def, star, catalog) {
       const morph = p.morph ? ` It takes ${vTime(p.morph)} and can't be hurt while it does.` : '';
       const wave = f.shockwave ? ` A shock wave stuns every enemy in the ${area(f.shockwave.radius)} around it for ${vTime(f.shockwave.stun)}.` : '';
       // Only how it transforms: the form's own stats are in its Pokédex entry.
-      return { when, text: `${into} into ${esc(f.name)} for the rest of the fight.${morph}${wave}` };
+      return { when, text: `${into} into ${esc(f.name)} for the rest of the fight.`, more: `${into} into ${esc(f.name)} for the rest of the fight.${morph}${wave}` };
     }
     case 'treat': {
       const fl = Object.fromEntries(p.flavors.map((f) => [f.flavor, f]));
       const heal = fl.heal && `<b>${esc(fl.heal.name.replace(/.*\((.*)\)/, '$1'))}</b> heals the ally with the lowest share of HP for ${vHeal(`${fl.heal.healPct}%`)} of its damage (${vHeal(show(Math.floor((def.damage[lvl] * STAT_SCALE * fl.heal.healPct) / 100)))}) over ${vTime(p.duration)}`;
       const haste = fl.haste && `<b>${esc(fl.haste.name.replace(/.*\((.*)\)/, '$1'))}</b> makes the hardest-hitting ally attack ${vNum(`${fl.haste.hastePct}%`)} faster for ${vTime(p.duration)}`;
       const guard = fl.guard && `<b>${esc(fl.guard.name.replace(/.*\((.*)\)/, '$1'))}</b> shields the ally most enemies are attacking for ${vTime(p.duration)}: ${vNum(`${fl.guard.guardPct}%`)} less damage, and the first stun or knockback only breaks the shield`;
-      return { when: every, text: `Changes into a random flavour and treats one ally. ${[heal, haste, guard].filter(Boolean).join('. ')}.` };
+      return { when: every, text: `Changes into a random flavour that heals, speeds up or shields an ally.`, more: `Changes into a random flavour and treats one ally. ${[heal, haste, guard].filter(Boolean).join('. ')}.` };
     }
-    case 'opening': return { when: 'At battle start', text: `Fires a wave down its column. The first enemy hit takes ${hit}, is carried to the far end of the board${p.stun ? ` and is stunned for ${vTime(p.stun)}` : ''}.` };
+    case 'opening': return { when: 'At battle start', text: `Fires a wave down its column that sweeps the first enemy to the far end of the board.`, more: `Fires a wave down its column. The first enemy hit takes ${hit}, is carried to the far end of the board${p.stun ? ` and is stunned for ${vTime(p.stun)}` : ''}.` };
     default: return null;
   }
 }
 
 export function describePower(def, star, catalog) {
   const pt = powerText(def, star, catalog);
-  return pt ? `<span class="pw-when">${pt.when}</span> ${pt.text}` : '';
+  return pt ? `<p><b>${esc(def.ability.name)}:</b> <span class="pw-when">${pt.when}</span> ${pt.text}</p>${moreBox(pt.more)}` : '';
 }
+
+// The full details of an ability, folded away. Whether it is open is
+// remembered, so a player who likes the details keeps seeing them.
+let moreOpen = false;
+if (typeof document !== 'undefined') document.addEventListener('toggle', (e) => { if (e.target.classList?.contains('pw-more')) moreOpen = e.target.open; }, true);
+export const moreBox = (more, attrs = '') => (more ? `<details class="pw-more"${moreOpen ? ' open' : ''}><summary><span class="pw-show">More details</span><span class="pw-hide">Fewer details</span></summary><p${attrs}>${more}</p></details>` : '');
 
 // Ditto has no fighting stats of its own: it copies the nearest enemy's.
 const isCopycat = (def) => def.ability?.kind === 'copy';
@@ -1046,7 +1071,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         <dt>Range</dt><dd>${def.range}</dd>
         <dt>Movement</dt><dd>${SPEED_NAME[def.moveSpeed]}</dd>`}
       </dl>
-      ${def.ability ? `<p class="ability"><b>${esc(def.ability.name)}:</b> ${describePower(def, star, catalog)}</p>` : ''}
+      ${def.ability ? `<div class="ability">${describePower(def, star, catalog)}</div>` : ''}
       ${inst && canPlan()
         ? `<button id="sell" class="danger">Sell for ${sellValue(catalog, inst)} coins (${copies} ${copies === 1 ? 'copy' : 'copies'} back to pool)</button>` : ''}`;
   }
@@ -2158,6 +2183,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   function dexLevelValues(def, star, formOf, formIndex = 0) {
     const st = unitStats(def, star);
     let power = '';
+    let more = '';
     const f = formOf && formsOf(formOf)[formIndex];
     if (f && f === formOf.ability.chargedForm) {
       power = `${esc(formOf.name)} takes this form while its ability is charged, and turns back when it binds a Pokémon. Same stats as ${esc(formOf.name)}.`;
@@ -2178,12 +2204,12 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         f.blink && 'It doesn\'t walk: it zips straight to the square beside its target.',
         f.hop && `Every ${vNum(f.energy)} attacks it zips to a different enemy.`,
       ].filter(Boolean).join(' ');
-    } else if (def.ability) power = powerText(def, star, catalog)?.text ?? '';
+    } else if (def.ability) ({ text: power, more = '' } = powerText(def, star, catalog) ?? { text: '' });
     if (formOf) power = linkNames(power, [{ name: formOf.name, attrs: `data-dex="${idOf(formOf, catalog)}"` }]);
     // Numbers in the text get their own spans so a level change can count them.
-    power = power.split(/(<[^>]+>)/).map((part) => (part.startsWith('<') ? part : part.replace(/\d+(?:\.\d+)?/g, '<span class="pn">$&</span>'))).join('');
+    const counted = (html) => html.split(/(<[^>]+>)/).map((part) => (part.startsWith('<') ? part : part.replace(/\d+(?:\.\d+)?/g, '<span class="pn">$&</span>'))).join('');
     return {
-      hp: String(show(st.hp)), dmg: String(show(st.atk)), power,
+      hp: String(show(st.hp)), dmg: String(show(st.atk)), power: counted(power), more: counted(more),
     };
   }
 
@@ -2206,7 +2232,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     for (const el of detail.querySelectorAll('[data-k]')) {
       const next = v[el.dataset.k];
       if (next == null) continue;
-      if (el.dataset.k === 'power') {
+      if (el.dataset.k === 'power' || el.dataset.k === 'more') {
         // Same sentence with different numbers (the usual case): only the
         // numbers count to their new values. Otherwise swap the text in place.
         const nums = [...el.querySelectorAll('.pn')];
@@ -2366,7 +2392,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     ].filter(Boolean).join('');
     const power = isForm
       ? `<div class="dex-power"><h3>${esc(base.ability.name)} ${formsOf(base)[dexForm].flavor ? 'flavour' : 'form'}</h3><p data-k="power">${v.power}</p></div>`
-      : def.ability ? `<div class="dex-power"><h3>${esc(def.ability.name)} <span class="pw-when">${powerText(def, star, catalog).when}</span></h3><p data-k="power">${v.power}</p></div>` : '';
+      : def.ability ? `<div class="dex-power"><h3>${esc(def.ability.name)} <span class="pw-when">${powerText(def, star, catalog).when}</span></h3><p data-k="power">${v.power}</p>${moreBox(v.more, ' data-k="more"')}</div>` : '';
 
     // Related Pokémon: [def, attributes, label, key].
     const related = [];
