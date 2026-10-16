@@ -2110,6 +2110,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
 
   dexEl.addEventListener('click', (e) => {
     if (e.target === dexEl || e.target.closest('#dex-close')) return closeDex();
+    const sortBtn = e.target.closest('[data-dex-sort]');
+    if (sortBtn) return setDexSort(sortBtn.dataset.dexSort);
     const pick = e.target.closest('[data-dex]');
     if (pick) openEntry(pick.dataset.dex);
   });
@@ -2214,14 +2216,61 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     </button>`;
   }
 
+  // Pokédex order: by cost unless the player picks another. Tapping the
+  // chosen sort again flips its direction. Remembered in this browser.
+  const DEX_SORTS = [
+    ['cost', 'Cost', (d) => d.cost ?? 0],
+    ['name', 'Name', (d) => d.name],
+    ['class', 'Class', (d) => typeName(d.type)],
+    ['hp', 'HP', (d) => d.hp[0] + (d.shield?.[0] ?? 0)], // a shield counts as more HP
+    ['dmg', 'Damage', (d) => d.damage[0]],
+  ];
+  const DEX_SORT_KEY = 'poke-tactics-dex-sort';
+  let dexSort = (() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(DEX_SORT_KEY));
+      if (DEX_SORTS.some(([k]) => k === saved?.by)) return { by: saved.by, desc: Boolean(saved.desc) };
+    } catch {}
+    return { by: 'cost', desc: false };
+  })();
+  function sortedDex(ids) {
+    const key = DEX_SORTS.find(([k]) => k === dexSort.by)[2];
+    const cmp = (a, b) => (typeof a === 'string' ? a.localeCompare(b) : a - b);
+    return [...ids].sort((a, b) => {
+      const by = cmp(key(catalog[a]), key(catalog[b])) * (dexSort.desc ? -1 : 1);
+      return by || catalog[a].name.localeCompare(catalog[b].name); // ties: by name
+    });
+  }
+  function setDexSort(by) {
+    dexSort = by === dexSort.by ? { by, desc: !dexSort.desc } : { by, desc: by === 'hp' || by === 'dmg' };
+    try { localStorage.setItem(DEX_SORT_KEY, JSON.stringify(dexSort)); } catch {}
+    // Cards glide to their new places (FLIP).
+    const was = new Map([...dexEl.querySelectorAll('.dex-grid-card')].map((c) => [c.dataset.dex, c.getBoundingClientRect()]));
+    renderDexGrid();
+    if (reduceMotion()) return;
+    dexEl.querySelectorAll('.dex-grid-card').forEach((c) => {
+      const from = was.get(c.dataset.dex);
+      if (!from) return;
+      const to = c.getBoundingClientRect();
+      const dx = from.left - to.left;
+      const dy = from.top - to.top;
+      if (dx || dy) c.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 420, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' });
+    });
+    dexEl.querySelector('.dex-sort .on')?.animate([{ transform: 'scale(0.9)' }, { transform: 'none' }], { duration: 220, easing: 'ease-out' });
+  }
   function renderDexGrid() {
     const summons = summonIds();
+    const sortBar = `<div class="dex-sort" role="group" aria-label="Sort by"><span class="muted">Sort</span>${DEX_SORTS.map(([k, label]) => {
+      const on = k === dexSort.by;
+      return `<button type="button" data-dex-sort="${k}" class="${on ? 'on' : ''}" aria-pressed="${on}"${on ? ` aria-label="${label}, ${dexSort.desc ? 'high to low' : 'low to high'}. Tap to reverse."` : ''}>${label}${on ? `<i aria-hidden="true">${dexSort.desc ? '↓' : '↑'}</i>` : ''}</button>`;
+    }).join('')}</div>`;
     dexEl.querySelector('.dex-panel').innerHTML = `
       <button id="dex-close" class="ghost" aria-label="Close">✕</button>
       <h1>Pokédex</h1>
       <p class="muted dex-sub">Tap a Pokémon to see its stats and ability.</p>
-      <div class="dex-grid">${troopIds(catalog).map(dexCard).join('')}</div>
-      ${summons.length ? `<h3 class="dex-section">Summoned in battle</h3><div class="dex-grid">${summons.map(dexCard).join('')}</div>` : ''}`;
+      ${sortBar}
+      <div class="dex-grid">${sortedDex(troopIds(catalog)).map(dexCard).join('')}</div>
+      ${summons.length ? `<h3 class="dex-section">Summoned in battle</h3><div class="dex-grid">${sortedDex(summons).map(dexCard).join('')}</div>` : ''}`;
   }
 
   // The stat shape: four stats as a diamond. Each point is the stat divided
