@@ -214,39 +214,40 @@ test a set of changes together. Team styles to pit against each other live in `A
   - Toxtricity (cost 3, Ranged, range 2, attacks every 1.25s), **Overdrive**: every 3 attacks, each ally
     directly left, right, in front of and behind it that has an ability counter gains +2 toward its ability
     (never past full; at the end of the tick, like all ability progress).
-  - Vespiquen, **Attack Order**: every 6 attacks, summons 2 Combee beside it: its sides first, then
+  - Vespiquen, **Attack Order**: every 7 attacks, summons 2 Combee beside it: its sides first, then
     behind, in front, and the diagonals from back to front. Combee come at Vespiquen's star level. They fight but never count as survivors for round damage. With no free square,
     the ability stays charged and tries again after the next attack.
-  - Coalossal, **Heat Crash**: after 6 attacks, the next hits for 130%, knocks the target back 2 squares
-    and stuns it for 1s.
-  - Decidueye, **Phantom Force**: after 8 attacks, invisible for 3s and attacks 30% faster. Enemies can't
+  - Coalossal, **Heat Crash**: after 4 attacks, the next hits for 130%, knocks the target back 2 squares
+    and stuns it for 3s.
+  - Decidueye, **Phantom Force**: after 6 attacks, invisible for 3s and attacks 50% faster. Enemies can't
     target or follow an invisible unit.
-  - Infernape, **Blaze**: after 7 attacks, attacks 50% faster for 3s.
+  - Infernape, **Blaze**: after 7 attacks, attacks 50% faster for 3s. Each hit while it lasts burns the
+    target for 20% of Infernape's damage every second for 3s (another hit restarts the burn).
   - Hoopa (cost 3, Special, range 2, attacks every 1.0s), **Binding Ring**: after 4 attacks it holds its
     charge until an enemy is about to change squares by itself (a step, or an ability that moves it, like
     a dash or a zip), and binds that one just before it goes, so the move (or the dash or zip) never happens; being
     shoved by an attack doesn't count. A bound Pokémon still attacks anything in range, but the rings
     stop 3 tries to move in all (that first one included, walking or moving abilities), then break. They also snap at once if it's shoved or knocked to another
     square, or knocked out.
-  - Amoonguss (cost 4, Tank), **Rage Powder**: every 2 attacks, the hardest-hitting enemy
-    within the 5x5 around it that is attacking someone else must attack Amoonguss for 5s.
+  - Amoonguss (cost 4, Tank), **Rage Powder**: always on (no counter). An enemy picking a new target
+    goes for Amoonguss if it can already hit it without moving; one that would have to move picks as usual.
   - Annihilape (cost 4, Tank), **Rage Fist**: each attack in a row without moving makes it attack
     12% faster, with no cap. Moving (or being moved) resets it.
   - Dragapult (cost 4, Ranged, range 3), **Dragon Darts**: after each attack made while a Dreepy is
     home (at most 2 can be out at once; with both out, attacks don't charge it), its next action (an attack or a step, after its usual 0.8s wait)
     fires one Dreepy instead, at the farthest enemy outside the 3x3 around it (never at a Pokémon
-    right next to it; with none that far, it just attacks). The Dreepy crashes into its target for 50
-    damage at ★ (96 / 115 / 138 at higher levels) and a 0.5s stun, taking its square and shoving it aside (a
+    right next to it; with none that far, it just attacks). The Dreepy crashes into its target for 35
+    damage at ★ (96 / 125 / 138 at higher levels) and a 0.5s stun, taking its square and shoving it aside (a
     shield breaks instead); once the stun wears off the target attacks that Dreepy right away until
-    it faints. Dreepy have 230 HP and hit for 12 every 0.5s at ★, growing slowly with level. A fainted
+    it faints. Dreepy have 161 HP and hit for 12 every 0.5s at ★, growing slowly with level. A fainted
     Dreepy flies back (0.5s). Dragapult: 800 HP, 50 damage every 0.8s. Darts fire at the end of the
     tick, aiming and landing from where everyone stood when it began, so neither side gets an edge.
   - Greninja, **Battle Bond**: after 5 attacks, becomes Ash-Greninja for the rest of the fight: fast
-    movement, attacks every 0.8s, more damage, range 3 (same HP).
-  - Torterra, **Earthquake**: with every 5th attack, every enemy on the board takes 30% and is stunned 1s.
+    movement, attacks every 0.8s, more damage (105 at ★), range 3 (same HP).
+  - Torterra, **Earthquake**: with every 5th attack, every enemy on the board takes 30% and is stunned 1.5s.
   - Lilligant, **Aromatherapy**: every attack heals your Pokémon in the 3x3 around the square it hits
     (diagonals too), for 60% of its damage.
-  - Golem, **Self-Destruct**: when knocked out it stays on its square for 3s (it can't be hit), then
+  - Golem, **Self-Destruct**: when knocked out it stays on its square for 2s (it can't be hit), then
     explodes for 300% on enemies in the 3x3 square around it. The fight waits for it.
   - Frosmoth (cost 3, Special, range 2, attacks every 1.25s), **Frostbite**: no charged ability. Every
     hit chills the target for 3s: it attacks 30% slower and waits 30% longer between steps; another
@@ -269,13 +270,15 @@ test a set of changes together. Team styles to pit against each other live in `A
     beside them) and zips there; with no other enemy to reach it moves to another square beside its
     target, and with none free it stays. The purple bar counts toward the next hop. A form with a
     faster attack speed doesn't wait out the old form's attack timer.
-  - Tapu Koko (range 2, attacks every 1.1s), **Wild Charge**: after 4 attacks, the next dashes in a straight line to the open square
-    next to the farthest enemy (closest to Tapu Koko). The dash takes 0.1s per square (at least 0.2s),
-    and Tapu Koko is immune to everything on the way. When it arrives it hits for 150%; the target and
-    every enemy it passed through are stunned for 1s.
+  - Tapu Koko (range 2, attacks every 1.1s), **Wild Charge**: after 4 attacks, the next dashes in a straight line onto the
+    farthest enemy's square, shoving it to a square beside it (a shield, or no room: it stops on the open
+    square next to it instead). The dash takes 0.1s per square (at least 0.2s), and Tapu Koko is immune to
+    everything on the way. When it arrives it hits for 200% and stuns the target for 1.5s; every enemy it
+    passed through takes 30% and is stunned for 0.5s.
   - Ditto, **Transform**: walks (medium speed) toward the nearest enemy until it's within that enemy's
     range, then takes 1s to transform into it, copying its max HP, damage, attack speed, range and crit
-    (not its ability or movement). It keeps its share of HP across the change, shows the copied sprite in
+    (not its ability or movement). The copy's HP and damage are 60% / 78% / 95% / 108% of the original's,
+    by Ditto's level. It keeps its share of HP across the change, shows the copied sprite in
     Ditto's colours, and doesn't move while transformed. When the copied Pokémon faints or no enemy is in
     range, it turns back into Ditto and walks to the next nearest.
 - **Healing** (Lilligant, Alcremie) lands at the end of each tick, like stuns, so it never depends on who

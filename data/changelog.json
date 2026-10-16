@@ -1,5 +1,74 @@
 [
   {
+    "id": "2026-10-16-balance-pass",
+    "version": "0.45.0",
+    "date": "2026-10-16",
+    "title": "Big balance pass",
+    "intro": "Changes from the full balance review: the weakest Pokémon got stronger, the strongest got toned down, and a few got new twists.",
+    "changes": [
+      {
+        "pokemon": "coalossal",
+        "kind": "buff",
+        "text": "Heat Crash goes off every 4 attacks instead of 6, and stuns for 3s instead of 1s. HP and damage +18%."
+      },
+      {
+        "pokemon": "tapukoko",
+        "kind": "change",
+        "text": "Wild Charge now crashes onto the farthest enemy's square, shoving it aside, then hits for 200% (was 150%) and stuns it for 1.5s. Enemies it passes through take 30% damage and a short 0.5s stun instead of a full 1s stun. HP +10%."
+      },
+      {
+        "pokemon": "decidueye",
+        "kind": "buff",
+        "text": "Phantom Force goes off every 6 attacks instead of 8, and makes it attack 50% faster instead of 30%."
+      },
+      {
+        "pokemon": "torterra",
+        "kind": "buff",
+        "text": "Earthquake stuns for 1.5s instead of 1s."
+      },
+      {
+        "pokemon": "golem",
+        "kind": "buff",
+        "text": "Self-Destruct explodes after 2s instead of 3s. HP +12%, damage +5%."
+      },
+      {
+        "pokemon": "vespiquen",
+        "kind": "nerf",
+        "text": "Attack Order goes off every 7 attacks instead of 6."
+      },
+      {
+        "pokemon": "greninja",
+        "kind": "nerf",
+        "text": "Ash-Greninja deals 5% less damage."
+      },
+      {
+        "pokemon": "amoonguss",
+        "kind": "change",
+        "text": "Rage Powder is now always on: an enemy picking a new target goes for Amoonguss if it can already hit it without moving. Enemies that would have to move pick as usual. No more ability counter."
+      },
+      {
+        "pokemon": "beheeyem",
+        "kind": "change",
+        "text": "Stats now grow with levels like everyone else's: weaker at ★ (588 HP, 97 damage), much stronger at ✦ (2881 HP, 475 damage)."
+      },
+      {
+        "pokemon": "infernape",
+        "kind": "change",
+        "text": "Blaze also burns: each hit while it lasts burns the target for 20% of Infernape's damage every second for 3s. Its stats now grow with levels like everyone else's: weaker at ★, stronger at ✦."
+      },
+      {
+        "pokemon": "ditto",
+        "kind": "change",
+        "text": "The copy's strength now depends on Ditto's level: 60% / 78% / 95% / 108% of the original's HP and damage. Levelling Ditto up finally pays off."
+      },
+      {
+        "pokemon": "dragapult",
+        "kind": "change",
+        "text": "Dreepy hits for 35 at ★ (was 50) and 125 at ★★★ (was 115), and have 161 HP at ★ (was 230). Toned down early, a little stronger later."
+      }
+    ]
+  },
+  {
     "id": "2026-10-16-annihilape-no-cap",
     "version": "0.44.1",
     "date": "2026-10-16",
