@@ -1,8 +1,8 @@
 // Dummy opponent. It plays through the exact same intent API as a human, so
 // in Phase 3 a remote guest can take its seat without touching the rules.
 
-import { MAX_STAR, REROLL_COST, fielded, teamSize, troopIds } from './game.js?v=8a8a88d';
-import { COLS, HALF } from './combat.js?v=8a8a88d';
+import { MAX_STAR, REROLL_COST, fielded, teamSize, troopIds } from './game.js?v=210a768';
+import { COLS, HALF } from './combat.js?v=210a768';
 
 // Columns ordered from the centre outwards, e.g. [2, 1, 3, 0, 4] for 5 columns.
 const CENTER_OUT = [...Array(COLS).keys()].sort((a, b) => Math.abs(2 * a - (COLS - 1)) - Math.abs(2 * b - (COLS - 1)) || a - b);
@@ -52,10 +52,12 @@ export function botTurn(state, catalog, p, send, { arrange = true } = {}) {
 //     enemies they hit are surrounded by allies to heal.
 
 const STURDY_HP = 900;
+// How much it takes to knock out: HP plus any shield.
+const toughness = (def, star) => def.hp[star] + (def.shield?.[star] ?? 0);
 function roleOf(def) {
   if (['splashHeal', 'treat', 'boost'].includes(def.ability?.kind)) return 'healer';
   if (def.ability?.kind === 'copy' || def.ability?.teleport || def.ability?.dash) return 'rusher';
-  if (def.range <= 1) return def.hp[0] >= STURDY_HP ? 'tank' : 'melee';
+  if (def.range <= 1) return toughness(def, 0) >= STURDY_HP ? 'tank' : 'melee';
   return 'ranged';
 }
 const ROLE_REASON = {
@@ -70,7 +72,7 @@ export function planLayout(state, catalog, p) {
   const me = state.players[p];
   const foe = state.players[1 - p].lastBoard ?? [];
   const units = me.board.map((u) => ({ u, def: catalog[u.unitId], role: roleOf(catalog[u.unitId]) }));
-  const strength = (x) => x.def.hp[x.u.star];
+  const strength = (x) => toughness(x.def, x.u.star);
   const hits = (x) => x.def.damage[x.u.star];
 
   // What the opponent showed last round, in our own column numbers.
@@ -80,7 +82,7 @@ export function planLayout(state, catalog, p) {
   const flankHp = [0, 0]; // [left, right] as we see it
   for (const e of foe) {
     const c = facing(e.x);
-    if (c !== mid) flankHp[c < mid ? 0 : 1] += catalog[e.unitId]?.hp[e.star] ?? 0;
+    if (c !== mid) flankHp[c < mid ? 0 : 1] += catalog[e.unitId] ? toughness(catalog[e.unitId], e.star) : 0;
   }
   const strong = flankHp[0] === flankHp[1] ? null : flankHp[0] > flankHp[1] ? 'left' : 'right';
   // Columns from the centre outwards, their stronger flank first on each step,

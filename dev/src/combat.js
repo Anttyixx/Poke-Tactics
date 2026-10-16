@@ -439,8 +439,13 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     // `copyPct` (by Ditto's level): how strong the copy is, in % of the
     // original's HP and damage, so levelling Ditto up pays off.
     const bonus = u.power?.copyPct?.[u.star] ?? 100;
-    rescaleHp(u, Math.round((e.maxHp * bonus) / 100));
-    setStats(u, { atk: Math.round((e.atk * bonus) / 100), attackCd: e.attackCd, range: e.range, crit: e.crit, sprite: e.sprite }, { name: catalog[e.unitId].name, copy: e.unitId, hp: u.hp, maxHp: u.maxHp });
+    // A Ditto copying a Ditto that's already a copy takes its own stats, so
+    // two Dittos copying each other in the same tick end up the same either way.
+    const src = e.copyOf !== null ? unitStats(catalog[e.unitId], e.star) : null;
+    const maxHp = src ? src.hp : e.maxHp;
+    const atk = src ? src.atk : e.atk;
+    rescaleHp(u, Math.round((maxHp * bonus) / 100));
+    setStats(u, { atk: Math.round((atk * bonus) / 100), attackCd: e.attackCd, range: e.range, crit: e.crit, sprite: e.sprite }, { name: catalog[e.unitId].name, copy: e.unitId, hp: u.hp, maxHp: u.maxHp });
   }
   function revertCopy(u) {
     const def = catalog[u.unitId];
