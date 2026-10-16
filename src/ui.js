@@ -381,7 +381,6 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     if (!btn) return;
     const action = btn.dataset.menu;
     if (action === 'close') closeMenu();
-    else if (action === 'dex') { closeMenu(); openDex(); }
     else if (action === 'new-confirmed') { closeMenu(); onNewGame(); }
     else if (action === 'leave-confirmed') { closeMenu(); onLobby('leave'); }
     else if (action === 'copy-log') copyLog(btn);
@@ -399,9 +398,6 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       confirmRemove = null;
       onFriends(btn.dataset.action, btn.dataset.code);
     }
-    else if (action === 'start-battle') { closeMenu(); onLobby('open'); }
-    else if (action === 'start-friend') { closeMenu(); onLobby('friend'); }
-    else if (action === 'start-training') { closeMenu(); started = true; overlay.classList.remove('start-screen'); showTeamBuilder(); }
     else openMenu(action); // 'main', 'help', 'new'
   });
   // Online pop-ups get their own layer over the start screen (see showLobby).
@@ -427,6 +423,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     if (btn?.dataset.copy) return copyText(btn.dataset.copy, btn);
     if (btn?.id === 'share-link') return navigator.share?.({ title: 'Poke Tactics', text: `Battle me in Poke Tactics! Code: ${btn.dataset.code}`, url: btn.dataset.url }).catch(() => {});
     if (btn?.id === 'start-menu') return openMenu('main');
+    if (btn?.id === 'start-dex') return openDex();
     if (btn?.id === 'profile-chip') return openMenu('profile');
     const info = e.target.closest('[data-dex-info]');
     if (info) return openDex(info.dataset.dexInfo); // a team card's ⓘ: full stats and power
@@ -616,14 +613,10 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       // From the start screen: everything a player can start from here.
       panel.innerHTML = `${close}<h1>Menu</h1>
         <div class="menu-list">
-          <button data-menu="start-battle"><span>⚔</span><div>Battle<small>Play the next player looking for a battle</small></div></button>
-          <button data-menu="start-friend"><span>✉</span><div>Battle a friend<small>Send a battle request with their friend code</small></div></button>
-          <button data-menu="start-training"><span>▶</span><div>Training<small>Play against the bot</small></div></button>
           <button data-menu="friends" class="${getFriends()?.incoming.length ? 'unread' : ''}"><span>♥</span><div>Friends<small>${friendsSub()}</small></div></button>
           <button data-menu="profile"><span>☺</span><div>Profile<small>Your name, picture and stats</small></div></button>
           <button data-menu="news" class="${hasUnread() ? 'unread' : ''}"><span>★</span><div>What's new<small>${esc(changelog[0]?.title ?? 'Updates to the game')}</small></div></button>
           <button data-menu="help"><span>?</span><div>How to play<small>Rules, controls and keys</small></div></button>
-          <button data-menu="dex"><span>◎</span><div>Pokédex<small>Every Pokémon's stats and power</small></div></button>
           ${getLastLog() ? '<button data-menu="lastlog"><span>⧉</span><div>Last online match log<small>Copy it to look into a dropped connection</small></div></button>' : ''}
         </div>
         ${versionText ? `<p class="menu-version">${esc(versionText)}</p>` : ''}`;
@@ -633,7 +626,6 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
           <button data-menu="close"><span>▶</span><div>Resume</div></button>
           <button data-menu="news" class="${hasUnread() ? 'unread' : ''}"><span>★</span><div>What's new<small>${esc(changelog[0]?.title ?? 'Updates to the game')}</small></div></button>
           <button data-menu="help"><span>?</span><div>How to play<small>Rules, controls and keys</small></div></button>
-          <button data-menu="dex"><span>◎</span><div>Pokédex<small>Every Pokémon's stats and power</small></div></button>
           <button data-menu="log"><span>⧉</span><div>Match log<small>Copy every move this match, with notes</small></div></button>
           <button data-menu="friends" class="${getFriends()?.incoming.length ? 'unread' : ''}"><span>♥</span><div>Friends<small>${friendsSub()}</small></div></button>
           <button data-menu="profile"><span>☺</span><div>Profile<small>Your name, picture and stats</small></div></button>
@@ -1747,7 +1739,10 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
           <button id="vs-friend" class="battle-btn training-btn">Battle a friend</button>
           <button id="battle" class="battle-btn training-btn">Training</button>
         </div>
-        <button id="start-menu" class="icon-btn start-menu${hasUnread() ? ' unread' : ''}" title="Menu (M)" aria-label="Menu">${ICON_MENU}</button>
+        <div class="start-corner">
+          <button id="start-dex" class="icon-btn dex-button" title="Every Pokémon's stats (P)">${ICON_DEX}<span class="label-text">Pokédex</span></button>
+          <button id="start-menu" class="icon-btn start-menu${hasUnread() ? ' unread' : ''}" title="Menu (M)" aria-label="Menu">${ICON_MENU}</button>
+        </div>
         ${profileChip()}
         ${versionText ? `<div class="start-version">${esc(versionText)}</div>` : ''}
       </div>`);

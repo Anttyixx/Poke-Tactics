@@ -1,5 +1,15 @@
 [
   {
+    "id": "2026-10-16-tidy-menu",
+    "version": "0.37.8",
+    "date": "2026-10-16",
+    "title": "Tidier menu, Pokédex on the main screen",
+    "changes": [
+      { "kind": "change", "text": "The main screen has its own Pokédex button in the top right, next to the menu, like in battle." },
+      { "kind": "change", "text": "The menu now only holds the things you need now and then: Friends, Profile, What's new and How to play. Battle, Battle a friend and Training are on the main screen, and the Pokédex has its own button." }
+    ]
+  },
+  {
     "id": "2026-10-16-clean-start",
     "version": "0.37.7",
     "date": "2026-10-16",
