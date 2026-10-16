@@ -828,6 +828,16 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 #dex-back:hover { color: var(--text); }
 .dex-section { margin: 18px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
 .dex-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; }
+/* Sort pills above the grid; the chosen one shows its direction. */
+.dex-sort { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 12px; }
+.dex-sort > span { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; margin-right: 2px; }
+#dex .dex-sort button {
+  min-width: 0; padding: 5px 12px; border-radius: 99px; font-size: 13px; font-weight: 800;
+  background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); display: inline-flex; align-items: center; gap: 5px;
+}
+#dex .dex-sort button:hover { color: var(--text); border-color: var(--line-2); }
+#dex .dex-sort button.on { color: #10131f; background: var(--gold); border-color: var(--gold); }
+.dex-sort button i { font-style: normal; }
 .dex-card {
   display: flex; flex-direction: column; align-items: center; gap: 2px;
   padding: 10px 6px 9px; border-radius: 14px; text-align: center;

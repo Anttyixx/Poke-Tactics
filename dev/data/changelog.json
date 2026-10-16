@@ -1,5 +1,15 @@
 [
   {
+    "id": "2026-10-16-dex-sort",
+    "version": "0.43.2",
+    "date": "2026-10-16",
+    "title": "Sort the Pokédex",
+    "changes": [
+      { "kind": "change", "text": "The Pokédex is now sorted by cost (cheapest first), with ties in name order." },
+      { "kind": "new", "text": "Sort buttons above the Pokédex: Cost, Name, Class, HP (shield included), or Damage. Tap the chosen one again to reverse the order. The cards glide to their new places, and your choice is remembered." }
+    ]
+  },
+  {
     "id": "2026-10-16-dex-entry-animations",
     "version": "0.43.1",
     "date": "2026-10-16",
