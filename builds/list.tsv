@@ -1,3 +1,4 @@
+7bd2a40	dev	2026-10-16 05:46 UTC	Annihilape: +12% attack speed per attack in a row, no cap (0.44.1)
 bb03946	dev	2026-10-16 05:32 UTC	Annihilape's Rage Fist has no cap (+10% per attack); hide empty ability bars (0.44.0)
 44d5560	dev	2026-10-16 05:16 UTC	Shining Star's short text mentions the stun (0.43.4)
 10b3ea9	dev	2026-10-16 05:11 UTC	Form entries only say what the form does differently (0.43.3)
@@ -27,4 +28,3 @@ fc41cb1	dev	2026-10-16 01:29 UTC	Short ability descriptions with a More details 
 e49419b	dev	2026-10-15 18:42 UTC	Hoopa rework: after 5 attacks it binds the Pokémon it's attacking; bind holds until 3 tries to move, a shove/knockback, or a knockout; no Unbound form; 75 dmg every 1.0s (0.37.0)
 8a8a88d	dev	2026-10-15 05:55 UTC	Dragapult only charges its power while a Dreepy is home (attacks and Overdrive) (0.36.2)
 ba4e0a1	dev	2026-10-15 05:48 UTC	Dreepy landing hit at ★ 80 -&gt; 50 (0.36.1)
-d2953cb	dev	2026-10-15 05:37 UTC	Dragapult: 800 HP, 50 dmg every 0.8s; 1-charge power: after each attack its next action fires a Dreepy (if one is home); Dreepy HP 230-400 (0.36.0)

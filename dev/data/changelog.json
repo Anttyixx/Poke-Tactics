@@ -1,12 +1,12 @@
 [
   {
     "id": "2026-10-16-annihilape-no-cap",
-    "version": "0.44.0",
+    "version": "0.44.1",
     "date": "2026-10-16",
     "title": "Annihilape rages on, and fewer bars",
     "changes": [
-      { "pokemon": "annihilape", "kind": "change", "text": "Rage Fist has no cap anymore: every attack in a row without moving makes Annihilape attack faster, for as long as it keeps going. To balance it, each attack adds 10% speed instead of 20%." },
-      { "kind": "change", "text": "In battle, Pokémon without an ability counter no longer show an empty ability bar: Annihilape, Frosmoth, Lilligant, Golem, Ditto, Minior's Rock form, Combee, and Dreepy. Minior gets its bar once it becomes Star Form." }
+      { "pokemon": "annihilape", "kind": "change", "text": "Rage Fist has no cap anymore: every attack in a row without moving makes Annihilape attack faster, for as long as it keeps going. To balance it, each attack adds 12% speed instead of 20%." },
+      { "kind": "change", "text": "In battle, Pokémon without an ability counter no longer show an empty ability bar: Annihilape, Frosmoth, Lilligant, Golem, Ditto, Beheeyem, Minior's Rock form, Combee, and Dreepy. Minior gets its bar once it becomes Star Form." }
     ]
   },
   {
