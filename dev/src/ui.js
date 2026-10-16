@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=1c1fdc4';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=788716c';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=1c1fdc4';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=1c1fdc4';
+} from './game.js?v=788716c';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=788716c';
 
 const TICK_MS = 100;
 // Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
@@ -46,7 +46,44 @@ const vNum = (x) => `<span class="v">${x}</span>`;
 const vHeal = (x) => `<span class="v v-heal">${x}</span>`;
 const area = (r) => vNum(`${2 * r + 1}x${2 * r + 1}`);
 
+// Classes as players see them (the data keeps its own short ids).
+const TYPE_LABEL = { warrior: 'Tank', mage: 'Special', ranger: 'Ranged', rogue: 'Speedster', cleric: 'Healer' };
+export const typeName = (type) => TYPE_LABEL[type] ?? type[0].toUpperCase() + type.slice(1);
+
+// A Pokémon or form named in an ability: tap it for its Pokédex entry.
+const pokeLink = (name, attrs) => `<button type="button" class="poke-link" ${attrs}>${esc(name)}</button>`;
+const idOf = (def, catalog) => Object.keys(catalog ?? {}).find((k) => catalog[k] === def) ?? Object.keys(catalog ?? {}).find((k) => catalog[k].name === def.name && !catalog[k].form);
+// Turn the first plain-text mention of each name into a link (never inside a tag).
+export function linkNames(html, refs) {
+  for (const { name, attrs } of refs) {
+    const plain = esc(name);
+    let done = false;
+    html = html.split(/(<[^>]+>)/).map((part) => {
+      if (done || part.startsWith('<') || !part.includes(plain)) return part;
+      done = true;
+      return part.replace(plain, pokeLink(name, attrs));
+    }).join('');
+  }
+  return html;
+}
+// Which other Pokémon or forms an ability names.
+function abilityRefs(def, catalog) {
+  const p = def.ability;
+  if (!p) return [];
+  const id = idOf(def, catalog);
+  const refs = [];
+  if (p.unit && catalog?.[p.unit]) refs.push({ name: catalog[p.unit].name, attrs: `data-dex="${p.unit}"` });
+  if (p.form?.name && id) refs.push({ name: p.form.name, attrs: `data-dex-form="${id}:0"` });
+  if (p.chargedForm?.name && id) refs.push({ name: p.chargedForm.name, attrs: `data-dex-form="${id}:0"` });
+  return refs;
+}
+
 export function powerText(def, star, catalog) {
+  const out = powerTextPlain(def, star, catalog);
+  return out && { ...out, text: linkNames(out.text, abilityRefs(def, catalog)) };
+}
+
+function powerTextPlain(def, star, catalog) {
   const p = def.ability;
   if (!p) return null;
   const lvl = star ?? 0;
@@ -356,6 +393,11 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   infoEl.addEventListener('click', (e) => {
     if (e.target.closest('#info-close')) return closeInfo();
     if (e.target.id === 'sell' && selected !== null) { closeInfo(); intent({ type: 'sell', uid: selected }); }
+    const link = e.target.closest('.poke-link');
+    if (link) {
+      if (link.dataset.dexForm) { const [id, i] = link.dataset.dexForm.split(':'); return openEntry(id, Number(i)); }
+      return openEntry(link.dataset.dex);
+    }
     e.target.closest('.ability')?.classList.toggle('open'); // phones clamp it to two lines
   });
   sheetBackdrop.addEventListener('click', () => closeInfo());
@@ -934,7 +976,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
           ? `<span class="portrait" data-facing="down"><span class="sprite" ${spriteStyle(def)}></span></span>`
           : `<span class="emoji">${def.emoji}</span>`}
         <span class="name">${esc(def.name)}</span>
-        <span class="type">${def.type}</span>
+        <span class="type">${typeName(def.type)}</span>
         <span class="cost c${def.cost}" title="${def.cost} coins">${def.cost}</span>
         <span class="info-btn" data-info="${slot}" role="button" aria-label="${esc(def.name)} info">i</span>
         ${fielded(p, id) ? `<span class="levelup">Level up ${levelMark(fielded(p, id).star)} → ${levelMark(fielded(p, id).star + 1)}</span>` : ''}
@@ -991,7 +1033,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       <div class="info-head" data-type="${def.type}">
         ${portrait(def)}
         <div><h2>${esc(def.name)} ${levelSpan(star)}</h2>
-        <span class="sub">${def.type} · ${def.cost} coins · ${copies}/${COPIES_PER_TROOP} copies</span></div>
+        <span class="sub">${typeName(def.type)} · ${def.cost} coins · ${copies}/${COPIES_PER_TROOP} copies</span></div>
       </div>
       ${hint}
       <dl class="stats">
@@ -1719,7 +1761,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       <span class="info-btn" data-dex-info="${id}" role="button" aria-label="${esc(def.name)} info">i</span>
       <span class="dex-card-art">${portrait(def)}</span>
       <b>${esc(def.name)}</b>
-      <small>${def.cost} <i class="coin-icon" aria-label="coins"></i> · ${def.type[0].toUpperCase() + def.type.slice(1)}</small>
+      <small>${def.cost} <i class="coin-icon" aria-label="coins"></i> · ${typeName(def.type)}</small>
     </button>`;
   }
 
@@ -1991,9 +2033,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     dexEl.classList.remove('closing');
     dexEl.hidden = false;
   }
-  function openEntry(id) {
+  function openEntry(id, form = null) {
     dexPick = id;
-    dexForm = null;
+    dexForm = form;
     dexStar = 0;
     renderEntry();
     entryEl.classList.remove('closing');
@@ -2026,7 +2068,6 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     if (key === 'escape' || key === 'p') closeDex();
   }
 
-  const typeName = (type) => type[0].toUpperCase() + type.slice(1);
   const summonIds = () => Object.keys(catalog).filter((id) => catalog[id].summon).sort();
   // A transformed form as a Pokémon of its own (HP carries over when the form has none).
   // A Pokémon's forms: Greninja's or Minior's one transformation, Alcremie's flavours.
@@ -2041,10 +2082,10 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
 
   function dexCard(id) {
     const def = catalog[id];
-    return `<button class="dex-card" data-dex="${id}" data-type="${def.type}">
+    return `<button class="dex-card dex-grid-card" data-dex="${id}" data-type="${def.type}">
+      <span class="dex-corners"><span class="dex-corner dex-cost">${def.summon ? 'Summon' : `<i class="coin-icon" aria-hidden="true"></i>${def.cost}`}</span><span class="dex-corner dex-class">${typeName(def.type)}</span></span>
       <span class="dex-card-art">${portrait(def)}</span>
       <b>${esc(def.name)}</b>
-      <small>${def.summon ? 'Summon' : `${def.cost} <i class="coin-icon" aria-label="coins"></i>`} · ${typeName(def.type)}</small>
     </button>`;
   }
 
@@ -2138,6 +2179,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         f.hop && `Every ${vNum(f.energy)} attacks it zips to a different enemy.`,
       ].filter(Boolean).join(' ');
     } else if (def.ability) power = powerText(def, star, catalog)?.text ?? '';
+    if (formOf) power = linkNames(power, [{ name: formOf.name, attrs: `data-dex="${idOf(formOf, catalog)}"` }]);
     // Numbers in the text get their own spans so a level change can count them.
     power = power.split(/(<[^>]+>)/).map((part) => (part.startsWith('<') ? part : part.replace(/\d+(?:\.\d+)?/g, '<span class="pn">$&</span>'))).join('');
     return {
@@ -2182,7 +2224,20 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     }
   }
   function tweenNumber(el, to) {
-    const from = parseFloat(el.textContent) || 0;
+    if (el.textContent === to) return;
+    const num = /^(-?\d+(?:\.\d+)?)(.*)$/;
+    const a = el.textContent.match(num);
+    const b = to.match(num);
+    if (!a || !b || a[2] !== b[2]) {
+      el.textContent = to;
+      el.animate([{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], { duration: 240, easing: 'ease-out' });
+      const c = el.closest('.dex-chip');
+      c?.animate([{ borderColor: 'var(--gold)' }, {}], { duration: 500 });
+      return;
+    }
+    const suffix = b[2];
+    to = b[1];
+    const from = parseFloat(a[1]);
     const target = parseFloat(to);
     const places = (to.split('.')[1] ?? '').length;
     const start = performance.now();
@@ -2193,7 +2248,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     const step = (now) => {
       const k = Math.min(1, (now - start) / ms);
       const e = 1 - (1 - k) ** 3;
-      el.textContent = k < 1 ? (from + (target - from) * e).toFixed(places) : to;
+      el.textContent = (k < 1 ? (from + (target - from) * e).toFixed(places) : to) + suffix;
       if (k < 1) el._tween = requestAnimationFrame(step);
       else chip?.classList.remove('changing');
     };
@@ -2210,7 +2265,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     const fromSmall = was(newKey); // the small sprite that was tapped
     dexPick = id;
     dexForm = form;
-    renderEntry({ fade: true });
+    const old = entryEl.querySelector('.dex-detail');
+    if (old && !reduceMotion()) morphEntry(old); else renderEntry();
     if (!fromMain || !fromSmall || reduceMotion()) return;
     const play = (key, from) => {
       const el = entryEl.querySelector(`[data-key="${key}"]`);
@@ -2227,9 +2283,69 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     play(oldKey, fromMain); // shrinks from the big spot
   }
 
-  function renderEntry({ fade = false } = {}) {
+  // Another Pokémon or form in the open entry: the same boxes stay put and
+  // change to the new values (numbers count, the stat shape morphs, text
+  // fades), instead of the whole entry being redrawn.
+  function morphEntry(old) {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = entryHTML();
+    const next = tmp.querySelector('.dex-detail');
+    if (!next) return renderEntry();
+    const panel = entryEl.querySelector('.dex-panel');
+    panel.dataset.type = old.dataset.type = next.dataset.type;
+    const fadeIn = (el) => el?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260, easing: 'ease-out' });
+    // Name, tags and sprites: swapped (the sprites fly between their spots).
+    const hero = next.querySelector('.dex-hero');
+    old.querySelector('.dex-hero').replaceWith(hero);
+    fadeIn(hero.querySelector('.dex-title'));
+    // Stat shape and chips.
+    const oldBox = old.querySelector('.dex-statbox');
+    const newBox = next.querySelector('.dex-statbox');
+    const op = oldBox.querySelector('.dex-radar .shape');
+    const np = newBox.querySelector('.dex-radar .shape');
+    if (!op !== !np) { oldBox.replaceWith(newBox); fadeIn(newBox); } else {
+      if (op) tweenRadar(op, np.dataset.vals.split(',').map(Number));
+      morphChips(oldBox.querySelector('.dex-chips'), newBox.querySelector('.dex-chips'));
+    }
+    // The ability box.
+    const opw = old.querySelector('.dex-power');
+    const npw = next.querySelector('.dex-power');
+    if (opw && npw) {
+      opw.replaceChildren(...npw.childNodes);
+      fadeIn(opw);
+    } else if (opw) opw.remove();
+    else if (npw) { old.append(npw); fadeIn(npw); }
+  }
+  // Chips are matched by their label: a kept chip counts to its new value,
+  // a new one pops in, one with no match leaves.
+  function morphChips(box, nextBox) {
+    const label = (c) => c.querySelector('small').textContent;
+    const olds = new Map([...box.children].map((c) => [label(c), c]));
+    const order = [...nextBox.children].map((n) => {
+      const o = olds.get(label(n));
+      if (!o) { n.animate([{ opacity: 0, transform: 'scale(0.85)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'ease-out' }); return n; }
+      olds.delete(label(n));
+      if (n.dataset.k) o.dataset.k = n.dataset.k; else delete o.dataset.k;
+      const ob = o.querySelector('b');
+      const nb = n.querySelector('b');
+      ob.style.minWidth = nb.style.minWidth;
+      tweenNumber(ob, nb.textContent);
+      return o;
+    });
+    for (const o of olds.values()) o.remove();
+    box.replaceChildren(...order);
+  }
+
+  function renderEntry() {
+    const html = entryHTML();
+    if (html === null) return closeEntry();
+    entryEl.querySelector('.dex-panel').dataset.type = (dexForm !== null && formsOf(catalog[dexPick])[dexForm]) ? formDef(catalog[dexPick], dexForm).type : catalog[dexPick].type;
+    entryEl.querySelector('.dex-panel').innerHTML = html;
+  }
+
+  function entryHTML() {
     const base = catalog[dexPick];
-    if (!base) return closeEntry();
+    if (!base) return null;
     const isForm = dexForm !== null && Boolean(formsOf(base)[dexForm]);
     const def = isForm ? formDef(base, dexForm) : base;
     const star = dexStar;
@@ -2266,10 +2382,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     const relatedHtml = related.map(([d, attrs, label, key]) => `<button class="dex-rel" ${attrs} title="${esc(label)}" aria-label="${esc(label)}">${sprite(d, 'dex-rel-sprite', key)}</button>`).join('');
 
     const tag = isForm ? 'Transformed form' : def.summon ? 'Summoned in battle' : `${def.cost} coins`;
-    entryEl.querySelector('.dex-panel').dataset.type = def.type;
-    entryEl.querySelector('.dex-panel').innerHTML = `
+    return `
       <button id="entry-close" class="ghost" aria-label="Close">✕</button>
-      <section class="dex-detail${fade ? ' refresh' : ''}" data-type="${def.type}">
+      <section class="dex-detail" data-type="${def.type}">
         <div class="dex-hero">
           <div class="dex-figure">
             <div class="dex-art">

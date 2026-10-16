@@ -1,5 +1,17 @@
 [
   {
+    "id": "2026-10-16-dex-links-classes",
+    "version": "0.39.0",
+    "date": "2026-10-16",
+    "title": "New class names and a livelier Pokédex",
+    "changes": [
+      { "kind": "change", "text": "Classes have new names: Warrior is now Tank, Mage is Special, Ranger is Ranged, Rogue is Speedster and Cleric is Healer." },
+      { "kind": "new", "text": "A Pokémon or form named in an ability (like Dreepy, Combee or Ash-Greninja) can be tapped to open its Pokédex entry." },
+      { "kind": "change", "text": "Switching to another Pokémon or form inside a Pokédex entry no longer redraws everything: the stat chips count to their new values, the stat shape morphs, and the ability box fades to the new text." },
+      { "kind": "change", "text": "Pokédex cards show the cost in the top left corner and the class in the top right." }
+    ]
+  },
+  {
     "id": "2026-10-16-abilities",
     "version": "0.38.0",
     "date": "2026-10-16",

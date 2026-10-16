@@ -211,7 +211,7 @@ test a set of changes together. Team styles to pit against each other live in `A
   - Beheeyem, **Psywave**: at the start of battle, a wave flies down its column to the other end of the
     board. The first enemy it hits takes 50% and is carried to that end, then is stunned for 1s; anyone
     already there is pushed to the side. Both sit out until the wave lands.
-  - Toxtricity (cost 3, ranger, range 2, attacks every 1.25s), **Overdrive**: every 3 attacks, each ally
+  - Toxtricity (cost 3, Ranged, range 2, attacks every 1.25s), **Overdrive**: every 3 attacks, each ally
     directly left, right, in front of and behind it that has an ability counter gains +2 toward its ability
     (never past full; at the end of the tick, like all ability progress).
   - Vespiquen, **Attack Order**: every 6 attacks, summons 2 Combee beside it: its sides first, then
@@ -222,17 +222,17 @@ test a set of changes together. Team styles to pit against each other live in `A
   - Decidueye, **Phantom Force**: after 8 attacks, invisible for 3s and attacks 30% faster. Enemies can't
     target or follow an invisible unit.
   - Infernape, **Blaze**: after 7 attacks, attacks 50% faster for 3s.
-  - Hoopa (cost 3, mage, range 2, attacks every 1.0s), **Binding Ring**: after 4 attacks it holds its
+  - Hoopa (cost 3, Special, range 2, attacks every 1.0s), **Binding Ring**: after 4 attacks it holds its
     charge until an enemy is about to change squares by itself (a step, or an ability that moves it, like
     a dash or a zip), and binds that one just before it goes, so the move (or the dash or zip) never happens; being
     shoved by an attack doesn't count. A bound Pokémon still attacks anything in range, but the rings
     stop 3 tries to move in all (that first one included, walking or moving abilities), then break. They also snap at once if it's shoved or knocked to another
     square, or knocked out.
-  - Amoonguss (cost 4, warrior, tank), **Rage Powder**: every 2 attacks, the hardest-hitting enemy
+  - Amoonguss (cost 4, Tank), **Rage Powder**: every 2 attacks, the hardest-hitting enemy
     within the 5x5 around it that is attacking someone else must attack Amoonguss for 5s.
-  - Annihilape (cost 4, warrior), **Rage Fist**: each attack in a row without moving makes it attack
+  - Annihilape (cost 4, Tank), **Rage Fist**: each attack in a row without moving makes it attack
     20% faster, up to +100% after 5 attacks. Moving (or being moved) resets it.
-  - Dragapult (cost 4, ranger, range 3), **Dragon Darts**: after each attack made while a Dreepy is
+  - Dragapult (cost 4, Ranged, range 3), **Dragon Darts**: after each attack made while a Dreepy is
     home (at most 2 can be out at once; with both out, attacks don't charge it), its next action (an attack or a step, after its usual 0.8s wait)
     fires one Dreepy instead, at the farthest enemy outside the 3x3 around it (never at a Pokémon
     right next to it; with none that far, it just attacks). The Dreepy crashes into its target for 50
@@ -248,11 +248,11 @@ test a set of changes together. Team styles to pit against each other live in `A
     (diagonals too), for 60% of its damage.
   - Golem, **Self-Destruct**: when knocked out it stays on its square for 3s (it can't be hit), then
     explodes for 300% on enemies in the 3x3 square around it. The fight waits for it.
-  - Frosmoth (cost 3, mage, range 2, attacks every 1.25s), **Frostbite**: no charged ability. Every
+  - Frosmoth (cost 3, Special, range 2, attacks every 1.25s), **Frostbite**: no charged ability. Every
     hit chills the target for 3s: it attacks 30% slower and waits 30% longer between steps; another
     hit restarts the timer. Chills land at the end of the tick, like stuns. Chilled Pokémon are
     tinted blue with a snowflake badge.
-  - Alcremie (cost 3, cleric, range 2, attacks every 1.25s), **Sweet Treat**: every 4 attacks it
+  - Alcremie (cost 3, Healer, range 2, attacks every 1.25s), **Sweet Treat**: every 4 attacks it
     changes into a random flavour (seeded, so replays match) and treats one ally for 3s. Matcha
     Cream heals the ally with the lowest share of HP for 600% of its damage, a chunk every second;
     Ruby Cream makes the hardest-hitting ally attack 100% faster; Mint Cream shields the ally most
