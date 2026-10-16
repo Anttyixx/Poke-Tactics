@@ -222,21 +222,25 @@ test a set of changes together. Team styles to pit against each other live in `A
   - Decidueye, **Phantom Force**: after 8 attacks, invisible for 3s and attacks 30% faster. Enemies can't
     target or follow an invisible unit.
   - Infernape, **Blaze**: after 7 attacks, attacks 50% faster for 3s.
-  - Hoopa (cost 3, mage, range 2, attacks every 1.11s), **Binding Ring**: it starts the fight charged
-    (shown as Hoopa Unbound) and waits until an enemy tries to move (walk, zip or dash). That Pokémon
-    is bound in place for 3s: it can't move, but it still attacks anything in range. Hoopa turns back,
-    refills after 2 attacks, and never binds the same Pokémon twice in a row.
+  - Hoopa (cost 3, mage, range 2, attacks every 1.0s), **Binding Ring**: after 4 attacks it holds its
+    charge until an enemy is about to change squares by itself (a step, or an ability that moves it, like
+    a dash or a zip), and binds that one just before it goes, so the move (or the dash or zip) never happens; being
+    shoved by an attack doesn't count. A bound Pokémon still attacks anything in range, but the rings
+    stop 3 tries to move in all (that first one included, walking or moving abilities), then break. They also snap at once if it's shoved or knocked to another
+    square, or knocked out.
   - Amoonguss (cost 4, warrior, tank), **Rage Powder**: every 2 attacks, the hardest-hitting enemy
     within the 5x5 around it that is attacking someone else must attack Amoonguss for 5s.
   - Annihilape (cost 4, warrior), **Rage Fist**: each attack in a row without moving makes it attack
     20% faster, up to +100% after 5 attacks. Moving (or being moved) resets it.
-  - Dragapult (cost 4, ranger, range 3), **Dragon Darts**: when it attacks with both its Dreepy at
-    home, it fires them instead, at the two farthest enemies. Each crashes into its target for 40
-    damage and a 0.5s stun, taking its square and shoving it aside (a shield breaks instead), and the
-    target must attack that Dreepy until it faints. Dreepy are fragile and hit fast for little;
-    they're a distraction. A fainted Dreepy flies back (3s); until both are home, Dragapult attacks
-    as usual. Darts fire at the end of the tick, at enemies already on the board, every Dragapult's
-    first Dreepy before any second one, so neither side gets an edge.
+  - Dragapult (cost 4, ranger, range 3), **Dragon Darts**: after each attack made while a Dreepy is
+    home (at most 2 can be out at once; with both out, attacks don't charge it), its next action (an attack or a step, after its usual 0.8s wait)
+    fires one Dreepy instead, at the farthest enemy outside the 3x3 around it (never at a Pokémon
+    right next to it; with none that far, it just attacks). The Dreepy crashes into its target for 50
+    damage at ★ (96 / 115 / 138 at higher levels) and a 0.5s stun, taking its square and shoving it aside (a
+    shield breaks instead); once the stun wears off the target attacks that Dreepy right away until
+    it faints. Dreepy have 230 HP and hit for 12 every 0.5s at ★, growing slowly with level. A fainted
+    Dreepy flies back (0.5s). Dragapult: 800 HP, 50 damage every 0.8s. Darts fire at the end of the
+    tick, aiming and landing from where everyone stood when it began, so neither side gets an edge.
   - Greninja, **Battle Bond**: after 5 attacks, becomes Ash-Greninja for the rest of the fight: fast
     movement, attacks every 0.8s, more damage, range 3 (same HP).
   - Torterra, **Earthquake**: with every 5th attack, every enemy on the board takes 30% and is stunned 1s.

@@ -1302,7 +1302,20 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 }
 :is(#overlay, #lobby) .profile-chip span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 :is(#overlay, #lobby) .profile-chip .avatar { width: 36px; height: 36px; background-color: #ffffff14; border-radius: 8px; background-size: 80%; }
-#overlay:not(.start-screen) .profile-chip { display: none; }
+#overlay:not(.start-screen) .profile-chip, #overlay:not(.start-screen) .start-people { display: none; }
+/* Start screen: profile chip and the Friends button, top left. */
+#overlay .start-people {
+  position: fixed; z-index: 2; display: flex; align-items: stretch; gap: 8px;
+  top: max(14px, env(safe-area-inset-top)); left: max(14px, env(safe-area-inset-left));
+}
+#overlay .start-people .profile-chip { position: static; max-width: calc(100vw - 240px); }
+#overlay .start-people .friends-btn { position: relative; margin: 0; min-width: 0; padding: 0 12px; }
+.friends-btn svg { width: 22px; height: 22px; }
+.friends-btn .online-count {
+  position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 99px;
+  background: #3ecf6b; color: #062312; font: 900 11px/18px var(--font); text-align: center; box-shadow: 0 0 0 2px var(--bg);
+}
+.friends-btn .asks-dot { position: absolute; top: -3px; left: -3px; width: 10px; height: 10px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 0 2px var(--bg); }
 
 /* Profile screen. */
 /* Profile screen: picture + name, then stats and friends. */

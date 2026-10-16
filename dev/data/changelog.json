@@ -1,5 +1,15 @@
 [
   {
+    "id": "2026-10-16-friends-button",
+    "version": "0.37.9",
+    "date": "2026-10-16",
+    "title": "Friends button on the main screen",
+    "changes": [
+      { "kind": "new", "text": "A Friends button next to your profile on the main screen shows how many friends are online, with a dot when someone sent you a friend request. Tap it to add and manage friends, or ask an online friend to battle." },
+      { "kind": "change", "text": "The Battle a friend button is gone from the main screen: battle friends from the Friends button instead. Friends also left the main screen's menu, since it has its own button now." }
+    ]
+  },
+  {
     "id": "2026-10-16-tidy-menu",
     "version": "0.37.8",
     "date": "2026-10-16",
