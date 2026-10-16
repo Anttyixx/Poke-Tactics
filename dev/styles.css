@@ -1031,6 +1031,9 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 }
 
 /* ---- Start screen ---- */
+/* While the game loads (html.booting, removed by main.js), and while the start
+   screen is up, the game screen behind it stays hidden. */
+.booting #app, .booting #toast, body:has(#overlay.start-screen:not([hidden])) #app { visibility: hidden; }
 #overlay.start-screen {
   background:
     radial-gradient(800px 500px at 50% 20%, #2a3a6e, transparent 70%),
