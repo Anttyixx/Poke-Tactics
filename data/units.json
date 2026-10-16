@@ -92,7 +92,7 @@
   "annihilape": {
     "name": "Annihilape", "sprite": "assets/sprites/annihilape.png", "fx": "#c9c9e0", "type": "warrior", "cost": 4,
     "hp": [1250,  2125,  3612,  6125], "damage": [100,  170,  289,  490], "range": 1, "moveSpeed": "medium", "secPerHit": 1.4, "critChance": 15, "energy": 0,
-    "ability": {"name": "Rage Fist", "kind": "rage", "stackPct": 10}
+    "ability": {"name": "Rage Fist", "kind": "rage", "stackPct": 12}
   },
   "dragapult": {
     "name": "Dragapult", "sprite": "assets/sprites/dragapult.png", "fx": "#6fe0d8", "type": "ranger", "cost": 4,
