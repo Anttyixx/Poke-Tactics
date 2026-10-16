@@ -1,3 +1,4 @@
+5bc6cd9	dev	2026-10-16 03:09 UTC	Stat shapes share one scale across Pokémon and levels (0.41.0)
 27bf768	dev	2026-10-16 02:54 UTC	Use the Oxford comma in ability descriptions (0.40.5)
 db441e1	dev	2026-10-16 02:18 UTC	Show the key numbers in short ability descriptions (0.40.4)
 f860b0a	dev	2026-10-16 02:06 UTC	Put the More details button in the ability box's top-right corner (0.40.3)
@@ -27,4 +28,3 @@ cd50a55	dev	2026-10-15 04:41 UTC	Dreepy landing hit doubled: 100/120/144/172 (0.
 6029e64	dev	2026-10-15 04:17 UTC	Dragapult: 3-charge power fires one Dreepy per full charge (max 2 out), attacks every 0.7s (0.34.0)
 4c243a7	dev	2026-10-15 03:29 UTC	Saved Dragapult version points at commit 45c1684
 f8c4cb9	dev	2026-10-15 03:29 UTC	Save Dragapult + Dreepy as dragapult-v1 (stats, rules, win rates) to restore later
-45c1684	dev	2026-10-15 00:26 UTC	Dreepy launch leaves a white streak; target's hit/stun/shove shown on arrival; lured target attacks the Dreepy right after the stun; Dragapult every 1.6s; Amoonguss pull lands at end of tick (0.33.2)

@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=27bf768';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=5bc6cd9';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=27bf768';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=27bf768';
+} from './game.js?v=5bc6cd9';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=5bc6cd9';
 
 const TICK_MS = 100;
 // Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
@@ -2196,15 +2196,22 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       move: 1 / (MOVE_SPEEDS[def.moveSpeed] + STEP_TICKS * TICK_SECONDS),
     };
   };
-  const radarTop = [];
+  // One scale for every Pokémon at every level: each axis is measured against
+  // the best value any Pokémon (or form) reaches at the top level. So shapes
+  // compare across Pokémon and across levels, and a stat that goes up with a
+  // level always pushes the shape out. HP and damage grow a lot with levels,
+  // so they use a square-root scale to keep level-1 shapes readable.
+  const RADAR_TOP_LEVEL = 3;
+  const RADAR_CURVE = { hp: Math.sqrt, atk: Math.sqrt };
+  let radarTop = null;
   function radarValues(def, star) {
-    if (!radarTop[star]) {
+    if (!radarTop) {
       const defs = Object.values(catalog).flatMap((d) => [d, ...formsOf(d).map((_, i) => formDef(d, i))]);
-      const raws = defs.map((d) => radarRaw(d, star));
-      radarTop[star] = Object.fromEntries(RADAR.map(([k]) => [k, Math.max(...raws.map((r) => r[k]))]));
+      const raws = defs.flatMap((d) => [0, 1, 2, RADAR_TOP_LEVEL].map((s2) => radarRaw(d, s2)));
+      radarTop = Object.fromEntries(RADAR.map(([k]) => [k, Math.max(...raws.map((r) => r[k]))]));
     }
     const raw = radarRaw(def, star);
-    return RADAR.map(([k]) => Math.min(1, raw[k] / (radarTop[star][k] * RADAR_HEADROOM)));
+    return RADAR.map(([k]) => Math.min(1, (RADAR_CURVE[k] ?? ((x) => x))(raw[k] / radarTop[k]) / RADAR_HEADROOM));
   }
   const RADAR_R = 70;
   const radarPoint = (i, v) => {
