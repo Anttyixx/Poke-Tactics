@@ -1,5 +1,14 @@
 [
   {
+    "id": "2026-10-16-hoopa-attack",
+    "version": "0.37.5",
+    "date": "2026-10-16",
+    "title": "Hoopa hits a little softer",
+    "changes": [
+      { "pokemon": "hoopa", "kind": "nerf", "text": "Attack lowered by about 5% (75 → 71 at level 1) to balance its faster Binding Ring." }
+    ]
+  },
+  {
     "id": "2026-10-15-hoopa-4-charges",
     "version": "0.37.4",
     "date": "2026-10-15",
