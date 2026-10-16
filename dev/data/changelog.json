@@ -1,5 +1,14 @@
 [
   {
+    "id": "2026-10-16-oxford-comma",
+    "version": "0.40.5",
+    "date": "2026-10-16",
+    "title": "Tidier ability wording",
+    "changes": [
+      { "kind": "fix", "text": "Ability descriptions now use the Oxford comma in lists, like Coalossal: Its next attack deals 130% damage, knocks the target back, and stuns it." }
+    ]
+  },
+  {
     "id": "2026-10-16-ability-short-numbers",
     "version": "0.40.4",
     "date": "2026-10-16",

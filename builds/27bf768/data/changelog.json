@@ -1,5 +1,296 @@
 [
   {
+    "id": "2026-10-16-oxford-comma",
+    "version": "0.40.5",
+    "date": "2026-10-16",
+    "title": "Tidier ability wording",
+    "changes": [
+      { "kind": "fix", "text": "Ability descriptions now use the Oxford comma in lists, like Coalossal: Its next attack deals 130% damage, knocks the target back, and stuns it." }
+    ]
+  },
+  {
+    "id": "2026-10-16-ability-short-numbers",
+    "version": "0.40.4",
+    "date": "2026-10-16",
+    "title": "Key numbers in short ability descriptions",
+    "changes": [
+      { "kind": "change", "text": "Short ability descriptions now include the basic numbers, like how much damage it deals, heals, slows or speeds up. For example, Golem: Explodes after fainting and deals 300% damage to the enemies around it." }
+    ]
+  },
+  {
+    "id": "2026-10-16-ability-button-corner",
+    "version": "0.40.3",
+    "date": "2026-10-16",
+    "title": "More details button stays put",
+    "changes": [
+      { "kind": "change", "text": "The More details button now sits in the top-right corner of the ability box, next to the ability's name, so it stays in the same spot when the text grows or shrinks." }
+    ]
+  },
+  {
+    "id": "2026-10-16-ability-swap-animation",
+    "version": "0.40.2",
+    "date": "2026-10-16",
+    "title": "Smoother ability details",
+    "changes": [
+      { "kind": "change", "text": "Switching between the short and full ability text is animated: the box smoothly grows or shrinks, the old text drifts away and the new text unrolls from the top, with its key numbers lighting up." }
+    ]
+  },
+  {
+    "id": "2026-10-16-ability-swap",
+    "version": "0.40.1",
+    "date": "2026-10-16",
+    "title": "More details, in place",
+    "changes": [
+      { "kind": "change", "text": "The More details button now swaps the short ability description for the full one right where it is, instead of opening a section underneath. Fewer details swaps it back." }
+    ]
+  },
+  {
+    "id": "2026-10-16-ability-summaries",
+    "version": "0.40.0",
+    "date": "2026-10-16",
+    "title": "Easier ability descriptions",
+    "intro": "Every ability now opens with a short, plain description. Want the exact numbers and rules? Tap More details.",
+    "changes": [
+      {
+        "kind": "change",
+        "text": "Ability descriptions in the Pokédex and the info panel are now a short summary of what the ability does."
+      },
+      {
+        "kind": "new",
+        "text": "Abilities with more to know have a More details button that unfolds the full description, with all the numbers. Once opened, it stays open as you look at other Pokémon."
+      }
+    ]
+  },
+  {
+    "id": "2026-10-16-dex-cards-cost-only",
+    "version": "0.39.1",
+    "date": "2026-10-16",
+    "title": "Cleaner Pokédex cards",
+    "changes": [
+      { "kind": "change", "text": "Pokédex cards no longer show the class: just the cost in the corner. The class is on each Pokémon's Pokédex entry." }
+    ]
+  },
+  {
+    "id": "2026-10-16-dex-links-classes",
+    "version": "0.39.0",
+    "date": "2026-10-16",
+    "title": "New class names and a livelier Pokédex",
+    "changes": [
+      { "kind": "change", "text": "Classes have new names: Warrior is now Tank, Mage is Special, Ranger is Ranged, Rogue is Speedster and Cleric is Healer." },
+      { "kind": "new", "text": "A Pokémon or form named in an ability (like Dreepy, Combee or Ash-Greninja) can be tapped to open its Pokédex entry." },
+      { "kind": "change", "text": "Switching to another Pokémon or form inside a Pokédex entry no longer redraws everything: the stat chips count to their new values, the stat shape morphs, and the ability box fades to the new text." },
+      { "kind": "change", "text": "Pokédex cards show the cost in the top left corner and the class in the top right." }
+    ]
+  },
+  {
+    "id": "2026-10-16-abilities",
+    "version": "0.38.0",
+    "date": "2026-10-16",
+    "title": "Powers are now Abilities",
+    "changes": [
+      { "kind": "change", "text": "Powers are now called abilities, like in the real games." },
+      { "pokemon": "greninja", "kind": "change", "text": "Battle Bond now just says when and how Greninja transforms. Ash-Greninja's stats are on its own Pokédex entry." },
+      { "pokemon": "minior", "kind": "change", "text": "Shining Star now just says when and how Minior transforms. Star Form's stats are on its own Pokédex entry." }
+    ]
+  },
+  {
+    "id": "2026-10-16-friends-button",
+    "version": "0.37.9",
+    "date": "2026-10-16",
+    "title": "Friends button on the main screen",
+    "changes": [
+      { "kind": "new", "text": "A Friends button next to your profile on the main screen shows how many friends are online, with a dot when someone sent you a friend request. Tap it to add and manage friends, or ask an online friend to battle." },
+      { "kind": "change", "text": "The Battle a friend button is gone from the main screen: battle friends from the Friends button instead. Friends also left the main screen's menu, since it has its own button now." }
+    ]
+  },
+  {
+    "id": "2026-10-16-tidy-menu",
+    "version": "0.37.8",
+    "date": "2026-10-16",
+    "title": "Tidier menu, Pokédex on the main screen",
+    "changes": [
+      { "kind": "change", "text": "The main screen has its own Pokédex button in the top right, next to the menu, like in battle." },
+      { "kind": "change", "text": "The menu now only holds the things you need now and then: Friends, Profile, What's new and How to play. Battle, Battle a friend and Training are on the main screen, and the Pokédex has its own button." }
+    ]
+  },
+  {
+    "id": "2026-10-16-clean-start",
+    "version": "0.37.7",
+    "date": "2026-10-16",
+    "title": "Clean main screen on open",
+    "changes": [
+      { "kind": "fix", "text": "Opening the game no longer flashes the battle board, shop and top bar while it loads, or behind the main screen. You see only the main screen." }
+    ]
+  },
+  {
+    "id": "2026-10-16-coin-sprite",
+    "version": "0.37.6",
+    "date": "2026-10-16",
+    "title": "New coin art",
+    "changes": [
+      { "kind": "change", "text": "Coins now use a proper coin sprite: next to your coin count, on shop card prices, and in the team picker and Pokédex." }
+    ]
+  },
+  {
+    "id": "2026-10-16-hoopa-attack",
+    "version": "0.37.5",
+    "date": "2026-10-16",
+    "title": "Hoopa hits a little softer",
+    "changes": [
+      { "pokemon": "hoopa", "kind": "nerf", "text": "Attack lowered by about 5% (75 → 71 at level 1) to balance its faster Binding Ring." }
+    ]
+  },
+  {
+    "id": "2026-10-15-hoopa-4-charges",
+    "version": "0.37.4",
+    "date": "2026-10-15",
+    "title": "Hoopa recharges faster",
+    "changes": [
+      { "pokemon": "hoopa", "kind": "buff", "text": "Binding Ring now needs 4 attacks instead of 5, so Hoopa gets its power back sooner." }
+    ]
+  },
+  {
+    "id": "2026-10-15-hoopa-stop-move",
+    "version": "0.37.3",
+    "date": "2026-10-15",
+    "title": "Hoopa's rings close before the move",
+    "changes": [
+      { "pokemon": "hoopa", "kind": "change", "text": "Hoopa now binds the Pokémon just before it changes squares, so that move never happens. That includes moving powers: a Tapu Koko about to dash or a Minior about to zip is bound first and stays put. The stopped move counts as the first of its 3 tries to break free." }
+    ]
+  },
+  {
+    "id": "2026-10-15-hoopa-move-bind",
+    "version": "0.37.2",
+    "date": "2026-10-15",
+    "title": "Hoopa binds the first Pokémon that moves",
+    "changes": [
+      { "pokemon": "hoopa", "kind": "change", "text": "With its power full (5 attacks), Hoopa now binds the first enemy that's about to change squares by itself, whether walking or using an ability that moves it (like a dash or a zip). That move still happens; the rings then stop its next 3 tries to move. Being shoved or knocked by an attack never sets it off." },
+      { "pokemon": "hoopa", "kind": "change", "text": "Moving abilities now count as tries to move while bound, the same as steps." }
+    ]
+  },
+  {
+    "id": "2026-10-15-hoopa-idle-bind",
+    "version": "0.37.1",
+    "date": "2026-10-15",
+    "title": "Hoopa binds the Pokémon that need to move",
+    "changes": [
+      { "pokemon": "hoopa", "kind": "change", "text": "With its power full (5 attacks), Hoopa now waits for an enemy that has nobody in its attack range, one that has to move to keep fighting, and binds the first one. It no longer binds the Pokémon it's attacking, which could just keep attacking." }
+    ]
+  },
+  {
+    "id": "2026-10-15-hoopa-rings",
+    "version": "0.37.0",
+    "date": "2026-10-15",
+    "title": "Hoopa's rings hold until they break",
+    "intro": "Hoopa now picks who to bind, and the rings hold until the Pokémon struggles free. (The previous Hoopa is saved as hoopa-v1.)",
+    "changes": [
+      { "pokemon": "hoopa", "kind": "change", "text": "Binding Ring: after 5 attacks, Hoopa binds the Pokémon it's attacking (or the nearest enemy that isn't bound yet). It no longer waits for an enemy to try to move." },
+      { "pokemon": "hoopa", "kind": "change", "text": "The bind has no timer. A bound Pokémon still attacks, but each try to move weakens the rings, and the 3rd try breaks them. Being shoved, knocked back or knocked out breaks them at once." },
+      { "pokemon": "hoopa", "kind": "change", "text": "No more Hoopa Unbound form, and Hoopa no longer starts the fight charged." },
+      { "pokemon": "hoopa", "kind": "buff", "text": "Damage 75 at ★ (was 68), attacking every 1.0s (was 1.11s)." }
+    ]
+  },
+  {
+    "id": "2026-10-15-dragapult-charge-home",
+    "version": "0.36.2",
+    "date": "2026-10-15",
+    "title": "Dragapult charges only with a Dreepy home",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "change", "text": "Dragapult only charges its power while at least one Dreepy is home. With both out, its attacks (and Toxtricity's Overdrive) no longer fill it, so when a Dreepy comes back it needs one more attack before firing it." }
+    ]
+  },
+  {
+    "id": "2026-10-15-dreepy-landing-lv1",
+    "version": "0.36.1",
+    "date": "2026-10-15",
+    "title": "Lighter Dreepy landing at ★",
+    "changes": [
+      { "pokemon": "dreepy", "kind": "nerf", "text": "Landing hit at ★ 80 → 50. Higher levels are unchanged (96 / 115 / 138)." }
+    ]
+  },
+  {
+    "id": "2026-10-15-dragapult-alternate",
+    "version": "0.36.0",
+    "date": "2026-10-15",
+    "title": "Dragapult: attack, Dreepy, attack, Dreepy",
+    "intro": "Dragapult now alternates: after each attack, its next action fires a Dreepy (when one is home). About 10 Dreepy a fight.",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "change", "text": "Its power fills with 1 attack (was 2). When it's full, its next action fires a Dreepy instead of attacking or stepping, after its usual 0.8s wait (was on its own, 0.5s after filling)." },
+      { "pokemon": "dragapult", "kind": "buff", "text": "800 HP at ★ (was 550), 50 damage (was 45), attacking every 0.8s (was 0.9s)." },
+      { "pokemon": "dreepy", "kind": "buff", "text": "HP 230 / 275 / 330 / 400 by level (was 150 / 180 / 215 / 260), so each one holds attention longer." }
+    ]
+  },
+  {
+    "id": "2026-10-15-dragapult-heavier",
+    "version": "0.35.1",
+    "date": "2026-10-15",
+    "title": "Dragapult hits harder, Dreepy crash harder",
+    "intro": "Bigger numbers where they count: Dragapult's attacks and the Dreepy crash. Still about 8 Dreepy a fight.",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "buff", "text": "Damage 45 at ★ (was 27), attacking every 0.9s (was 0.6s)." },
+      { "pokemon": "dreepy", "kind": "buff", "text": "Landing hit 80 / 96 / 115 / 138 by level (was 40 / 48 / 58 / 69). The 0.5s stun is unchanged." },
+      { "pokemon": "dragapult", "kind": "change", "text": "Its power fills with 2 attacks (was 3), so it still fires about 8 Dreepy a fight." },
+      { "pokemon": "dreepy", "kind": "nerf", "text": "Damage 12 / 15 / 19 / 23 by level (was 20 / 25 / 31 / 38): they're a distraction, not a damage dealer." },
+      { "pokemon": "dragapult", "kind": "nerf", "text": "HP 550 at ★ (was 750): more fragile to pay for the rest." }
+    ]
+  },
+  {
+    "id": "2026-10-15-dragapult-more-shots",
+    "version": "0.35.0",
+    "date": "2026-10-15",
+    "title": "More Dreepy",
+    "intro": "Dragapult fires about 9 Dreepy a fight now (was about 5–6): faster attacks fill its power sooner, and each hit is lighter.",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "change", "text": "Attacks every 0.6s (was 0.9s) for 27 damage at ★ (was 55), so its 3-charge power fills much more often." },
+      { "pokemon": "dreepy", "kind": "nerf", "text": "Landing hit 40 / 48 / 58 / 69 by level (was 100 / 120 / 144 / 172). The 0.5s stun is unchanged." }
+    ]
+  },
+  {
+    "id": "2026-10-15-dreepy-impact",
+    "version": "0.34.2",
+    "date": "2026-10-15",
+    "title": "Dreepy hit harder on impact",
+    "changes": [
+      { "pokemon": "dreepy", "kind": "buff", "text": "A Dreepy's landing hit is doubled: 100 / 120 / 144 / 172 by level (was 50 / 60 / 72 / 86)." }
+    ]
+  },
+  {
+    "id": "2026-10-15-dragapult-auto-fire",
+    "version": "0.34.1",
+    "date": "2026-10-15",
+    "title": "Dragapult fires on its own",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "change", "text": "When its power bar fills, Dragapult fires a Dreepy 0.5 seconds later on its own. It no longer uses up an attack or a step to do it." },
+      { "pokemon": "dragapult", "kind": "nerf", "text": "Attacks every 0.9s (was 0.7s), since firing no longer costs it an attack." }
+    ]
+  },
+  {
+    "id": "2026-10-15-dragapult-charge",
+    "version": "0.34.0",
+    "date": "2026-10-15",
+    "title": "Dragapult charges its Dreepy",
+    "intro": "Dragapult now fires its Dreepy one at a time from a charged power, and attacks much faster to fill it. (The previous version is saved as dragapult-v1.)",
+    "changes": [
+      { "pokemon": "dragapult", "kind": "change", "text": "Dragon Darts now has a 3-charge power bar that fills as Dragapult attacks. When it's full, Dragapult's next action fires one Dreepy (was both at once, whenever both were home)." },
+      { "pokemon": "dragapult", "kind": "change", "text": "Up to 2 Dreepy can be out at once. With both out, the bar waits, full, until one faints and is home." },
+      { "pokemon": "dragapult", "kind": "buff", "text": "Attacks every 0.7s (was 1.6s), so it fires Dreepy more often." },
+      { "pokemon": "dragapult", "kind": "change", "text": "Its power charge is only spent when a Dreepy actually launches." }
+    ]
+  },
+  {
+    "id": "2026-10-15-dreepy-streak",
+    "version": "0.33.2",
+    "date": "2026-10-15",
+    "title": "Dreepy streaks and snappier distractions",
+    "changes": [
+      { "pokemon": "dreepy", "kind": "change", "text": "Dreepy leave a white streak behind them as they shoot out of Dragapult, like something flying through the air." },
+      { "pokemon": "dreepy", "kind": "fix", "text": "The Pokémon a Dreepy crashes into now gets hit, stunned and shoved at the moment the Dreepy arrives (they showed before it got there)." },
+      { "pokemon": "dragapult", "kind": "change", "text": "Once the stun wears off, the Pokémon a Dreepy crashed into turns on the Dreepy and attacks it right away. Before, it finished its old attack timer first, so it took up to 1.6 seconds." },
+      { "pokemon": "dragapult", "kind": "buff", "text": "Attacks every 1.6s (was 1.7s), since its Dreepy now get attacked sooner." },
+      { "pokemon": "amoonguss", "kind": "fix", "text": "Rage Powder's pull now lands at the end of the moment, like stuns, so it never matters which side happened to act first." }
+    ]
+  },
+  {
     "id": "2026-10-14-dreepy-dash",
     "version": "0.33.1",
     "date": "2026-10-14",

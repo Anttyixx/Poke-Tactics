@@ -101,13 +101,16 @@ function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, in
     hasteUntil: 0, hastePct: 0, stealthFrom: 0, stealthUntil: 0,
     tauntBy: null, tauntUntil: 0, // Amoonguss's Rage Powder: it must attack this unit through tauntUntil
     rage: 0, movedSinceHit: true, // Annihilape's Rage Fist: attacks in a row without moving
-    darts: null, dartOf: null, dartSlot: 0, // Dragapult's Dreepy: [{ readyAt, unit }] / which Dragapult a Dreepy belongs to
+    darts: null, dartOf: null, dartSlot: 0, dartShots: 0, fullSince: null, // Dragapult's Dreepy: [{ readyAt, unit }] / which Dragapult a Dreepy belongs to
     bindingUntil: 0, hoopaForm: null, lastBound: null, // Hoopa: its own bind lasts through this tick; the form it has taken
+    boundBy: null, bindTries: 0, pendingBind: null, // Hoopa's targeted bind: who holds it, tries to move so far, closing at the end of the tick
+    ringReady: false, ringUsed: -1, // Hoopa (`pick: 'move'`): full and free to act when the tick began; the tick it last bound someone
     boundUntil: 0, // Hoopa's bind: it can't move (walk, zip or dash) through this tick; it can still attack
     guardUntil: 0, guardPct: 0, guardBrokeAt: -1, // Alcremie's Mint Cream shield: less damage; the first stun or shove only breaks it
     regen: null, // Alcremie's Matcha Cream: { src, per, left, next } healing once a second
     chillFrom: 0, chillUntil: 0, chillPct: 0, // Frosmoth's chill: slower attacks and steps through chillUntil
     pendingChill: null, // { duration, pct }: a chill that lands at the end of the tick
+    pendingTaunt: null, // { by, until }: Amoonguss's pull, landing at the end of the tick
     hold: 0, // ticks it can't move or attack (riding a Psywave); cooldowns still run
     landStun: 0, // stun applied when the hold ends (it has landed)
     pendingHeal: 0, healFrom: null, // healing lands at the end of the tick, like stuns; who it came from
@@ -187,12 +190,47 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
   // Hoopa's bind. A Hoopa whose counter is full waits; the first enemy that
   // tries to move after that is bound in place for `duration` ticks instead.
   // Returns true if `u` may not move this tick (already bound, or just bound).
-  const bound = (u) => u.boundUntil > 0 && t <= u.boundUntil;
+  // Hoopa's targeted bind (`targeted`): rings hold one Pokémon until it breaks
+  // free (`breakAfter` tries to move), is knocked out, or is moved by something
+  // else (a shove or a knockback).
+  const bound = (u) => u.boundBy !== null || (u.boundUntil > 0 && t <= u.boundUntil);
+  function unbind(u, why) {
+    if (u.boundBy === null) return;
+    u.boundBy = null;
+    u.bindTries = 0;
+    record && emit('unbind', { id: u.id, why });
+  }
+  // Each try to move strains the rings (and takes as long as a step would).
+  function strain(u) {
+    u.bindTries++;
+    u.moveTimer = STEP_TICKS + slowed(u.moveCd, u);
+    if (u.bindTries >= units[u.boundBy].power.breakAfter) unbind(u, 'broke');
+    else record && emit('bindStrain', { id: u.id, tries: u.bindTries, of: units[u.boundBy].power.breakAfter });
+  }
   function heldBack(u) {
+    if (u.boundBy !== null) {
+      if (u.moveTimer > 0) return true; // still getting over its last try (an ability can't skip that wait)
+      strain(u);
+      return true;
+    }
     if (bound(u)) return true;
     if (immune(u)) return false;
+    // Hoopa (`pick: 'move'`): a full charge rings the first enemy about to
+    // change squares by itself (a step, a zip, a dash, a teleport), just before
+    // it goes. That move is stopped and is already its first try against the rings.
+    const ringer = ringers.length ? ringers.find((h) => h.side !== u.side && h.ringReady && h.ringUsed !== t) : null;
+    if (ringer) {
+      ringer.ringUsed = t;
+      ringer.mana = 0;
+      record && emit('cast', { id: ringer.id, target: u.id });
+      u.boundBy = ringer.id;
+      u.bindTries = 0;
+      record && emit('bind', { id: u.id, by: ringer.id, breakAfter: ringer.power.breakAfter });
+      strain(u);
+      return true;
+    }
     const ready = (h) => (h.power.noCounter ? !(t <= h.bindingUntil) : h.maxMana > 0 && h.mana >= h.maxMana);
-    const hoopa = units.find((h) => h.side !== u.side && standing(h) && h.powerKind === 'bind' && !h.copyOf && ready(h) && !(h.power.noRepeat && h.lastBound === u.id));
+    const hoopa = units.find((h) => h.side !== u.side && standing(h) && h.powerKind === 'bind' && !h.power.targeted && !h.copyOf && ready(h) && !(h.power.noRepeat && h.lastBound === u.id));
     if (!hoopa) return false;
     hoopa.lastBound = u.id;
     if (hoopa.maxMana > 0) hoopa.mana = 0;
@@ -389,6 +427,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
   // Shove `u` to (x, y) without walking: knockbacks and teleports.
   function relocate(u, cell, type, extra) {
     if (u.x === cell.x && u.y === cell.y) return;
+    unbind(u, 'moved'); // shoved or knocked to another square: the rings snap
     u.x = cell.x;
     u.y = cell.y;
     u.movedSinceHit = true;
@@ -524,6 +563,10 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     if (p.kind === 'summon' && !cells.length) return;
     const taunted = p.kind === 'taunt' ? tauntPick(u) : null;
     if (p.kind === 'taunt' && !taunted) return; // nobody to pull: stays charged
+    // Hoopa: the Pokémon it's attacking, or if that one is already bound, the
+    // nearest enemy that isn't.
+    const ringed = p.kind === 'bind' ? (target.boundBy === null && target.pendingBind === null && !immune(target) ? target : units.filter((e) => e.side !== u.side && visible(e) && e.boundBy === null && e.pendingBind === null && !immune(e)).sort((a, b) => dist(u, at(a)) - dist(u, at(b)) || a.slot - b.slot)[0]) : null;
+    if (p.kind === 'bind' && !ringed) return; // everyone's already bound: stays charged
     u.mana = 0;
     switch (p.kind) {
       case 'snipe': {
@@ -563,11 +606,16 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
       case 'treat':
         sweetTreat(u);
         break;
+      case 'bind':
+        // Like stuns, the rings close at the end of the tick.
+        record && emit('cast', { id: u.id, target: ringed.id });
+        ringed.pendingBind = u.id;
+        break;
       case 'taunt':
+        // Like stuns, the pull lands at the end of the tick, so the Pokémon it
+        // pulls acts this tick as it would have either way.
         record && emit('cast', { id: u.id, target: taunted.id });
-        taunted.tauntBy = u.id;
-        taunted.tauntUntil = t + p.duration;
-        taunted.target = u.id;
+        taunted.pendingTaunt = { by: u.id, until: t + p.duration };
         record && emit('taunt', { id: taunted.id, by: u.id, duration: p.duration });
         break;
       case 'boost': {
@@ -577,7 +625,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
         record && emit('cast', { id: u.id, target: null });
         for (const [dx, dy] of NEIGHBORS) {
           const o = unitAt(u.x + dx, u.y + dy);
-          if (!o || o.side !== u.side || !standing(o) || !(o.maxMana > 0)) continue;
+          if (!o || o.side !== u.side || !standing(o) || !(o.maxMana > 0) || !canCharge(o)) continue;
           const gain = Math.min(p.charges, o.maxMana - shownMana(o));
           if (gain <= 0) continue;
           o.pendingMana += gain;
@@ -586,7 +634,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
         break;
       }
       case 'transform':
-        if (u.form) { hop(u, target); break; } // Star Form's own power
+        if (u.form) { if (!heldBack(u)) hop(u, target); break; } // Star Form's own power (a bound Minior keeps it for its next attack)
         record && emit('cast', { id: u.id, target: null });
         applyForm(u, p.form);
         break;
@@ -617,10 +665,28 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
   // Darts fly at the end of the tick (both sides at once), at enemies that were
   // already on the board when the tick began.
   let dartQueue = [];
+  // Ready to fire: every Dreepy home, or with `perShot` (Dreepy per shot)
+  // enough of them home for one shot.
   function dartsHome(u) {
     u.darts ??= Array.from({ length: u.power.count }, () => ({ readyAt: 0, unit: null, aim: null }));
-    return u.darts.every((slot) => !slot.unit && t >= slot.readyAt);
+    const home = u.darts.filter((slot) => !slot.unit && t >= slot.readyAt).length;
+    return u.power.perShot ? home >= u.power.perShot : home === u.darts.length;
   }
+  // With `fireDelay`: a full power bar fires a Dreepy on its own, `fireDelay`
+  // ticks after it filled (no attack or step is used), once a Dreepy is home
+  // and there's an enemy to aim at. Stunned, it waits.
+  function chargedDart(u) {
+    if (!(u.maxMana > 0 && u.mana >= u.maxMana)) { u.fullSince = null; return; }
+    u.fullSince ??= t - 1; // it filled last tick (at the end of it, or during its attack)
+    if (t - u.fullSince < u.power.fireDelay || !dartsHome(u)) return;
+    if (u.power.outside && !units.some((e) => e.side !== u.side && visible(e) && reach(u, at(e)) > u.power.outside)) return;
+    u.dartShots = u.power.perShot ?? u.power.count;
+    dartQueue.push(u);
+  }
+  // `chargeHome`: Dragapult only charges its power while a Dreepy is home.
+  // Hoopa (`pick: 'move'`) full when the tick began gains nothing this tick,
+  // whether its bind goes off before or after its attack.
+  const canCharge = (u) => !(u.powerKind === 'darts' && u.power.chargeHome && !dartsHome(u)) && !u.ringReady;
   // Every Dragapult's first ready Dreepy goes, then every second one, ... so
   // when both sides' darts want the same squares, neither side gets them all.
   function fireDarts() {
@@ -633,7 +699,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
   }
   function fireDart(u, slot) {
     const p = u.power;
-    if (slot.unit || t < slot.readyAt) return;
+    if (slot.unit || t < slot.readyAt || !(u.dartShots > 0)) return;
     // Enemies its other Dreepy were fired at (not whoever they fight now: a
     // lure from the other side's darts this same tick may have changed that).
     const busy = new Set(u.darts.filter((s) => s.unit).map((s) => s.aim));
@@ -666,6 +732,8 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     bySide[u.side].push(pal);
     slot.unit = pal;
     slot.aim = target.id;
+    u.dartShots--;
+    if (u.maxMana > 0) { u.mana = 0; u.fullSince = null; } // the charge is spent only once a Dreepy is actually out
     record && emit('summon', { id: u.id, unit: snapshot(pal), dart: true, target: target.id });
     if (shove) relocate(target, shove, 'knock', { by: pal.id }); // right after it lands on that square
     // The crash itself: a set hit (`impactDamage` by star, or `impactPct` of
@@ -679,6 +747,9 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
       target.tauntBy = pal.id;
       target.tauntUntil = MAX_TICKS;
       target.target = pal.id;
+      // Whatever it was winding up is lost: once the stun wears off it turns on
+      // the Dreepy and attacks right away.
+      target.atkTimer = Math.min(target.atkTimer, 1);
       record && emit('taunt', { id: target.id, by: pal.id, duration: MAX_TICKS - t, dart: true });
     }
   }
@@ -899,6 +970,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     // Coming out of a stun (or landing after being carried), a Pokémon looks
     // around again and picks the nearest enemy rather than its old target.
     if (u.stun > 0) { u.stun--; if (u.stun === 0 && !(u.tauntUntil >= t)) u.target = null; return; }
+    if (u.powerKind === 'darts' && u.power.fireDelay !== undefined) chargedDart(u);
     if (u.atkTimer > 0) u.atkTimer--;
     if (u.moveTimer > 0) u.moveTimer--;
     if (u.stepTimer > 0) u.stepTimer--;
@@ -965,13 +1037,13 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     // its next action (an attack, or a step toward its target) fires them
     // instead, at the end of the tick. With a power counter it also needs that many attacks since the
     // last pair.
-    if (u.powerKind === 'darts' && u.stepTimer === 0 && dartsHome(u) && !(u.maxMana > 0 && u.mana < u.maxMana)
+    if (u.powerKind === 'darts' && u.power.fireDelay === undefined && u.stepTimer === 0 && dartsHome(u) && !(u.maxMana > 0 && u.mana < u.maxMana)
       && (!u.power.outside || units.some((e) => e.side !== u.side && visible(e) && reach(u, at(e)) > u.power.outside))) {
       // Firing is an attack: it waits for its attack timer like one (so not
       // before a full attack cooldown at the start of the fight).
       const inRange = reach(u, at(target)) <= u.range;
       if (u.atkTimer === 0 && (inRange || u.moveTimer === 0)) {
-        if (u.maxMana > 0) u.mana = 0;
+        u.dartShots = u.power.perShot ?? u.power.count;
         dartQueue.push(u);
         u.atkTimer = cooldown(u);
         if (!inRange) u.moveTimer = slowed(u.moveCd, u); // it used its step too: waits as if it had walked
@@ -985,14 +1057,14 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
       // No need to teleport if the farthest enemy is already in reach.
       const far = farthestEnemy(u);
       const cell = far && reach(u, at(far)) > u.range && freeBeside(u, far);
-      if (cell) {
+      if (cell && !heldBack(u)) {
         relocate(u, cell, 'teleport');
         u.moveTimer = u.stepTimer = 0;
         target = far;
         u.target = far.id;
       }
     }
-    if (empowered && u.power.dash && u.atkTimer === 0 && !arrived && !bound(u)) {
+    if (empowered && u.power.dash && u.atkTimer === 0 && !arrived) {
       // Dash in a straight line next to the farthest enemy, stunning every
       // enemy it passes through on the way.
       const far = farthestEnemy(u);
@@ -1022,7 +1094,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
       if (empowered) {
         powerStrike(u, target);
       } else {
-        if (u.maxMana > 0) u.mana = Math.min(u.maxMana, u.mana + MANA_PER_ATTACK);
+        if (u.maxMana > 0 && canCharge(u)) u.mana = Math.min(u.maxMana, u.mana + MANA_PER_ATTACK);
         record && emit('attack', { id: u.id, target: target.id, mana: shownMana(u) });
         // Annihilape: every attack in a row without moving makes the next ones faster.
         if (u.powerKind === 'rage') {
@@ -1048,7 +1120,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
             if (o && o.side === u.side) heal(o, amount, u);
           }
         }
-        if (u.powerKind && u.powerKind !== 'empower' && u.powerKind !== 'bind' && u.powerKind !== 'darts' && u.maxMana > 0 && u.mana >= u.maxMana) instantPower(u, target);
+        if (u.powerKind && u.powerKind !== 'empower' && !(u.powerKind === 'bind' && (!u.power.targeted || u.power.pick === 'move')) && u.powerKind !== 'darts' && u.maxMana > 0 && u.mana >= u.maxMana) instantPower(u, target);
       }
       u.atkTimer = cooldown(u);
     } else if (u.moveTimer === 0 && u.stepTimer === 0 && (u.blink || u.copyOf === null) && heldBack(u)) {
@@ -1095,6 +1167,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
   };
 
   let orders = null;
+  let ringers = []; // Hoopas that ring the first enemy to move
   let orderSize = -1; // rebuilt when a summon joins
   let winner = outcome();
   while (winner === undefined && t < maxTicks) {
@@ -1106,7 +1179,13 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     // contested square first. A fixed pattern (e.g. odd/even) would line up with
     // cooldowns and always favour the same side. Each side keeps its unit order,
     // and units summoned this tick wait until the next one.
-    if (orderSize !== units.length) { orders = [[...bySide[0], ...bySide[1]], [...bySide[1], ...bySide[0]]]; orderSize = units.length; }
+    if (orderSize !== units.length) {
+      orders = [[...bySide[0], ...bySide[1]], [...bySide[1], ...bySide[0]]];
+      orderSize = units.length;
+      ringers = units.filter((u) => u.powerKind === 'bind' && u.power.pick === 'move');
+    }
+    // Hoopa's ring is judged from the start of the tick: full, standing and not stunned.
+    for (const h of ringers) h.ringReady = h.alive && h.hp > 0 && h.copyOf === null && h.stun === 0 && h.maxMana > 0 && h.mana >= h.maxMana;
     const order = coin(seed, t) ? orders[0] : orders[1];
     // Battle-start powers go off on the first tick, before anyone acts.
     if (t === 1) for (const u of order) if (u.powerKind === 'opening' && standing(u)) openingPower(u);
@@ -1188,6 +1267,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
       if (!u.alive) continue;
       if (u.hp === 0 && !(u.fuse > 0)) {
         u.alive = false; // knocked out this tick (a lit Golem stays)
+        u.boundBy = null;
         if (u.dartOf !== null) dartHome(u); // a Dreepy flies back to its Dragapult
       }
       u.mana = shownMana(u);
@@ -1198,6 +1278,20 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
         u.chillPct = u.pendingChill.pct;
       }
       u.pendingChill = null;
+      if (u.pendingTaunt && u.hp > 0) {
+        u.tauntBy = u.pendingTaunt.by;
+        u.tauntUntil = u.pendingTaunt.until;
+        u.target = u.tauntBy;
+      }
+      u.pendingTaunt = null;
+      if (u.pendingBind !== null) {
+        if (u.hp > 0 && !immune(u) && u.boundBy === null) {
+          u.boundBy = u.pendingBind;
+          u.bindTries = 0;
+          record && emit('bind', { id: u.id, by: u.boundBy, breakAfter: units[u.boundBy].power.breakAfter });
+        }
+        u.pendingBind = null;
+      }
       u.pendingMana = 0;
       u.pendingStun = 0;
     }
