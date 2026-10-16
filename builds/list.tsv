@@ -1,3 +1,4 @@
+ea23259	dev	2026-10-16 04:44 UTC	Pokédex entries: fixed chip slots, open and swap animations (0.43.1)
 47bdeea	dev	2026-10-16 04:12 UTC	Shields: a second bar that takes all damage first; Minior's Rock form is a shield (0.43.0)
 3512198	dev	2026-10-16 03:46 UTC	Minior transforms at 35% HP with one shared HP pool (0.42.0)
 5bc6cd9	dev	2026-10-16 03:09 UTC	Stat shapes share one scale across Pokémon and levels (0.41.0)
@@ -27,4 +28,3 @@ fa0c7eb	dev	2026-10-15 05:22 UTC	Dragapult 45 dmg every 0.9s, 2-charge power, 55
 580b5d4	dev	2026-10-15 05:00 UTC	Dragapult: ~9 Dreepy per fight: attacks every 0.6s for 27, landing hit 40/48/58/69 (0.35.0)
 cd50a55	dev	2026-10-15 04:41 UTC	Dreepy landing hit doubled: 100/120/144/172 (0.34.2)
 692f7ed	dev	2026-10-15 04:35 UTC	Dragapult fires a Dreepy on its own 0.5s after its power fills (no attack used); attacks every 0.9s (0.34.1)
-6029e64	dev	2026-10-15 04:17 UTC	Dragapult: 3-charge power fires one Dreepy per full charge (max 2 out), attacks every 0.7s (0.34.0)

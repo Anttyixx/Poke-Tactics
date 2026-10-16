@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=47bdeea';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=ea23259';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=47bdeea';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=47bdeea';
+} from './game.js?v=ea23259';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=ea23259';
 
 const TICK_MS = 100;
 // Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
@@ -2137,6 +2137,35 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     entryEl.classList.remove('closing');
     entryEl.hidden = false;
     entryEl.scrollTop = 0;
+    const detail = entryEl.querySelector('.dex-detail');
+    if (detail && !reduceMotion()) animateEntryIn(detail);
+  }
+
+  // Entry animations. `enter` plays an element in from `from` (held there
+  // until its delay is up).
+  const EASE_OUT = 'cubic-bezier(0.22, 1, 0.36, 1)';
+  const SPRING = 'cubic-bezier(0.34, 1.45, 0.64, 1)';
+  const enter = (el, from, delay = 0, ms = 380, easing = EASE_OUT) => el?.animate([from, { opacity: 1, transform: 'none', filter: 'none' }], { duration: ms, delay, easing, fill: 'backwards' });
+  // Opening an entry: the Pokémon pops in, its name and tags sweep in from the
+  // left, the stat shape spins in and grows from nothing, the chips pop in one
+  // by one, then the ability rises into place.
+  function animateEntryIn(detail) {
+    const q = (sel) => detail.querySelector(sel);
+    enter(q('.dex-portrait'), { opacity: 0, transform: 'translateY(12px) scale(0.5)' }, 60, 520, SPRING);
+    enter(q('#dex-level'), { opacity: 0, transform: 'scale(0.6)' }, 220, 420, SPRING);
+    detail.querySelectorAll('.dex-rel').forEach((r, i) => enter(r, { opacity: 0, transform: 'scale(0.4)' }, 260 + i * 60, 420, SPRING));
+    [...(q('.dex-title')?.children ?? [])].forEach((c, i) => enter(c, { opacity: 0, transform: 'translateX(-20px)' }, 100 + i * 70));
+    const radar = q('.dex-radar');
+    if (radar) {
+      enter(radar, { opacity: 0, transform: 'scale(0.8) rotate(-10deg)' }, 160, 520);
+      const shape = radar.querySelector('.shape');
+      const to = shape.dataset.vals.split(',').map(Number);
+      shape.dataset.vals = to.map(() => 0).join(',');
+      shape.setAttribute('points', radarPoints(to.map(() => 0)));
+      setTimeout(() => { if (shape.isConnected && shape.dataset.vals.split(',').every((x) => x === '0')) tweenRadar(shape, to); }, 340);
+    }
+    [...(q('.dex-chips')?.children ?? [])].forEach((c, i) => enter(c, { opacity: 0, transform: 'translateY(10px) scale(0.85)' }, 240 + i * 50, 420, SPRING));
+    enter(q('.dex-power'), { opacity: 0, transform: 'translateY(16px)' }, 420, 460);
   }
   // Close a pop-up with the opening animation played backwards.
   function closeAnimated(el) {
@@ -2231,7 +2260,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     return [100 + Math.cos(a) * RADAR_R * v, 100 + Math.sin(a) * RADAR_R * v];
   };
   const radarPoints = (vals) => vals.map((v, i) => radarPoint(i, Math.max(0.04, v)).map((n) => n.toFixed(1)).join(',')).join(' ');
-  function radarSvg(vals) {
+  function radarSvg(vals, note = '') {
     const ring = (f) => `<polygon class="ring" points="${radarPoints(RADAR.map(() => f))}"/>`;
     const axes = RADAR.map((_, i) => { const [x, y] = radarPoint(i, 1); return `<line x1="100" y1="100" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}"/>`; }).join('');
     const labels = RADAR.map(([, label], i) => {
@@ -2240,7 +2269,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     }).join('');
     return `<svg class="dex-radar" viewBox="-12 -2 224 204" role="img" aria-label="Stat shape">
       ${ring(1)}${ring(2 / 3)}${ring(1 / 3)}<g class="axes">${axes}</g>
-      <polygon class="shape" points="${radarPoints(vals)}" data-vals="${vals.join(',')}"/>${labels}</svg>`;
+      <polygon class="shape" points="${radarPoints(vals)}" data-vals="${vals.join(',')}"/>${labels}${note ? `<text class="note" x="100" y="104">${note}</text>` : ''}</svg>`;
   }
   function tweenRadar(poly, to) {
     const from = poly.dataset.vals.split(',').map(Number);
@@ -2401,7 +2430,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     // Name, tags and sprites: swapped (the sprites fly between their spots).
     const hero = next.querySelector('.dex-hero');
     old.querySelector('.dex-hero').replaceWith(hero);
-    fadeIn(hero.querySelector('.dex-title'));
+    // The new name and tags slide in from the right, one after another.
+    [...hero.querySelector('.dex-title').children].forEach((c, i) => enter(c, { opacity: 0, transform: 'translateX(24px)', filter: 'blur(3px)' }, i * 60, 360));
     // Stat shape and chips.
     const oldBox = old.querySelector('.dex-statbox');
     const newBox = next.querySelector('.dex-statbox');
@@ -2412,32 +2442,58 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       morphChips(oldBox.querySelector('.dex-chips'), newBox.querySelector('.dex-chips'));
     }
     // The ability box.
+    // The ability box resizes to its new text, which slides in from the right.
     const opw = old.querySelector('.dex-power');
     const npw = next.querySelector('.dex-power');
     if (opw && npw) {
+      const h0 = opw.offsetHeight;
       opw.replaceChildren(...npw.childNodes);
-      fadeIn(opw);
-    } else if (opw) opw.remove();
-    else if (npw) { old.append(npw); fadeIn(npw); }
+      const h1 = opw.offsetHeight;
+      opw.style.overflow = 'hidden';
+      opw.animate([{ height: `${h0}px` }, { height: `${h1}px` }], { duration: 380, easing: EASE_OUT }).onfinish = () => { opw.style.overflow = ''; };
+      [...opw.children].forEach((c, i) => enter(c, { opacity: 0, transform: 'translateX(20px)', filter: 'blur(2px)' }, 80 + i * 60, 360));
+    } else if (opw) {
+      opw.animate([{ opacity: 1 }, { opacity: 0, transform: 'translateY(10px)' }], { duration: 220, easing: 'ease-in' }).onfinish = () => opw.remove();
+    } else if (npw) { old.append(npw); enter(npw, { opacity: 0, transform: 'translateY(16px)' }, 80, 420); }
   }
-  // Chips are matched by their label: a kept chip counts to its new value,
-  // a new one pops in, one with no match leaves.
+  // Chips are matched by their slot. A kept chip counts to its new value with
+  // a little ripple; a new one pops in; one that's gone shrinks away where it
+  // stood; and any chip whose spot changes glides there.
   function morphChips(box, nextBox) {
-    const label = (c) => c.querySelector('small').textContent;
-    const olds = new Map([...box.children].map((c) => [label(c), c]));
+    const slot = (c) => c.dataset.slot;
+    const was = new Map([...box.children].map((c) => [slot(c), c.getBoundingClientRect()]));
+    const olds = new Map([...box.children].map((c) => [slot(c), c]));
+    const boxAt = box.getBoundingClientRect();
     const order = [...nextBox.children].map((n) => {
-      const o = olds.get(label(n));
-      if (!o) { n.animate([{ opacity: 0, transform: 'scale(0.85)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'ease-out' }); return n; }
-      olds.delete(label(n));
+      const o = olds.get(slot(n));
+      if (!o) return n;
+      olds.delete(slot(n));
       if (n.dataset.k) o.dataset.k = n.dataset.k; else delete o.dataset.k;
       const ob = o.querySelector('b');
       const nb = n.querySelector('b');
       ob.style.minWidth = nb.style.minWidth;
-      tweenNumber(ob, nb.textContent);
+      if (!ob.children.length && !nb.children.length) tweenNumber(ob, nb.textContent);
+      else if (ob.innerHTML !== nb.innerHTML) { ob.innerHTML = nb.innerHTML; enter(ob, { opacity: 0, transform: 'translateY(4px)' }, 0, 260); }
       return o;
     });
-    for (const o of olds.values()) o.remove();
     box.replaceChildren(...order);
+    order.forEach((c, i) => {
+      const from = was.get(slot(c));
+      if (!from) { enter(c, { opacity: 0, transform: 'scale(0.6)' }, 120 + i * 40, 420, SPRING); return; }
+      const to = c.getBoundingClientRect();
+      const dx = from.left - to.left;
+      const dy = from.top - to.top;
+      c.animate(dx || dy
+        ? [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }]
+        : [{ transform: 'none' }, { transform: 'scale(0.95)' }, { transform: 'none' }], { duration: dx || dy ? 420 : 300, delay: dx || dy ? 0 : i * 35, easing: EASE_OUT });
+    });
+    // Chips that are gone leave from where they stood.
+    for (const [key, o] of olds) {
+      const r = was.get(key);
+      Object.assign(o.style, { position: 'absolute', left: `${r.left - boxAt.left}px`, top: `${r.top - boxAt.top}px`, width: `${r.width}px`, height: `${r.height}px`, margin: '0', pointerEvents: 'none' });
+      box.append(o);
+      o.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scale(0.6)', filter: 'blur(2px)' }], { duration: 260, easing: 'ease-in', fill: 'forwards' }).onfinish = () => o.remove();
+    }
   }
 
   function renderEntry() {
@@ -2460,14 +2516,18 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     // their size as the level changes.
     const all = [0, 1, 2, 3].map((s2) => dexLevelValues(def, s2, isForm ? base : null, dexForm ?? 0));
     const width = (k) => Math.max(...all.map((x) => String(x[k] ?? '').length));
-    const chip = (k, label, value) => `<span class="dex-chip"${k ? ` data-k="${k}"` : ''}><small>${label}</small><b${k ? ` style="min-width:${width(k)}ch"` : ''}>${value}</b></span>`;
+    // Every entry has the same chips in the same places, so a stat is always
+    // where players last saw it: Ditto's copied stats say so instead of going
+    // missing, and Shield (only some Pokémon have one) comes last.
+    const COPIED = '<i class="copied">Copied</i>';
+    const chip = (slot, label, value, k = '') => `<span class="dex-chip" data-slot="${slot}"${k ? ` data-k="${k}"` : ''}><small>${label}</small><b${k ? ` style="min-width:${width(k)}ch"` : ''}>${value}</b></span>`;
     const chips = [
-      chip('hp', 'HP', v.hp),
-      st.shield && chip('shield', 'Shield', v.shield),
-      !copycat && chip('dmg', 'Damage', v.dmg),
-      !copycat && chip('', 'Attacks every', `${attackTime(st)}s`),
-      !copycat && chip('', 'Range', def.range > 1 ? `${def.range} tiles` : 'Melee'),
-      chip('', 'Speed', SPEED_NAME[def.moveSpeed]),
+      chip('hp', 'HP', v.hp, 'hp'),
+      copycat ? chip('dmg', 'Damage', COPIED) : chip('dmg', 'Damage', v.dmg, 'dmg'),
+      chip('atk', 'Attacks every', copycat ? COPIED : `${attackTime(st)}s`),
+      chip('range', 'Range', copycat ? COPIED : def.range > 1 ? `${def.range} tiles` : 'Melee'),
+      chip('speed', 'Speed', SPEED_NAME[def.moveSpeed]),
+      st.shield && chip('shield', 'Shield', v.shield, 'shield'),
     ].filter(Boolean).join('');
     const power = isForm
       ? `<div class="dex-power"><h3>${esc(base.ability.name)} ${formsOf(base)[dexForm].flavor ? 'flavour' : 'form'}</h3><p data-k="power">${v.power}</p></div>`
@@ -2505,7 +2565,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
           </div>
         </div>
         <div class="dex-statbox">
-          ${copycat ? '' : radarSvg(radarValues(def, star))}
+          ${copycat ? radarSvg(RADAR.map(() => 0), 'Copies its target') : radarSvg(radarValues(def, star))}
           <div class="dex-chips">${chips}</div>
         </div>
         ${power}
