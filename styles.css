@@ -901,7 +901,7 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 
 .dex-statbox { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 14px; align-items: center; margin-bottom: 14px; }
 .dex-statbox:not(:has(.dex-radar)) { grid-template-columns: 1fr; }
-.dex-chips { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.dex-chips { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .dex-chip {
   display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 6px 14px; border-radius: 99px;
   background: var(--panel-2); border: 1px solid color-mix(in srgb, var(--type) 30%, var(--line));
@@ -917,7 +917,9 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   filter: drop-shadow(0 0 6px color-mix(in srgb, var(--type) 60%, transparent));
 }
 .dex-radar text { fill: var(--muted); font-size: 11px; font-weight: 800; text-anchor: middle; }
-.dex-chip small { color: var(--muted); font-size: 12px; font-weight: 700; }
+.dex-radar text.note { fill: var(--text, #e8ebf5); font-size: 12px; }
+.dex-chip small { color: var(--muted); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.dex-chip .copied { font-style: normal; font-size: 13px; color: var(--muted); }
 .dex-chip b { font-size: 16px; font-variant-numeric: tabular-nums; }
 .dex-chip.changing { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 10%, var(--panel-2)); }
 .dex-power .pn { font-variant-numeric: tabular-nums; }

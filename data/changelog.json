@@ -1,5 +1,16 @@
 [
   {
+    "id": "2026-10-16-dex-entry-animations",
+    "version": "0.43.1",
+    "date": "2026-10-16",
+    "title": "Livelier Pokédex entries",
+    "changes": [
+      { "kind": "change", "text": "Stat chips are always in the same places in every Pokédex entry: HP, Damage, Attacks every, Range, Speed, then Shield last for Pokémon that have one. Ditto's copied stats now say Copied instead of going missing, and its stat shape stays in place." },
+      { "kind": "new", "text": "Opening an entry animates it in: the Pokémon pops in, its name sweeps in, the stat shape spins in and grows, the chips pop in one by one, and the ability rises into place." },
+      { "kind": "new", "text": "Switching to a form or related Pokémon has its own animation: the name slides in, chips ripple as their values count, a chip that's gone shrinks away while others glide to their new spot, and the ability box resizes as its text slides in." }
+    ]
+  },
+  {
     "id": "2026-10-16-shields",
     "version": "0.43.0",
     "date": "2026-10-16",
