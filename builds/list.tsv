@@ -1,3 +1,4 @@
+fc41cb1	dev	2026-10-16 01:29 UTC	Short ability descriptions with a More details toggle (0.40.0)
 2c5c749	dev	2026-10-16 01:09 UTC	Pokédex cards show only the cost, no class (0.39.1)
 788716c	dev	2026-10-16 01:05 UTC	Pokédex: tappable Pokémon names in abilities, in-place entry swaps, cost and class on cards; classes renamed (0.39.0)
 1c1fdc4	dev	2026-10-16 00:36 UTC	Call powers abilities in the game's text; transform abilities only say when and how (0.38.0)
@@ -27,4 +28,3 @@ b70b646	dev	2026-10-14 22:22 UTC	Dragapult fires both Dreepy on its next action 
 3115900	dev	2026-10-14 20:17 UTC	Fix Dreepy sprite sheet row order (down, left, right, up) so it faces the right way (0.32.2)
 c7663b9	dev	2026-10-14 18:54 UTC	Knocked-out Dreepy fly back from the hit, spinning, then arc home to Dragapult (0.32.1)
 692f749	dev	2026-10-14 18:45 UTC	Dreepy grow slowly with level (HP 150-260, dmg 20-38, landing 50-86); Dragapult attacks every 1.5s for 55 (0.32.0)
-0b65480	dev	2026-10-14 17:30 UTC	Dragapult: Dreepy only at enemies outside the 3x3 around it (one per far enemy, none -&gt; attacks); Dreepy 150 HP / 25 dmg and 50 landing hit at every level; attacks every 1.8s for 65 (0.31.0)

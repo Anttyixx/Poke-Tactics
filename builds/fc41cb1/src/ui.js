@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=0b65480';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=fc41cb1';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=0b65480';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=0b65480';
+} from './game.js?v=fc41cb1';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=fc41cb1';
 
 const TICK_MS = 100;
 // Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
@@ -46,7 +46,53 @@ const vNum = (x) => `<span class="v">${x}</span>`;
 const vHeal = (x) => `<span class="v v-heal">${x}</span>`;
 const area = (r) => vNum(`${2 * r + 1}x${2 * r + 1}`);
 
+// Classes as players see them (the data keeps its own short ids).
+const TYPE_LABEL = { warrior: 'Tank', mage: 'Special', ranger: 'Ranged', rogue: 'Speedster', cleric: 'Healer' };
+export const typeName = (type) => TYPE_LABEL[type] ?? type[0].toUpperCase() + type.slice(1);
+
+// A Pokémon or form named in an ability: tap it for its Pokédex entry.
+const pokeLink = (name, attrs) => `<button type="button" class="poke-link" ${attrs}>${esc(name)}</button>`;
+const idOf = (def, catalog) => Object.keys(catalog ?? {}).find((k) => catalog[k] === def) ?? Object.keys(catalog ?? {}).find((k) => catalog[k].name === def.name && !catalog[k].form);
+// Turn the first plain-text mention of each name into a link (never inside a tag).
+export function linkNames(html, refs) {
+  for (const { name, attrs } of refs) {
+    const plain = esc(name);
+    let done = false;
+    html = html.split(/(<[^>]+>)/).map((part) => {
+      if (done || part.startsWith('<') || !part.includes(plain)) return part;
+      done = true;
+      return part.replace(plain, pokeLink(name, attrs));
+    }).join('');
+  }
+  return html;
+}
+// Which other Pokémon or forms an ability names.
+function abilityRefs(def, catalog) {
+  const p = def.ability;
+  if (!p) return [];
+  const id = idOf(def, catalog);
+  const refs = [];
+  if (p.unit && catalog?.[p.unit]) refs.push({ name: catalog[p.unit].name, attrs: `data-dex="${p.unit}"` });
+  if (p.form?.name && id) refs.push({ name: p.form.name, attrs: `data-dex-form="${id}:0"` });
+  if (p.chargedForm?.name && id) refs.push({ name: p.chargedForm.name, attrs: `data-dex-form="${id}:0"` });
+  return refs;
+}
+
 export function powerText(def, star, catalog) {
+  const out = powerTextPlain(def, star, catalog);
+  const refs = abilityRefs(def, catalog);
+  return out && { ...out, text: linkNames(out.text, refs), more: out.more && linkNames(out.more, refs) };
+}
+
+// An ability's text: `text` is the short version everyone sees, `more` (when
+// there is more to know) the full details behind the "More details" toggle.
+function powerTextPlain(def, star, catalog) {
+  const out = abilityTexts(def, star, catalog);
+  if (out && out.more === out.text) delete out.more;
+  return out;
+}
+
+function abilityTexts(def, star, catalog) {
   const p = def.ability;
   if (!p) return null;
   const lvl = star ?? 0;
@@ -55,68 +101,93 @@ export function powerText(def, star, catalog) {
   const every = `Every ${def.energy} attacks`;
   switch (p.kind) {
     case 'empower': {
-      if (p.dash) return { when: every, text: `Dashes in a straight line to the farthest enemy, immune to everything on the way, and hits it for ${hit}. The target and every enemy it passes through are stunned for ${vTime(p.stun)}.` };
-      if (p.teleport) return { when: every, text: `Teleports next to the farthest enemy and hits it for ${hit}${p.lifestealPct ? `, healing for ${vHeal(`${p.lifestealPct}%`)} of the damage dealt` : ''}.` };
+      if (p.dash) return { when: every, text: `Dashes to the farthest enemy and hits it hard, stunning everything in its path.`, more: `Dashes in a straight line to the farthest enemy, immune to everything on the way, and hits it for ${hit}. The target and every enemy it passes through are stunned for ${vTime(p.stun)}.` };
+      if (p.teleport) return { when: every, text: `Teleports next to the farthest enemy and hits it hard.`, more: `Teleports next to the farthest enemy and hits it for ${hit}${p.lifestealPct ? `, healing for ${vHeal(`${p.lifestealPct}%`)} of the damage dealt` : ''}.` };
       const extra = [
         p.knockback && `knocks the target back ${vNum(p.knockback)} squares`,
         p.stun && `stuns ${p.knockback ? 'it' : 'the target'} for ${vTime(p.stun)}`,
         p.lifestealPct && `heals it for ${vHeal(`${p.lifestealPct}%`)} of the damage dealt`,
       ].filter(Boolean);
-      return { when: every, text: `Its next attack hits for ${hit}${extra.length ? `${extra.length === 1 ? ' and ' : ', '}${extra.join(' and ')}` : ''}.` };
+      const short = [p.knockback && 'knocks the target back', p.stun && (p.knockback ? 'stuns it' : 'stuns the target'), p.lifestealPct && 'heals it'].filter(Boolean);
+      const join = (xs) => (xs.length ? `${xs.length === 1 ? ' and ' : ', '}${xs.join(' and ')}` : '');
+      return { when: every, text: `Its next attack hits much harder${join(short)}.`, more: `Its next attack hits for ${hit}${join(extra)}.` };
     }
     case 'bind': {
-      const start = p.startCharged ? 'It starts the fight charged and refills' : 'Its power fills';
-      return { when: `After ${def.energy} attacks`, text: `${start} after ${vNum(def.energy)} attacks, then waits until an enemy tries to move. Hoopa binds that Pokémon in place for ${vTime(p.duration)}: it can't walk, zip or dash, but it still attacks anything in range.${p.noRepeat ? ' It never binds the same Pokémon twice in a row.' : ''}${p.chargedForm ? ` While charged it becomes ${esc(p.chargedForm.name)}.` : ''}` };
+      if (p.targeted) {
+        const rest = `A bound Pokémon still attacks anything in range, but can't walk, zip or dash. The rings stop its next ${vNum(p.breakAfter)} tries to move (each one weakens them), then break. They also snap at once if it's shoved or knocked to another square, or knocked out.`;
+        if (p.pick === 'move') return { when: `After ${def.energy} attacks`, text: `Traps the next enemy that tries to move in rings. It can still attack, but can't move until it breaks free.`, more: `Holds its full charge until an enemy tries to change squares by itself (a step, or an ability that moves it), then binds that one in rings just before it goes: the move (or moving ability, like a dash) is stopped and counts as its first try to break free. Being shoved by an enemy attack never triggers it. ${rest}` };
+        return { when: `After ${def.energy} attacks`, text: `Traps the Pokémon it's attacking in rings. It can still attack, but can't move until it breaks free.`, more: `Binds the Pokémon it's attacking in rings (if that one is already bound, the nearest enemy that isn't). ${rest}` };
+      }
+      const start = p.startCharged ? 'It starts the fight charged and refills' : 'Its ability charges';
+      return { when: `After ${def.energy} attacks`, text: `Pins the next enemy that tries to move in place for ${vTime(p.duration)}.`, more: `${start} after ${vNum(def.energy)} attacks, then waits until an enemy tries to move. Hoopa binds that Pokémon in place for ${vTime(p.duration)}: it can't walk, zip or dash, but it still attacks anything in range.${p.noRepeat ? ' It never binds the same Pokémon twice in a row.' : ''}${p.chargedForm ? ` While charged it becomes ${esc(p.chargedForm.name)}.` : ''}` };
     }
-    case 'taunt': return { when: every, text: `Spreads its spores: the hardest-hitting enemy within the ${area(p.radius)} around it that is attacking someone else must attack ${esc(def.name)} for ${vTime(p.duration)}.` };
-    case 'rage': return { when: 'Every attack', text: `Each attack in a row without moving makes it attack ${vNum(`${p.stackPct}%`)} faster, up to ${vNum(`${p.stackPct * p.maxStacks}%`)} after ${vNum(p.maxStacks)} attacks. Moving resets it.` };
+    case 'taunt': return { when: every, text: `Makes a nearby enemy attack ${esc(def.name)} instead of its friends.`, more: `Spreads its spores: the hardest-hitting enemy within the ${area(p.radius)} around it that is attacking someone else must attack ${esc(def.name)} for ${vTime(p.duration)}.` };
+    case 'rage': return { when: 'Every attack', text: `Attacks faster with every hit while it stands still.`, more: `Each attack in a row without moving makes it attack ${vNum(`${p.stackPct}%`)} faster, up to ${vNum(`${p.stackPct * p.maxStacks}%`)} after ${vNum(p.maxStacks)} attacks. Moving resets it.` };
     case 'darts': {
       const name = catalog?.[p.unit]?.name ?? p.unit;
-      return { when: def.energy ? 'Both home + charged' : 'Both home', text: `When it attacks with both ${name} at home${def.energy ? ` and its counter full (it starts full, then fills with ${vNum(def.energy)} attacks)` : ''}, it fires them instead: one at each of the ${vNum(p.count)} farthest enemies${p.outside ? ` outside the ${area(p.outside)} around it (never at a Pokémon right next to it; with only one enemy that far, just one ${name} goes, and with none it attacks)` : ''}${p.impactDamage ? `, each hitting for ${vDmg(show(Math.round(p.impactDamage[lvl] * STAT_SCALE)))}` : p.impactPct ? `, each hitting for ${vDmg(`${p.impactPct}%`)} damage (${vDmg(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.impactPct) / 100)))})` : ''}${p.impactStun ? ` and stunning it for ${vTime(p.impactStun)}` : ''}. Each ${p.displace ? 'crashes into its target, shoving it aside onto a square next to it, then stays' : 'lands beside its target'} and fights.${p.lure ? ` Its target stops attacking whoever it was and must attack the ${name} until it faints.` : ''} A ${name} that faints flies back (${vTime(Math.round(p.returnSec * 10))}). Until both are home, ${esc(def.name)} attacks normally. They come at ${esc(def.name)}'s level${catalog?.[p.unit]?.hp.every((h, k, a) => h === a[0]) ? `, but ${name} and the landing hit stay the same at every level` : ''}.` };
+      const shot = p.perShot ?? p.count;
+      const ready = p.fireDelay !== undefined
+        ? `${vTime(p.fireDelay)} after its counter fills (${vNum(def.energy)} attacks), it fires ${shot === 1 ? `a ${name}` : `${vNum(shot)} ${name}`} on its own, without using an attack (up to ${vNum(p.count)} can be out at once; with all out, it waits, full)`
+        : p.perShot
+        ? `After ${def.energy === 1 ? 'each attack' : `every ${vNum(def.energy)} attacks`}${p.chargeHome ? ` made while a ${name} is home (with all ${vNum(p.count)} out, attacks don't charge it)` : `, if a ${name} is home (up to ${vNum(p.count)} can be out at once)`}, its next action (an attack, or a step toward its target) fires ${shot === 1 ? `a ${name}` : `${vNum(shot)} ${name}`} instead`
+        : `With all ${name} home${def.energy ? ` and its counter full (${vNum(def.energy)} attacks)` : ''}, its next action (an attack, or a step toward its target) fires them instead`;
+      const at = `the farthest enemy${shot === 1 ? '' : 'ies'}${p.outside ? ` outside the ${area(p.outside)} around it (never one right next to it; with no enemy that far it just attacks)` : ''}`;
+      const impact = p.impactDamage ? `, hitting for ${vDmg(show(Math.round(p.impactDamage[lvl] * STAT_SCALE)))}` : p.impactPct ? `, hitting for ${vDmg(`${p.impactPct}%`)} damage (${vDmg(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.impactPct) / 100)))})` : '';
+      return {
+        when: def.energy === 1 ? 'Every other action' : def.energy ? `Every ${def.energy} attacks` : 'All home',
+        text: `Launches ${shot === 1 ? `a ${name}` : `${name}`} at a far-away enemy. It crashes in${p.impactStun ? ', stuns its target' : ''} and stays to fight.`,
+        more: `${ready}, at ${at}${impact}${p.impactStun ? ` and stunning it for ${vTime(p.impactStun)}` : ''}. It ${p.displace ? 'crashes into its target, shoving it aside onto a square next to it, then stays' : 'lands beside its target'} and fights.${p.lure ? ` Once the stun wears off, its target drops whoever it was attacking and attacks the ${name} right away, until it faints.` : ''} A ${name} that faints flies back (${vTime(Math.round(p.returnSec * 10))}). They come at ${esc(def.name)}'s level.`,
+      };
     }
-    case 'boost': return { when: every, text: `Charges up the allies directly left, right, in front of and behind it: each gains ${vNum(`+${p.charges}`)} toward its power (Pokémon without a power counter don't benefit).` };
+    case 'boost': return { when: every, text: `Charges up the abilities of the allies next to it.`, more: `Charges up the allies directly left, right, in front of and behind it: each gains ${vNum(`+${p.charges}`)} toward its ability (Pokémon without an ability counter don't benefit).` };
     case 'snipe': return { when: every, text: `The attack also zaps the farthest enemy for ${hit}.` };
     case 'summon': {
       const name = catalog?.[p.unit]?.name ?? p.unit;
       const n = (p.countByStar ?? [1, 1, 1, 1])[lvl];
       const level = p.summonStar !== undefined ? `They are always ${levelMark(p.summonStar)}.` : `They come at ${def.name}'s level.`;
-      return { when: every, text: `Summons ${vNum(n)} ${name} beside it. ${level}` };
+      return { when: every, text: `Summons ${vNum(n)} ${name} to fight beside it.`, more: `Summons ${vNum(n)} ${name} beside it. ${level}` };
     }
-    case 'stealth': return { when: every, text: `Turns invisible for ${vTime(p.duration)}${p.hastePct ? ` and attacks ${vNum(`${p.hastePct}%`)} faster` : ''}. Enemies can't target or follow it while it's invisible.` };
+    case 'stealth': return { when: every, text: `Turns invisible for a while${p.hastePct ? ' and attacks faster' : ''}.`, more: `Turns invisible for ${vTime(p.duration)}${p.hastePct ? ` and attacks ${vNum(`${p.hastePct}%`)} faster` : ''}. Enemies can't target or follow it while it's invisible.` };
     case 'haste': return { when: every, text: `Attacks ${vNum(`${p.hastePct}%`)} faster for ${vTime(p.duration)}.` };
-    case 'quake': return { when: every, text: `Shakes the whole board: every enemy takes ${hit}${p.stun ? ` and is stunned for ${vTime(p.stun)}` : ''}.` };
-    case 'chill': return { when: 'Every attack', text: `Chills the target for ${vTime(p.duration)}: it attacks and moves ${vNum(`${p.slowPct}%`)} slower. Another hit restarts the timer.` };
+    case 'quake': return { when: every, text: `Shakes the whole board, hurting${p.stun ? ' and stunning' : ''} every enemy.`, more: `Every enemy takes ${hit}${p.stun ? ` and is stunned for ${vTime(p.stun)}` : ''}.` };
+    case 'chill': return { when: 'Every attack', text: `Slows down the enemy it hits.`, more: `Chills the target for ${vTime(p.duration)}: it attacks and moves ${vNum(`${p.slowPct}%`)} slower. Another hit restarts the timer.` };
     case 'splashHeal': {
       const where = p.radius ? `in the ${area(p.radius)} around its target` : 'directly left, right, above and below its target';
-      return { when: 'Every attack', text: `Heals your Pokémon ${where} for ${vHeal(`${p.healPct}%`)} of its damage (${vHeal(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.healPct) / 100)))}).` };
+      return { when: 'Every attack', text: `Each attack also heals your Pokémon near its target.`, more: `Heals your Pokémon ${where} for ${vHeal(`${p.healPct}%`)} of its damage (${vHeal(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.healPct) / 100)))}).` };
     }
-    case 'selfdestruct': return { when: 'When knocked out', text: `Stays on its square for ${vTime(p.delay)}, then explodes: enemies in the ${area(p.radius)} around it take ${hit}.` };
-    case 'copy': return { when: 'Always', text: `Walks to the nearest enemy and takes ${vTime(p.morph)} to transform into it, copying its HP, damage, attack speed, range and crit (not its power or movement). It keeps its share of HP and stands still while transformed. When that Pokémon faints, it turns back and walks to the next one.` };
+    case 'selfdestruct': return { when: 'When knocked out', text: `Explodes a moment later, hurting the enemies around it.`, more: `Stays on its square for ${vTime(p.delay)}, then explodes: enemies in the ${area(p.radius)} around it take ${hit}.` };
+    case 'copy': return { when: 'Always', text: `Transforms into the nearest enemy and copies its stats.`, more: `Walks to the nearest enemy and takes ${vTime(p.morph)} to transform into it, copying its HP, damage, attack speed, range and crit (not its ability or movement). It keeps its share of HP and stands still while transformed. When that Pokémon faints, it turns back and walks to the next one.` };
     case 'transform': {
       const f = p.form;
       const when = p.trigger === 'knockedOut' ? 'When knocked out' : p.trigger === 'lowHp' ? `At ${p.hpPct}% HP` : every;
       const into = p.trigger === 'knockedOut' ? 'Instead of fainting, it transforms' : 'Transforms';
-      const stats = `${f.hp ? `${vNum(show(Math.round(f.hp[lvl] * STAT_SCALE)))} HP, ` : ''}${vDmg(show(Math.round(f.damage[lvl] * STAT_SCALE)))} damage every ${vNum(`${f.secPerHit}s`)}, range ${vNum(f.range)}`;
       const morph = p.morph ? ` It takes ${vTime(p.morph)} and can't be hurt while it does.` : '';
       const wave = f.shockwave ? ` A shock wave stuns every enemy in the ${area(f.shockwave.radius)} around it for ${vTime(f.shockwave.stun)}.` : '';
-      return { when, text: `${into} into ${f.name} for the rest of the fight: ${stats}${f.hp ? '' : ' (HP stays the same)'}.${morph}${wave}` };
+      // Only how it transforms: the form's own stats are in its Pokédex entry.
+      return { when, text: `${into} into ${esc(f.name)} for the rest of the fight.`, more: `${into} into ${esc(f.name)} for the rest of the fight.${morph}${wave}` };
     }
     case 'treat': {
       const fl = Object.fromEntries(p.flavors.map((f) => [f.flavor, f]));
       const heal = fl.heal && `<b>${esc(fl.heal.name.replace(/.*\((.*)\)/, '$1'))}</b> heals the ally with the lowest share of HP for ${vHeal(`${fl.heal.healPct}%`)} of its damage (${vHeal(show(Math.floor((def.damage[lvl] * STAT_SCALE * fl.heal.healPct) / 100)))}) over ${vTime(p.duration)}`;
       const haste = fl.haste && `<b>${esc(fl.haste.name.replace(/.*\((.*)\)/, '$1'))}</b> makes the hardest-hitting ally attack ${vNum(`${fl.haste.hastePct}%`)} faster for ${vTime(p.duration)}`;
       const guard = fl.guard && `<b>${esc(fl.guard.name.replace(/.*\((.*)\)/, '$1'))}</b> shields the ally most enemies are attacking for ${vTime(p.duration)}: ${vNum(`${fl.guard.guardPct}%`)} less damage, and the first stun or knockback only breaks the shield`;
-      return { when: every, text: `Changes into a random flavour and treats one ally. ${[heal, haste, guard].filter(Boolean).join('. ')}.` };
+      return { when: every, text: `Changes into a random flavour that heals, speeds up or shields an ally.`, more: `Changes into a random flavour and treats one ally. ${[heal, haste, guard].filter(Boolean).join('. ')}.` };
     }
-    case 'opening': return { when: 'At battle start', text: `Fires a wave down its column. The first enemy hit takes ${hit}, is carried to the far end of the board${p.stun ? ` and is stunned for ${vTime(p.stun)}` : ''}.` };
+    case 'opening': return { when: 'At battle start', text: `Fires a wave down its column that sweeps the first enemy to the far end of the board.`, more: `Fires a wave down its column. The first enemy hit takes ${hit}, is carried to the far end of the board${p.stun ? ` and is stunned for ${vTime(p.stun)}` : ''}.` };
     default: return null;
   }
 }
 
 export function describePower(def, star, catalog) {
   const pt = powerText(def, star, catalog);
-  return pt ? `<span class="pw-when">${pt.when}</span> ${pt.text}` : '';
+  return pt ? `<p><b>${esc(def.ability.name)}:</b> <span class="pw-when">${pt.when}</span> ${pt.text}</p>${moreBox(pt.more)}` : '';
 }
+
+// The full details of an ability, folded away. Whether it is open is
+// remembered, so a player who likes the details keeps seeing them.
+let moreOpen = false;
+if (typeof document !== 'undefined') document.addEventListener('toggle', (e) => { if (e.target.classList?.contains('pw-more')) moreOpen = e.target.open; }, true);
+export const moreBox = (more, attrs = '') => (more ? `<details class="pw-more"${moreOpen ? ' open' : ''}><summary><span class="pw-show">More details</span><span class="pw-hide">Fewer details</span></summary><p${attrs}>${more}</p></details>` : '');
 
 // Ditto has no fighting stats of its own: it copies the nearest enemy's.
 const isCopycat = (def) => def.ability?.kind === 'copy';
@@ -347,6 +418,11 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   infoEl.addEventListener('click', (e) => {
     if (e.target.closest('#info-close')) return closeInfo();
     if (e.target.id === 'sell' && selected !== null) { closeInfo(); intent({ type: 'sell', uid: selected }); }
+    const link = e.target.closest('.poke-link');
+    if (link) {
+      if (link.dataset.dexForm) { const [id, i] = link.dataset.dexForm.split(':'); return openEntry(id, Number(i)); }
+      return openEntry(link.dataset.dex);
+    }
     e.target.closest('.ability')?.classList.toggle('open'); // phones clamp it to two lines
   });
   sheetBackdrop.addEventListener('click', () => closeInfo());
@@ -372,7 +448,6 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     if (!btn) return;
     const action = btn.dataset.menu;
     if (action === 'close') closeMenu();
-    else if (action === 'dex') { closeMenu(); openDex(); }
     else if (action === 'new-confirmed') { closeMenu(); onNewGame(); }
     else if (action === 'leave-confirmed') { closeMenu(); onLobby('leave'); }
     else if (action === 'copy-log') copyLog(btn);
@@ -390,9 +465,6 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       confirmRemove = null;
       onFriends(btn.dataset.action, btn.dataset.code);
     }
-    else if (action === 'start-battle') { closeMenu(); onLobby('open'); }
-    else if (action === 'start-friend') { closeMenu(); onLobby('friend'); }
-    else if (action === 'start-training') { closeMenu(); started = true; overlay.classList.remove('start-screen'); showTeamBuilder(); }
     else openMenu(action); // 'main', 'help', 'new'
   });
   // Online pop-ups get their own layer over the start screen (see showLobby).
@@ -412,12 +484,13 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     const btn = e.target.closest('button, [data-dex-info]');
     if (btn?.id === 'battle') { started = true; overlay.classList.remove('start-screen'); return showTeamBuilder(); }
     if (btn?.id === 'friend') return onLobby('open');
-    if (btn?.id === 'vs-friend') return onLobby('friend');
+    if (btn?.id === 'start-friends') return openMenu('friends', { noBack: true }); // straight from the main screen: just close
     if (btn?.dataset.lobby === 'friends') return openMenu('friends');
     if (btn?.dataset.lobby) return onLobby(btn.dataset.lobby, lobbyValues());
     if (btn?.dataset.copy) return copyText(btn.dataset.copy, btn);
     if (btn?.id === 'share-link') return navigator.share?.({ title: 'Poke Tactics', text: `Battle me in Poke Tactics! Code: ${btn.dataset.code}`, url: btn.dataset.url }).catch(() => {});
     if (btn?.id === 'start-menu') return openMenu('main');
+    if (btn?.id === 'start-dex') return openDex();
     if (btn?.id === 'profile-chip') return openMenu('profile');
     const info = e.target.closest('[data-dex-info]');
     if (info) return openDex(info.dataset.dexInfo); // a team card's ⓘ: full stats and power
@@ -508,6 +581,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   }
 
   const ICON_MENU = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>';
+  const ICON_FRIENDS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><circle cx="17" cy="9" r="2.8"/><path d="M16.5 14.2c2.9.2 5 2.3 5 5.3"/></svg>';
   const ICON_DEX = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><path d="M3 12h6m6 0h6"/><circle cx="12" cy="12" r="3"/></svg>';
 
   function renderHud() {
@@ -526,7 +600,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
 
   // ---- menu ------------------------------------------------------------------
 
-  function openMenu(view = 'main') {
+  function openMenu(view = 'main', { noBack = false } = {}) {
     menuView = view;
     const panel = menuEl.querySelector('.menu-panel');
     panel.classList.toggle('help', view === 'help');
@@ -541,7 +615,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
           <li><b>Position</b>: the row nearest the middle is your front line. Tap a Pokémon, then a square, to move it (onto another Pokémon swaps them).</li>
           <li><b>Sell</b>: drag a Pokémon onto the shop, or tap it and press Sell. Its copies go back to your pool.</li>
           <li><b>Fight</b>: the battle plays out by itself. After 30 seconds, sudden death drains everyone until one side falls.</li>
-          <li><b>Powers</b>: every Pokémon has one; the blue bar under it fills with each attack. See them all in the Pokédex.</li>
+          <li><b>Abilities</b>: every Pokémon has one; the blue bar under it fills with each attack. See them all in the Pokédex.</li>
           <li><b>Scouting</b>: from round 2, the faded Pokémon on the enemy side show where your opponent placed theirs last round.</li>
           <li><b>Coins</b>: you start with ${START_COINS}. Every round after that: +${ROUND_COINS}, plus ${LOST_COIN} for each of your Pokémon knocked out in the last battle. Coins carry over.</li>
           <li><b>Shop</b>: it refreshes for free every time you buy, and after every battle. A reroll costs ${REROLL_COST} coin.</li>
@@ -585,7 +659,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       return;
     } else if (view === 'friends') {
       confirmRemove = null;
-      panel.innerHTML = `${close}${back}<h1>Friends</h1><div class="friends-body">${friendsViewHTML()}</div>`;
+      panel.innerHTML = `${close}${noBack ? '' : back}<h1>Friends</h1><div class="friends-body">${friendsViewHTML()}</div>`;
       menuEl.hidden = false;
       return;
     } else if (view === 'lastlog') {
@@ -607,14 +681,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       // From the start screen: everything a player can start from here.
       panel.innerHTML = `${close}<h1>Menu</h1>
         <div class="menu-list">
-          <button data-menu="start-battle"><span>⚔</span><div>Battle<small>Play the next player looking for a battle</small></div></button>
-          <button data-menu="start-friend"><span>✉</span><div>Battle a friend<small>Send a battle request with their friend code</small></div></button>
-          <button data-menu="start-training"><span>▶</span><div>Training<small>Play against the bot</small></div></button>
-          <button data-menu="friends" class="${getFriends()?.incoming.length ? 'unread' : ''}"><span>♥</span><div>Friends<small>${friendsSub()}</small></div></button>
           <button data-menu="profile"><span>☺</span><div>Profile<small>Your name, picture and stats</small></div></button>
           <button data-menu="news" class="${hasUnread() ? 'unread' : ''}"><span>★</span><div>What's new<small>${esc(changelog[0]?.title ?? 'Updates to the game')}</small></div></button>
           <button data-menu="help"><span>?</span><div>How to play<small>Rules, controls and keys</small></div></button>
-          <button data-menu="dex"><span>◎</span><div>Pokédex<small>Every Pokémon's stats and power</small></div></button>
           ${getLastLog() ? '<button data-menu="lastlog"><span>⧉</span><div>Last online match log<small>Copy it to look into a dropped connection</small></div></button>' : ''}
         </div>
         ${versionText ? `<p class="menu-version">${esc(versionText)}</p>` : ''}`;
@@ -624,7 +693,6 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
           <button data-menu="close"><span>▶</span><div>Resume</div></button>
           <button data-menu="news" class="${hasUnread() ? 'unread' : ''}"><span>★</span><div>What's new<small>${esc(changelog[0]?.title ?? 'Updates to the game')}</small></div></button>
           <button data-menu="help"><span>?</span><div>How to play<small>Rules, controls and keys</small></div></button>
-          <button data-menu="dex"><span>◎</span><div>Pokédex<small>Every Pokémon's stats and power</small></div></button>
           <button data-menu="log"><span>⧉</span><div>Match log<small>Copy every move this match, with notes</small></div></button>
           <button data-menu="friends" class="${getFriends()?.incoming.length ? 'unread' : ''}"><span>♥</span><div>Friends<small>${friendsSub()}</small></div></button>
           <button data-menu="profile"><span>☺</span><div>Profile<small>Your name, picture and stats</small></div></button>
@@ -824,6 +892,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   // Friends data changed: refresh whatever shows it.
   function showFriends() {
     renderChallenge();
+    const fb = overlay.querySelector('#start-friends');
+    if (fb) { const n = onlineCount(); fb.innerHTML = friendsBtnHTML(); fb.title = getFriends()?.available ? `Friends (${n} online)` : 'Friends'; }
     const mine = lobbyEl.querySelector('#my-friend-code');
     const code = getFriends()?.code;
     if (mine && code) {
@@ -931,7 +1001,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
           ? `<span class="portrait" data-facing="down"><span class="sprite" ${spriteStyle(def)}></span></span>`
           : `<span class="emoji">${def.emoji}</span>`}
         <span class="name">${esc(def.name)}</span>
-        <span class="type">${def.type}</span>
+        <span class="type">${typeName(def.type)}</span>
         <span class="cost c${def.cost}" title="${def.cost} coins">${def.cost}</span>
         <span class="info-btn" data-info="${slot}" role="button" aria-label="${esc(def.name)} info">i</span>
         ${fielded(p, id) ? `<span class="levelup">Level up ${levelMark(fielded(p, id).star)} → ${levelMark(fielded(p, id).star + 1)}</span>` : ''}
@@ -988,7 +1058,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       <div class="info-head" data-type="${def.type}">
         ${portrait(def)}
         <div><h2>${esc(def.name)} ${levelSpan(star)}</h2>
-        <span class="sub">${def.type} · ${def.cost} coins · ${copies}/${COPIES_PER_TROOP} copies</span></div>
+        <span class="sub">${typeName(def.type)} · ${def.cost} coins · ${copies}/${COPIES_PER_TROOP} copies</span></div>
       </div>
       ${hint}
       <dl class="stats">
@@ -1001,7 +1071,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         <dt>Range</dt><dd>${def.range}</dd>
         <dt>Movement</dt><dd>${SPEED_NAME[def.moveSpeed]}</dd>`}
       </dl>
-      ${def.ability ? `<p class="ability"><b>${esc(def.ability.name)}:</b> ${describePower(def, star, catalog)}</p>` : ''}
+      ${def.ability ? `<div class="ability">${describePower(def, star, catalog)}</div>` : ''}
       ${inst && canPlan()
         ? `<button id="sell" class="danger">Sell for ${sellValue(catalog, inst)} coins (${copies} ${copies === 1 ? 'copy' : 'copies'} back to pool)</button>` : ''}`;
   }
@@ -1192,6 +1262,25 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   }
 
   // Fly a projectile from one square to another; returns its flight time in ms.
+  // A white streak drawn behind something shooting from `from` to `to` (view
+  // squares), growing with it and then fading, like a trail through the air.
+  let streakId = 0;
+  function streak(from, to, ms, easing) {
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('class', 'streak');
+    svg.setAttribute('viewBox', `0 0 ${COLS * 100} ${ROWS * 100}`);
+    svg.setAttribute('preserveAspectRatio', 'none');
+    const [x1, y1, x2, y2] = [(from.x + 0.5) * 100, (from.y + 0.5) * 100, (to.x + 0.5) * 100, (to.y + 0.5) * 100];
+    const id = `streak${++streakId}`;
+    svg.innerHTML = `<defs><linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.7" stop-color="#fff" stop-opacity="0.55"/><stop offset="1" stop-color="#fff" stop-opacity="0.95"/></linearGradient></defs>`
+      + `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="url(#${id})" stroke-width="7" stroke-linecap="round" vector-effect="non-scaling-stroke" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1"/>`;
+    layer.append(svg);
+    const line = svg.querySelector('line');
+    line.animate([{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], { duration: ms, easing, fill: 'forwards' });
+    svg.animate([{ opacity: 1 }, { opacity: 1, offset: 0.55 }, { opacity: 0 }], { duration: ms + 380 / speed }).onfinish = () => svg.remove();
+  }
+
   function projectile(from, to, color, big) {
     const dx = to.x - from.x;
     const dy = to.y - from.y;
@@ -1317,26 +1406,68 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         if (!animate) break;
         const p = viewPos(pal.x, pal.y);
         if (ev.dart) {
-          // Dragapult's Dreepy: flies from Dragapult to where it lands (onto its
-          // target, which is shoved aside when it arrives).
+          // Dragapult's Dreepy: shot out of Dragapult like Tapu Koko's dash, a
+          // fast straight streak with sparks behind it, small at first and full
+          // size as it lands (onto its target, which is shoved aside on arrival).
           pal.el.style.visibility = 'hidden';
-          const ms = projectile(at(), p, fxColor(pal.unitId), true);
+          const from = at();
+          const dx = p.x - from.x;
+          const dy = p.y - from.y;
+          const squares = Math.max(Math.abs(dx), Math.abs(dy));
+          const ms = Math.max(160, 55 * squares) / speed;
+          const color = fxColor(pal.unitId);
+          const flyer = document.createElement('div');
+          flyer.className = 'unit sprite-unit dart-flyer dashing';
+          flyer.style.setProperty('--fx', color);
+          flyer.dataset.facing = facingFor(Math.abs(dx) >= Math.abs(dy) ? dx : 0, Math.abs(dx) >= Math.abs(dy) ? 0 : dy, 'down');
+          flyer.innerHTML = `<div class="body"><div class="sprite" style="background-image:url('${catalog[pal.unitId]?.sprite ?? ''}')"></div></div>`;
+          place(flyer, from.x, from.y);
+          layer.append(flyer);
+          const ease = 'cubic-bezier(.6,0,.2,1)';
+          flyer.animate([{ translate: '0 0', scale: '0.35' }, { translate: `${dx * 100}% ${dy * 100}%`, scale: '1' }], { duration: ms, easing: ease }).onfinish = () => flyer.remove();
+          streak(from, p, ms, ease);
+          // Its hit, stun and shove all land when it arrives.
+          ctx.srcDelay.set(pal.id, ms);
+          ctx.hitDelay.set(ev.target, ms);
           ctx.hitDelay.set(pal.id, ms);
           later(ms, () => { pal.el.style.visibility = ''; play(pal.el, 'spawned', 300); fx(p.x, p.y, 'burst', fxColor(pal.unitId), 1.2); });
         } else { play(pal.el, 'spawned', 400); fx(p.x, p.y, 'ring', fxColor(pal.unitId), 1.3); }
         break;
       }
-      case 'dartReturn': { // a fainted Dreepy drifts slowly back to Dragapult
+      case 'dartReturn': { // a fainted Dreepy is knocked away by the hit, then arcs back to Dragapult
         if (!animate) break;
-        const ghost = document.createElement('div');
-        ghost.className = 'unit sprite-unit dart-ghost';
-        ghost.dataset.facing = 'down';
-        ghost.innerHTML = `<div class="body"><div class="sprite" style="background-image:url('${catalog[ev.unitId]?.sprite ?? ''}')"></div></div>`;
+        const dreepy = actors.get(ev.dreepy);
+        const hitter = dreepy?.lastHitBy;
         const from = viewPos(ev.fromX, ev.fromY);
-        const to = at();
-        place(ghost, from.x, from.y);
-        layer.append(ghost);
-        ghost.animate([{ translate: '0 0' }, { translate: `${(to.x - from.x) * 100}% ${(to.y - from.y) * 100}%` }], { duration: (ev.duration * TICK_MS) / speed, easing: 'linear' }).onfinish = () => ghost.remove();
+        const home = at(); // Dragapult, in squares
+        const ms = Math.max(ev.duration * TICK_MS, 500) / speed;
+        later(ctx.hitDelay.get(ev.dreepy) ?? 0, () => {
+          const ghost = document.createElement('div');
+          ghost.className = 'unit sprite-unit dart-ghost';
+          ghost.dataset.facing = 'down';
+          ghost.innerHTML = `<div class="body"><div class="sprite" style="background-image:url('${catalog[ev.unitId]?.sprite ?? ''}')"></div></div>`;
+          place(ghost, from.x, from.y);
+          layer.append(ghost);
+          // Knocked a square away from whoever hit it (straight up if unknown)...
+          const by = hitter ? viewPos(hitter.x, hitter.y) : { x: from.x, y: from.y + 1 };
+          let dx = from.x - by.x;
+          let dy = from.y - by.y;
+          const len = Math.hypot(dx, dy) || 1;
+          dx = (dx / len) * 0.9;
+          dy = (dy / len) * 0.9;
+          // ...then a curve up and over back home (a quadratic arc).
+          const end = { x: home.x - from.x, y: home.y - from.y };
+          const peak = { x: (dx + end.x) / 2, y: Math.min(dy, end.y) - 1.2 - Math.hypot(end.x - dx, end.y - dy) * 0.25 };
+          const frames = [{ offset: 0, translate: '0 0', rotate: '0deg', opacity: 0.6 }];
+          frames.push({ offset: 0.3, translate: `${dx * 100}% ${dy * 100}%`, rotate: `${dx >= 0 ? 200 : -200}deg`, opacity: 0.45, easing: 'ease-in-out' });
+          for (let k = 1; k <= 8; k++) {
+            const q = k / 8;
+            const x = (1 - q) ** 2 * dx + 2 * (1 - q) * q * peak.x + q ** 2 * end.x;
+            const y = (1 - q) ** 2 * dy + 2 * (1 - q) * q * peak.y + q ** 2 * end.y;
+            frames.push({ offset: 0.3 + 0.7 * q, translate: `${x * 100}% ${y * 100}%`, rotate: `${(dx >= 0 ? 200 : -200) + (dx >= 0 ? 160 : -160) * q}deg`, opacity: 0.45 - 0.25 * q });
+          }
+          ghost.animate(frames, { duration: ms, easing: 'linear' }).onfinish = () => ghost.remove();
+        });
         break;
       }
       case 'taunt': { // Amoonguss: this Pokémon must attack it for a while
@@ -1510,6 +1641,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         const delay = animate ? ctx.srcDelay.get(ev.src) ?? 0 : 0;
         if (delay) ctx.hitDelay.set(a.id, delay);
         const src = actors.get(ev.src);
+        if (src) a.lastHitBy = src; // which way it flies if this knocks it out (Dreepy)
         later(delay, () => {
           if (newest()) {
             a.hp = ev.hp;
@@ -1573,10 +1705,18 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         });
         break;
       }
+      case 'bindStrain': // Hoopa's rings: a try to move weakens them
+        if (animate) { floatText(a, `${ev.tries}/${ev.of}`, 'bind'); play(a.el, 'strain', 300); }
+        break;
+      case 'unbind': // Hoopa's rings break (broken free, or knocked away)
+        a.boundUntil = 0;
+        a.el.classList.remove('bound');
+        if (animate && ev.why === 'broke') { floatText(a, 'Broke free!', 'bind'); fx(at().x, at().y, 'burst', '#ff8ad8', 1.1); }
+        break;
       case 'bind': { // Hoopa: rings hold the Pokémon in place for a while
         const from = actors.get(ev.by);
         const wear = () => {
-          a.boundUntil = ev.t + ev.duration;
+          a.boundUntil = ev.duration ? ev.t + ev.duration : Infinity; // a targeted bind lasts until it breaks
           a.el.classList.add('bound');
         };
         if (!animate) { wear(); break; }
@@ -1646,10 +1786,18 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       <span class="info-btn" data-dex-info="${id}" role="button" aria-label="${esc(def.name)} info">i</span>
       <span class="dex-card-art">${portrait(def)}</span>
       <b>${esc(def.name)}</b>
-      <small>${def.cost} 🪙 · ${def.type[0].toUpperCase() + def.type.slice(1)}</small>
+      <small>${def.cost} <i class="coin-icon" aria-label="coins"></i> · ${typeName(def.type)}</small>
     </button>`;
   }
 
+  // The main screen's Friends button: an icon, with how many friends are online
+  // (and a dot for friend requests waiting).
+  function friendsBtnHTML() {
+    const f = getFriends();
+    const n = f?.available ? onlineCount() : 0;
+    const asks = f?.incoming.length ?? 0;
+    return `${ICON_FRIENDS}${n ? `<span class="online-count" title="${n} online">${n}</span>` : ''}${asks ? `<span class="asks-dot" title="${asks} friend request${asks === 1 ? '' : 's'}"></span>` : ''}`;
+  }
   function profileChip() {
     const p = getProfile();
     return `<button id="profile-chip" class="profile-chip" title="Your profile">${avatar(p.avatar)}<span>${p.saved && p.name ? esc(p.name) : 'Set up your profile'}</span></button>`;
@@ -1665,11 +1813,13 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         <div class="parade" aria-hidden="true">${parade}</div>
         <div class="start-modes">
           <button id="friend" class="primary battle-btn">Battle</button>
-          <button id="vs-friend" class="battle-btn training-btn">Battle a friend</button>
           <button id="battle" class="battle-btn training-btn">Training</button>
         </div>
-        <button id="start-menu" class="icon-btn start-menu${hasUnread() ? ' unread' : ''}" title="Menu (M)" aria-label="Menu">${ICON_MENU}</button>
-        ${profileChip()}
+        <div class="start-corner">
+          <button id="start-dex" class="icon-btn dex-button" title="Every Pokémon's stats (P)">${ICON_DEX}<span class="label-text">Pokédex</span></button>
+          <button id="start-menu" class="icon-btn start-menu${hasUnread() ? ' unread' : ''}" title="Menu (M)" aria-label="Menu">${ICON_MENU}</button>
+        </div>
+        <div class="start-people">${profileChip()}<button id="start-friends" class="icon-btn friends-btn" aria-label="Friends" title="Friends">${friendsBtnHTML()}</button></div>
         ${versionText ? `<div class="start-version">${esc(versionText)}</div>` : ''}
       </div>`);
     overlay.classList.add('start-screen');
@@ -1908,9 +2058,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     dexEl.classList.remove('closing');
     dexEl.hidden = false;
   }
-  function openEntry(id) {
+  function openEntry(id, form = null) {
     dexPick = id;
-    dexForm = null;
+    dexForm = form;
     dexStar = 0;
     renderEntry();
     entryEl.classList.remove('closing');
@@ -1943,7 +2093,6 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     if (key === 'escape' || key === 'p') closeDex();
   }
 
-  const typeName = (type) => type[0].toUpperCase() + type.slice(1);
   const summonIds = () => Object.keys(catalog).filter((id) => catalog[id].summon).sort();
   // A transformed form as a Pokémon of its own (HP carries over when the form has none).
   // A Pokémon's forms: Greninja's or Minior's one transformation, Alcremie's flavours.
@@ -1958,10 +2107,10 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
 
   function dexCard(id) {
     const def = catalog[id];
-    return `<button class="dex-card" data-dex="${id}" data-type="${def.type}">
+    return `<button class="dex-card dex-grid-card" data-dex="${id}" data-type="${def.type}">
+      <span class="dex-corners"><span class="dex-corner dex-cost">${def.summon ? 'Summon' : `<i class="coin-icon" aria-hidden="true"></i>${def.cost}`}</span></span>
       <span class="dex-card-art">${portrait(def)}</span>
       <b>${esc(def.name)}</b>
-      <small>${def.summon ? 'Summon' : `${def.cost} 🪙`} · ${typeName(def.type)}</small>
     </button>`;
   }
 
@@ -1970,7 +2119,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     dexEl.querySelector('.dex-panel').innerHTML = `
       <button id="dex-close" class="ghost" aria-label="Close">✕</button>
       <h1>Pokédex</h1>
-      <p class="muted dex-sub">Tap a Pokémon to see its stats and power.</p>
+      <p class="muted dex-sub">Tap a Pokémon to see its stats and ability.</p>
       <div class="dex-grid">${troopIds(catalog).map(dexCard).join('')}</div>
       ${summons.length ? `<h3 class="dex-section">Summoned in battle</h3><div class="dex-grid">${summons.map(dexCard).join('')}</div>` : ''}`;
   }
@@ -2034,9 +2183,10 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   function dexLevelValues(def, star, formOf, formIndex = 0) {
     const st = unitStats(def, star);
     let power = '';
+    let more = '';
     const f = formOf && formsOf(formOf)[formIndex];
     if (f && f === formOf.ability.chargedForm) {
-      power = `${esc(formOf.name)} takes this form while its power is charged, and turns back when it binds a Pokémon. Same stats as ${esc(formOf.name)}.`;
+      power = `${esc(formOf.name)} takes this form while its ability is charged, and turns back when it binds a Pokémon. Same stats as ${esc(formOf.name)}.`;
     } else if (f?.flavor) {
       // An Alcremie flavour: what its treat does.
       const p = formOf.ability;
@@ -2054,11 +2204,12 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         f.blink && 'It doesn\'t walk: it zips straight to the square beside its target.',
         f.hop && `Every ${vNum(f.energy)} attacks it zips to a different enemy.`,
       ].filter(Boolean).join(' ');
-    } else if (def.ability) power = powerText(def, star, catalog)?.text ?? '';
+    } else if (def.ability) ({ text: power, more = '' } = powerText(def, star, catalog) ?? { text: '' });
+    if (formOf) power = linkNames(power, [{ name: formOf.name, attrs: `data-dex="${idOf(formOf, catalog)}"` }]);
     // Numbers in the text get their own spans so a level change can count them.
-    power = power.split(/(<[^>]+>)/).map((part) => (part.startsWith('<') ? part : part.replace(/\d+(?:\.\d+)?/g, '<span class="pn">$&</span>'))).join('');
+    const counted = (html) => html.split(/(<[^>]+>)/).map((part) => (part.startsWith('<') ? part : part.replace(/\d+(?:\.\d+)?/g, '<span class="pn">$&</span>'))).join('');
     return {
-      hp: String(show(st.hp)), dmg: String(show(st.atk)), power,
+      hp: String(show(st.hp)), dmg: String(show(st.atk)), power: counted(power), more: counted(more),
     };
   }
 
@@ -2081,7 +2232,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     for (const el of detail.querySelectorAll('[data-k]')) {
       const next = v[el.dataset.k];
       if (next == null) continue;
-      if (el.dataset.k === 'power') {
+      if (el.dataset.k === 'power' || el.dataset.k === 'more') {
         // Same sentence with different numbers (the usual case): only the
         // numbers count to their new values. Otherwise swap the text in place.
         const nums = [...el.querySelectorAll('.pn')];
@@ -2099,7 +2250,20 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     }
   }
   function tweenNumber(el, to) {
-    const from = parseFloat(el.textContent) || 0;
+    if (el.textContent === to) return;
+    const num = /^(-?\d+(?:\.\d+)?)(.*)$/;
+    const a = el.textContent.match(num);
+    const b = to.match(num);
+    if (!a || !b || a[2] !== b[2]) {
+      el.textContent = to;
+      el.animate([{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], { duration: 240, easing: 'ease-out' });
+      const c = el.closest('.dex-chip');
+      c?.animate([{ borderColor: 'var(--gold)' }, {}], { duration: 500 });
+      return;
+    }
+    const suffix = b[2];
+    to = b[1];
+    const from = parseFloat(a[1]);
     const target = parseFloat(to);
     const places = (to.split('.')[1] ?? '').length;
     const start = performance.now();
@@ -2110,7 +2274,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     const step = (now) => {
       const k = Math.min(1, (now - start) / ms);
       const e = 1 - (1 - k) ** 3;
-      el.textContent = k < 1 ? (from + (target - from) * e).toFixed(places) : to;
+      el.textContent = (k < 1 ? (from + (target - from) * e).toFixed(places) : to) + suffix;
       if (k < 1) el._tween = requestAnimationFrame(step);
       else chip?.classList.remove('changing');
     };
@@ -2127,7 +2291,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     const fromSmall = was(newKey); // the small sprite that was tapped
     dexPick = id;
     dexForm = form;
-    renderEntry({ fade: true });
+    const old = entryEl.querySelector('.dex-detail');
+    if (old && !reduceMotion()) morphEntry(old); else renderEntry();
     if (!fromMain || !fromSmall || reduceMotion()) return;
     const play = (key, from) => {
       const el = entryEl.querySelector(`[data-key="${key}"]`);
@@ -2144,9 +2309,69 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     play(oldKey, fromMain); // shrinks from the big spot
   }
 
-  function renderEntry({ fade = false } = {}) {
+  // Another Pokémon or form in the open entry: the same boxes stay put and
+  // change to the new values (numbers count, the stat shape morphs, text
+  // fades), instead of the whole entry being redrawn.
+  function morphEntry(old) {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = entryHTML();
+    const next = tmp.querySelector('.dex-detail');
+    if (!next) return renderEntry();
+    const panel = entryEl.querySelector('.dex-panel');
+    panel.dataset.type = old.dataset.type = next.dataset.type;
+    const fadeIn = (el) => el?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260, easing: 'ease-out' });
+    // Name, tags and sprites: swapped (the sprites fly between their spots).
+    const hero = next.querySelector('.dex-hero');
+    old.querySelector('.dex-hero').replaceWith(hero);
+    fadeIn(hero.querySelector('.dex-title'));
+    // Stat shape and chips.
+    const oldBox = old.querySelector('.dex-statbox');
+    const newBox = next.querySelector('.dex-statbox');
+    const op = oldBox.querySelector('.dex-radar .shape');
+    const np = newBox.querySelector('.dex-radar .shape');
+    if (!op !== !np) { oldBox.replaceWith(newBox); fadeIn(newBox); } else {
+      if (op) tweenRadar(op, np.dataset.vals.split(',').map(Number));
+      morphChips(oldBox.querySelector('.dex-chips'), newBox.querySelector('.dex-chips'));
+    }
+    // The ability box.
+    const opw = old.querySelector('.dex-power');
+    const npw = next.querySelector('.dex-power');
+    if (opw && npw) {
+      opw.replaceChildren(...npw.childNodes);
+      fadeIn(opw);
+    } else if (opw) opw.remove();
+    else if (npw) { old.append(npw); fadeIn(npw); }
+  }
+  // Chips are matched by their label: a kept chip counts to its new value,
+  // a new one pops in, one with no match leaves.
+  function morphChips(box, nextBox) {
+    const label = (c) => c.querySelector('small').textContent;
+    const olds = new Map([...box.children].map((c) => [label(c), c]));
+    const order = [...nextBox.children].map((n) => {
+      const o = olds.get(label(n));
+      if (!o) { n.animate([{ opacity: 0, transform: 'scale(0.85)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'ease-out' }); return n; }
+      olds.delete(label(n));
+      if (n.dataset.k) o.dataset.k = n.dataset.k; else delete o.dataset.k;
+      const ob = o.querySelector('b');
+      const nb = n.querySelector('b');
+      ob.style.minWidth = nb.style.minWidth;
+      tweenNumber(ob, nb.textContent);
+      return o;
+    });
+    for (const o of olds.values()) o.remove();
+    box.replaceChildren(...order);
+  }
+
+  function renderEntry() {
+    const html = entryHTML();
+    if (html === null) return closeEntry();
+    entryEl.querySelector('.dex-panel').dataset.type = (dexForm !== null && formsOf(catalog[dexPick])[dexForm]) ? formDef(catalog[dexPick], dexForm).type : catalog[dexPick].type;
+    entryEl.querySelector('.dex-panel').innerHTML = html;
+  }
+
+  function entryHTML() {
     const base = catalog[dexPick];
-    if (!base) return closeEntry();
+    if (!base) return null;
     const isForm = dexForm !== null && Boolean(formsOf(base)[dexForm]);
     const def = isForm ? formDef(base, dexForm) : base;
     const star = dexStar;
@@ -2167,7 +2392,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     ].filter(Boolean).join('');
     const power = isForm
       ? `<div class="dex-power"><h3>${esc(base.ability.name)} ${formsOf(base)[dexForm].flavor ? 'flavour' : 'form'}</h3><p data-k="power">${v.power}</p></div>`
-      : def.ability ? `<div class="dex-power"><h3>${esc(def.ability.name)} <span class="pw-when">${powerText(def, star, catalog).when}</span></h3><p data-k="power">${v.power}</p></div>` : '';
+      : def.ability ? `<div class="dex-power"><h3>${esc(def.ability.name)} <span class="pw-when">${powerText(def, star, catalog).when}</span></h3><p data-k="power">${v.power}</p>${moreBox(v.more, ' data-k="more"')}</div>` : '';
 
     // Related Pokémon: [def, attributes, label, key].
     const related = [];
@@ -2183,10 +2408,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     const relatedHtml = related.map(([d, attrs, label, key]) => `<button class="dex-rel" ${attrs} title="${esc(label)}" aria-label="${esc(label)}">${sprite(d, 'dex-rel-sprite', key)}</button>`).join('');
 
     const tag = isForm ? 'Transformed form' : def.summon ? 'Summoned in battle' : `${def.cost} coins`;
-    entryEl.querySelector('.dex-panel').dataset.type = def.type;
-    entryEl.querySelector('.dex-panel').innerHTML = `
+    return `
       <button id="entry-close" class="ghost" aria-label="Close">✕</button>
-      <section class="dex-detail${fade ? ' refresh' : ''}" data-type="${def.type}">
+      <section class="dex-detail" data-type="${def.type}">
         <div class="dex-hero">
           <div class="dex-figure">
             <div class="dex-art">
