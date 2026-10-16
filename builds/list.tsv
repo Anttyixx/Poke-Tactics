@@ -1,3 +1,4 @@
+81b33c5	dev	2026-10-16 00:24 UTC	Tidier menu: Pokédex button on the main screen; drop Battle, Battle a friend, Training and Pokédex from the menu (0.37.8)
 57a4dfc	dev	2026-10-16 00:16 UTC	Show only the main screen on open: hide the game screen while loading and behind the start screen (0.37.7)
 9881481	dev	2026-10-16 00:09 UTC	Use the coin sprite for coins: coin count, shop prices, team picker and Pokédex (0.37.6)
 4359a81	dev	2026-10-16 00:02 UTC	Hoopa's attack lowered about 5% (75 -&gt; 71 at level 1) (0.37.5)
@@ -27,4 +28,3 @@ c7663b9	dev	2026-10-14 18:54 UTC	Knocked-out Dreepy fly back from the hit, spinn
 910da92	dev	2026-10-14 16:56 UTC	Dreepy damage 15 -&gt; 10 (0.29.1)
 c67ca26	dev	2026-10-14 16:54 UTC	Dreepy fly home in 0.5s; Dragapult needs 3 attacks between pairs (starts charged) (0.29.0)
 83a493a	dev	2026-10-14 16:47 UTC	Dreepy landing: 40 damage + 0.5s stun; Dreepy 15 dmg / 55 HP; Dragapult damage 55; Dreepy back in 3s (0.28.0)
-0868dc9	dev	2026-10-14 16:39 UTC	Dreepy crash into their target: take its square and shove it aside (shields break instead); Dragapult damage 55 -&gt; 45 (0.27.0)

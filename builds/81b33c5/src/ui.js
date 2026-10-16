@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=0868dc9';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=81b33c5';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=0868dc9';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=0868dc9';
+} from './game.js?v=81b33c5';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=81b33c5';
 
 const TICK_MS = 100;
 // Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
@@ -65,6 +65,7 @@ export function powerText(def, star, catalog) {
       return { when: every, text: `Its next attack hits for ${hit}${extra.length ? `${extra.length === 1 ? ' and ' : ', '}${extra.join(' and ')}` : ''}.` };
     }
     case 'bind': {
+      if (p.targeted) return { when: `After ${def.energy} attacks`, text: `${p.pick === 'move' ? 'Holds its full charge until an enemy tries to change squares by itself (a step, or an ability that moves it), then binds that one in rings just before it goes: the move (or moving power, like a dash) is stopped and counts as its first try to break free. Being shoved by an enemy attack never triggers it.' : "Binds the Pokémon it's attacking in rings (if that one is already bound, the nearest enemy that isn't)."} A bound Pokémon still attacks anything in range, but can't walk, zip or dash. The rings stop its next ${vNum(p.breakAfter)} tries to move (each one weakens them), then break. They also snap at once if it's shoved or knocked to another square, or knocked out.` };
       const start = p.startCharged ? 'It starts the fight charged and refills' : 'Its power fills';
       return { when: `After ${def.energy} attacks`, text: `${start} after ${vNum(def.energy)} attacks, then waits until an enemy tries to move. Hoopa binds that Pokémon in place for ${vTime(p.duration)}: it can't walk, zip or dash, but it still attacks anything in range.${p.noRepeat ? ' It never binds the same Pokémon twice in a row.' : ''}${p.chargedForm ? ` While charged it becomes ${esc(p.chargedForm.name)}.` : ''}` };
     }
@@ -72,7 +73,15 @@ export function powerText(def, star, catalog) {
     case 'rage': return { when: 'Every attack', text: `Each attack in a row without moving makes it attack ${vNum(`${p.stackPct}%`)} faster, up to ${vNum(`${p.stackPct * p.maxStacks}%`)} after ${vNum(p.maxStacks)} attacks. Moving resets it.` };
     case 'darts': {
       const name = catalog?.[p.unit]?.name ?? p.unit;
-      return { when: 'Both home', text: `When it attacks with both ${name} at home, it fires them instead: one at each of the ${vNum(p.count)} farthest enemies${p.impactPct ? `, each hitting for ${vDmg(`${p.impactPct}%`)} damage (${vDmg(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.impactPct) / 100)))})` : ''}. Each ${p.displace ? 'crashes into its target, shoving it aside onto a square next to it, then stays' : 'lands beside its target'} and fights.${p.lure ? ` Its target stops attacking whoever it was and must attack the ${name} until it faints.` : ''} A ${name} that faints flies back (${vTime(Math.round(p.returnSec * 10))}). Until both are home, ${esc(def.name)} attacks normally. They come at ${esc(def.name)}'s level.` };
+      const shot = p.perShot ?? p.count;
+      const ready = p.fireDelay !== undefined
+        ? `${vTime(p.fireDelay)} after its counter fills (${vNum(def.energy)} attacks), it fires ${shot === 1 ? `a ${name}` : `${vNum(shot)} ${name}`} on its own, without using an attack (up to ${vNum(p.count)} can be out at once; with all out, it waits, full)`
+        : p.perShot
+        ? `After ${def.energy === 1 ? 'each attack' : `every ${vNum(def.energy)} attacks`}${p.chargeHome ? ` made while a ${name} is home (with all ${vNum(p.count)} out, attacks don't charge it)` : `, if a ${name} is home (up to ${vNum(p.count)} can be out at once)`}, its next action (an attack, or a step toward its target) fires ${shot === 1 ? `a ${name}` : `${vNum(shot)} ${name}`} instead`
+        : `With all ${name} home${def.energy ? ` and its counter full (${vNum(def.energy)} attacks)` : ''}, its next action (an attack, or a step toward its target) fires them instead`;
+      const at = `the farthest enemy${shot === 1 ? '' : 'ies'}${p.outside ? ` outside the ${area(p.outside)} around it (never one right next to it; with no enemy that far it just attacks)` : ''}`;
+      const impact = p.impactDamage ? `, hitting for ${vDmg(show(Math.round(p.impactDamage[lvl] * STAT_SCALE)))}` : p.impactPct ? `, hitting for ${vDmg(`${p.impactPct}%`)} damage (${vDmg(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.impactPct) / 100)))})` : '';
+      return { when: def.energy === 1 ? 'Every other action' : def.energy ? `Every ${def.energy} attacks` : 'All home', text: `${ready}, at ${at}${impact}${p.impactStun ? ` and stunning it for ${vTime(p.impactStun)}` : ''}. It ${p.displace ? 'crashes into its target, shoving it aside onto a square next to it, then stays' : 'lands beside its target'} and fights.${p.lure ? ` Once the stun wears off, its target drops whoever it was attacking and attacks the ${name} right away, until it faints.` : ''} A ${name} that faints flies back (${vTime(Math.round(p.returnSec * 10))}). They come at ${esc(def.name)}'s level.` };
     }
     case 'boost': return { when: every, text: `Charges up the allies directly left, right, in front of and behind it: each gains ${vNum(`+${p.charges}`)} toward its power (Pokémon without a power counter don't benefit).` };
     case 'snipe': return { when: every, text: `The attack also zaps the farthest enemy for ${hit}.` };
@@ -372,7 +381,6 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     if (!btn) return;
     const action = btn.dataset.menu;
     if (action === 'close') closeMenu();
-    else if (action === 'dex') { closeMenu(); openDex(); }
     else if (action === 'new-confirmed') { closeMenu(); onNewGame(); }
     else if (action === 'leave-confirmed') { closeMenu(); onLobby('leave'); }
     else if (action === 'copy-log') copyLog(btn);
@@ -390,9 +398,6 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       confirmRemove = null;
       onFriends(btn.dataset.action, btn.dataset.code);
     }
-    else if (action === 'start-battle') { closeMenu(); onLobby('open'); }
-    else if (action === 'start-friend') { closeMenu(); onLobby('friend'); }
-    else if (action === 'start-training') { closeMenu(); started = true; overlay.classList.remove('start-screen'); showTeamBuilder(); }
     else openMenu(action); // 'main', 'help', 'new'
   });
   // Online pop-ups get their own layer over the start screen (see showLobby).
@@ -418,6 +423,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     if (btn?.dataset.copy) return copyText(btn.dataset.copy, btn);
     if (btn?.id === 'share-link') return navigator.share?.({ title: 'Poke Tactics', text: `Battle me in Poke Tactics! Code: ${btn.dataset.code}`, url: btn.dataset.url }).catch(() => {});
     if (btn?.id === 'start-menu') return openMenu('main');
+    if (btn?.id === 'start-dex') return openDex();
     if (btn?.id === 'profile-chip') return openMenu('profile');
     const info = e.target.closest('[data-dex-info]');
     if (info) return openDex(info.dataset.dexInfo); // a team card's ⓘ: full stats and power
@@ -607,14 +613,10 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       // From the start screen: everything a player can start from here.
       panel.innerHTML = `${close}<h1>Menu</h1>
         <div class="menu-list">
-          <button data-menu="start-battle"><span>⚔</span><div>Battle<small>Play the next player looking for a battle</small></div></button>
-          <button data-menu="start-friend"><span>✉</span><div>Battle a friend<small>Send a battle request with their friend code</small></div></button>
-          <button data-menu="start-training"><span>▶</span><div>Training<small>Play against the bot</small></div></button>
           <button data-menu="friends" class="${getFriends()?.incoming.length ? 'unread' : ''}"><span>♥</span><div>Friends<small>${friendsSub()}</small></div></button>
           <button data-menu="profile"><span>☺</span><div>Profile<small>Your name, picture and stats</small></div></button>
           <button data-menu="news" class="${hasUnread() ? 'unread' : ''}"><span>★</span><div>What's new<small>${esc(changelog[0]?.title ?? 'Updates to the game')}</small></div></button>
           <button data-menu="help"><span>?</span><div>How to play<small>Rules, controls and keys</small></div></button>
-          <button data-menu="dex"><span>◎</span><div>Pokédex<small>Every Pokémon's stats and power</small></div></button>
           ${getLastLog() ? '<button data-menu="lastlog"><span>⧉</span><div>Last online match log<small>Copy it to look into a dropped connection</small></div></button>' : ''}
         </div>
         ${versionText ? `<p class="menu-version">${esc(versionText)}</p>` : ''}`;
@@ -624,7 +626,6 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
           <button data-menu="close"><span>▶</span><div>Resume</div></button>
           <button data-menu="news" class="${hasUnread() ? 'unread' : ''}"><span>★</span><div>What's new<small>${esc(changelog[0]?.title ?? 'Updates to the game')}</small></div></button>
           <button data-menu="help"><span>?</span><div>How to play<small>Rules, controls and keys</small></div></button>
-          <button data-menu="dex"><span>◎</span><div>Pokédex<small>Every Pokémon's stats and power</small></div></button>
           <button data-menu="log"><span>⧉</span><div>Match log<small>Copy every move this match, with notes</small></div></button>
           <button data-menu="friends" class="${getFriends()?.incoming.length ? 'unread' : ''}"><span>♥</span><div>Friends<small>${friendsSub()}</small></div></button>
           <button data-menu="profile"><span>☺</span><div>Profile<small>Your name, picture and stats</small></div></button>
@@ -1192,6 +1193,25 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   }
 
   // Fly a projectile from one square to another; returns its flight time in ms.
+  // A white streak drawn behind something shooting from `from` to `to` (view
+  // squares), growing with it and then fading, like a trail through the air.
+  let streakId = 0;
+  function streak(from, to, ms, easing) {
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('class', 'streak');
+    svg.setAttribute('viewBox', `0 0 ${COLS * 100} ${ROWS * 100}`);
+    svg.setAttribute('preserveAspectRatio', 'none');
+    const [x1, y1, x2, y2] = [(from.x + 0.5) * 100, (from.y + 0.5) * 100, (to.x + 0.5) * 100, (to.y + 0.5) * 100];
+    const id = `streak${++streakId}`;
+    svg.innerHTML = `<defs><linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.7" stop-color="#fff" stop-opacity="0.55"/><stop offset="1" stop-color="#fff" stop-opacity="0.95"/></linearGradient></defs>`
+      + `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="url(#${id})" stroke-width="7" stroke-linecap="round" vector-effect="non-scaling-stroke" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1"/>`;
+    layer.append(svg);
+    const line = svg.querySelector('line');
+    line.animate([{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], { duration: ms, easing, fill: 'forwards' });
+    svg.animate([{ opacity: 1 }, { opacity: 1, offset: 0.55 }, { opacity: 0 }], { duration: ms + 380 / speed }).onfinish = () => svg.remove();
+  }
+
   function projectile(from, to, color, big) {
     const dx = to.x - from.x;
     const dy = to.y - from.y;
@@ -1317,26 +1337,68 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         if (!animate) break;
         const p = viewPos(pal.x, pal.y);
         if (ev.dart) {
-          // Dragapult's Dreepy: flies from Dragapult to where it lands (onto its
-          // target, which is shoved aside when it arrives).
+          // Dragapult's Dreepy: shot out of Dragapult like Tapu Koko's dash, a
+          // fast straight streak with sparks behind it, small at first and full
+          // size as it lands (onto its target, which is shoved aside on arrival).
           pal.el.style.visibility = 'hidden';
-          const ms = projectile(at(), p, fxColor(pal.unitId), true);
+          const from = at();
+          const dx = p.x - from.x;
+          const dy = p.y - from.y;
+          const squares = Math.max(Math.abs(dx), Math.abs(dy));
+          const ms = Math.max(160, 55 * squares) / speed;
+          const color = fxColor(pal.unitId);
+          const flyer = document.createElement('div');
+          flyer.className = 'unit sprite-unit dart-flyer dashing';
+          flyer.style.setProperty('--fx', color);
+          flyer.dataset.facing = facingFor(Math.abs(dx) >= Math.abs(dy) ? dx : 0, Math.abs(dx) >= Math.abs(dy) ? 0 : dy, 'down');
+          flyer.innerHTML = `<div class="body"><div class="sprite" style="background-image:url('${catalog[pal.unitId]?.sprite ?? ''}')"></div></div>`;
+          place(flyer, from.x, from.y);
+          layer.append(flyer);
+          const ease = 'cubic-bezier(.6,0,.2,1)';
+          flyer.animate([{ translate: '0 0', scale: '0.35' }, { translate: `${dx * 100}% ${dy * 100}%`, scale: '1' }], { duration: ms, easing: ease }).onfinish = () => flyer.remove();
+          streak(from, p, ms, ease);
+          // Its hit, stun and shove all land when it arrives.
+          ctx.srcDelay.set(pal.id, ms);
+          ctx.hitDelay.set(ev.target, ms);
           ctx.hitDelay.set(pal.id, ms);
           later(ms, () => { pal.el.style.visibility = ''; play(pal.el, 'spawned', 300); fx(p.x, p.y, 'burst', fxColor(pal.unitId), 1.2); });
         } else { play(pal.el, 'spawned', 400); fx(p.x, p.y, 'ring', fxColor(pal.unitId), 1.3); }
         break;
       }
-      case 'dartReturn': { // a fainted Dreepy drifts slowly back to Dragapult
+      case 'dartReturn': { // a fainted Dreepy is knocked away by the hit, then arcs back to Dragapult
         if (!animate) break;
-        const ghost = document.createElement('div');
-        ghost.className = 'unit sprite-unit dart-ghost';
-        ghost.dataset.facing = 'down';
-        ghost.innerHTML = `<div class="body"><div class="sprite" style="background-image:url('${catalog[ev.unitId]?.sprite ?? ''}')"></div></div>`;
+        const dreepy = actors.get(ev.dreepy);
+        const hitter = dreepy?.lastHitBy;
         const from = viewPos(ev.fromX, ev.fromY);
-        const to = at();
-        place(ghost, from.x, from.y);
-        layer.append(ghost);
-        ghost.animate([{ translate: '0 0' }, { translate: `${(to.x - from.x) * 100}% ${(to.y - from.y) * 100}%` }], { duration: (ev.duration * TICK_MS) / speed, easing: 'linear' }).onfinish = () => ghost.remove();
+        const home = at(); // Dragapult, in squares
+        const ms = Math.max(ev.duration * TICK_MS, 500) / speed;
+        later(ctx.hitDelay.get(ev.dreepy) ?? 0, () => {
+          const ghost = document.createElement('div');
+          ghost.className = 'unit sprite-unit dart-ghost';
+          ghost.dataset.facing = 'down';
+          ghost.innerHTML = `<div class="body"><div class="sprite" style="background-image:url('${catalog[ev.unitId]?.sprite ?? ''}')"></div></div>`;
+          place(ghost, from.x, from.y);
+          layer.append(ghost);
+          // Knocked a square away from whoever hit it (straight up if unknown)...
+          const by = hitter ? viewPos(hitter.x, hitter.y) : { x: from.x, y: from.y + 1 };
+          let dx = from.x - by.x;
+          let dy = from.y - by.y;
+          const len = Math.hypot(dx, dy) || 1;
+          dx = (dx / len) * 0.9;
+          dy = (dy / len) * 0.9;
+          // ...then a curve up and over back home (a quadratic arc).
+          const end = { x: home.x - from.x, y: home.y - from.y };
+          const peak = { x: (dx + end.x) / 2, y: Math.min(dy, end.y) - 1.2 - Math.hypot(end.x - dx, end.y - dy) * 0.25 };
+          const frames = [{ offset: 0, translate: '0 0', rotate: '0deg', opacity: 0.6 }];
+          frames.push({ offset: 0.3, translate: `${dx * 100}% ${dy * 100}%`, rotate: `${dx >= 0 ? 200 : -200}deg`, opacity: 0.45, easing: 'ease-in-out' });
+          for (let k = 1; k <= 8; k++) {
+            const q = k / 8;
+            const x = (1 - q) ** 2 * dx + 2 * (1 - q) * q * peak.x + q ** 2 * end.x;
+            const y = (1 - q) ** 2 * dy + 2 * (1 - q) * q * peak.y + q ** 2 * end.y;
+            frames.push({ offset: 0.3 + 0.7 * q, translate: `${x * 100}% ${y * 100}%`, rotate: `${(dx >= 0 ? 200 : -200) + (dx >= 0 ? 160 : -160) * q}deg`, opacity: 0.45 - 0.25 * q });
+          }
+          ghost.animate(frames, { duration: ms, easing: 'linear' }).onfinish = () => ghost.remove();
+        });
         break;
       }
       case 'taunt': { // Amoonguss: this Pokémon must attack it for a while
@@ -1510,6 +1572,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         const delay = animate ? ctx.srcDelay.get(ev.src) ?? 0 : 0;
         if (delay) ctx.hitDelay.set(a.id, delay);
         const src = actors.get(ev.src);
+        if (src) a.lastHitBy = src; // which way it flies if this knocks it out (Dreepy)
         later(delay, () => {
           if (newest()) {
             a.hp = ev.hp;
@@ -1573,10 +1636,18 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         });
         break;
       }
+      case 'bindStrain': // Hoopa's rings: a try to move weakens them
+        if (animate) { floatText(a, `${ev.tries}/${ev.of}`, 'bind'); play(a.el, 'strain', 300); }
+        break;
+      case 'unbind': // Hoopa's rings break (broken free, or knocked away)
+        a.boundUntil = 0;
+        a.el.classList.remove('bound');
+        if (animate && ev.why === 'broke') { floatText(a, 'Broke free!', 'bind'); fx(at().x, at().y, 'burst', '#ff8ad8', 1.1); }
+        break;
       case 'bind': { // Hoopa: rings hold the Pokémon in place for a while
         const from = actors.get(ev.by);
         const wear = () => {
-          a.boundUntil = ev.t + ev.duration;
+          a.boundUntil = ev.duration ? ev.t + ev.duration : Infinity; // a targeted bind lasts until it breaks
           a.el.classList.add('bound');
         };
         if (!animate) { wear(); break; }
@@ -1646,7 +1717,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       <span class="info-btn" data-dex-info="${id}" role="button" aria-label="${esc(def.name)} info">i</span>
       <span class="dex-card-art">${portrait(def)}</span>
       <b>${esc(def.name)}</b>
-      <small>${def.cost} 🪙 · ${def.type[0].toUpperCase() + def.type.slice(1)}</small>
+      <small>${def.cost} <i class="coin-icon" aria-label="coins"></i> · ${def.type[0].toUpperCase() + def.type.slice(1)}</small>
     </button>`;
   }
 
@@ -1668,7 +1739,10 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
           <button id="vs-friend" class="battle-btn training-btn">Battle a friend</button>
           <button id="battle" class="battle-btn training-btn">Training</button>
         </div>
-        <button id="start-menu" class="icon-btn start-menu${hasUnread() ? ' unread' : ''}" title="Menu (M)" aria-label="Menu">${ICON_MENU}</button>
+        <div class="start-corner">
+          <button id="start-dex" class="icon-btn dex-button" title="Every Pokémon's stats (P)">${ICON_DEX}<span class="label-text">Pokédex</span></button>
+          <button id="start-menu" class="icon-btn start-menu${hasUnread() ? ' unread' : ''}" title="Menu (M)" aria-label="Menu">${ICON_MENU}</button>
+        </div>
         ${profileChip()}
         ${versionText ? `<div class="start-version">${esc(versionText)}</div>` : ''}
       </div>`);
@@ -1961,7 +2035,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     return `<button class="dex-card" data-dex="${id}" data-type="${def.type}">
       <span class="dex-card-art">${portrait(def)}</span>
       <b>${esc(def.name)}</b>
-      <small>${def.summon ? 'Summon' : `${def.cost} 🪙`} · ${typeName(def.type)}</small>
+      <small>${def.summon ? 'Summon' : `${def.cost} <i class="coin-icon" aria-label="coins"></i>`} · ${typeName(def.type)}</small>
     </button>`;
   }
 

@@ -1267,7 +1267,15 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   position: fixed; z-index: 2; margin: 0; min-width: 0;
   top: max(14px, env(safe-area-inset-top)); right: max(14px, env(safe-area-inset-right));
 }
-#overlay:not(.start-screen) .start-menu, #overlay:not(.start-screen) .start-version { display: none; }
+#overlay:not(.start-screen) .start-menu, #overlay:not(.start-screen) .start-version, #overlay:not(.start-screen) .start-corner { display: none; }
+/* Start screen: Pokédex and menu buttons together in the top right. */
+#overlay .start-corner {
+  position: fixed; z-index: 2; display: flex; gap: 8px;
+  top: max(14px, env(safe-area-inset-top)); right: max(14px, env(safe-area-inset-right));
+}
+#overlay .start-corner .start-menu { position: static; }
+#overlay .start-corner button { margin: 0; min-width: 0; }
+@media (max-width: 520px) { #overlay .start-corner .label-text { display: none; } }
 .start-version {
   position: fixed; z-index: 2;
   left: max(14px, env(safe-area-inset-left)); bottom: max(12px, env(safe-area-inset-bottom));
