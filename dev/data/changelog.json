@@ -1,5 +1,15 @@
 [
   {
+    "id": "2026-10-16-star-form-text",
+    "version": "0.43.3",
+    "date": "2026-10-16",
+    "title": "Shorter form descriptions",
+    "changes": [
+      { "pokemon": "minior", "kind": "change", "text": "Star Form's Pokédex entry now only says what it does differently: it zips straight to its target instead of walking, and every 10 attacks zips to a different enemy. How it transforms is on Minior's own entry." },
+      { "pokemon": "greninja", "kind": "change", "text": "Ash-Greninja's entry no longer repeats how Greninja transforms; its stats say it all." }
+    ]
+  },
+  {
     "id": "2026-10-16-dex-sort",
     "version": "0.43.2",
     "date": "2026-10-16",

@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=dccde69';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=10b3ea9';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=dccde69';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=dccde69';
+} from './game.js?v=10b3ea9';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=10b3ea9';
 
 const TICK_MS = 100;
 // Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
@@ -2353,13 +2353,10 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         guard: `Shields the ally most enemies are attacking for ${vTime(p.duration)}: it takes ${vNum(`${f.guardPct}%`)} less damage, and the first stun or knockback only breaks the shield.`,
       }[f.flavor] + ` ${esc(formOf.name)} keeps this form until its next Sweet Treat.`;
     } else if (f) {
-      power = [
-        `${esc(formOf.name)} stays in this form for the rest of the fight.`,
-        !f.hp && `It keeps ${esc(formOf.name)}'s HP.`,
-        f.shockwave && `As it changes, a shock wave stuns every enemy in the ${area(f.shockwave.radius)} around it for ${vTime(f.shockwave.stun)}.`,
-        f.blink && 'It doesn\'t walk: it zips straight to the square beside its target.',
-        f.hop && `Every ${vNum(f.energy)} attacks it zips to a different enemy.`,
-      ].filter(Boolean).join(' ');
+      // Only what the form does differently: how and how long it changes is
+      // already on the base Pokémon's ability.
+      const moves = [f.blink && 'zips straight to its target instead of walking', f.hop && `every ${vNum(f.energy)} attacks zips to a different enemy`].filter(Boolean);
+      power = moves.length ? `It ${moves.join(', and ')}.` : '';
     } else if (def.ability) ({ text: power, more = '' } = powerText(def, star, catalog) ?? { text: '' });
     if (formOf) power = linkNames(power, [{ name: formOf.name, attrs: `data-dex="${idOf(formOf, catalog)}"` }]);
     // Numbers in the text get their own spans so a level change can count them.
@@ -2579,7 +2576,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       st.shield && chip('shield', 'Shield', v.shield, 'shield'),
     ].filter(Boolean).join('');
     const power = isForm
-      ? `<div class="dex-power"><h3>${esc(base.ability.name)} ${formsOf(base)[dexForm].flavor ? 'flavour' : 'form'}</h3><p data-k="power">${v.power}</p></div>`
+      ? !v.power ? '' : `<div class="dex-power"><h3>${esc(base.ability.name)} ${formsOf(base)[dexForm].flavor ? 'flavour' : 'form'}</h3><p data-k="power">${v.power}</p></div>`
       : def.ability ? `<div class="dex-power">${abilityHead(def.ability.name, powerText(def, star, catalog).when, v.more)}${abilityBody(v.power, v.more, { keyed: true })}</div>` : '';
 
     // Related Pokémon: [def, attributes, label, key].
