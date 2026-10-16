@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=5bc6cd9';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=3512198';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=5bc6cd9';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=5bc6cd9';
+} from './game.js?v=3512198';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=3512198';
 
 const TICK_MS = 100;
 // Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
@@ -1654,7 +1654,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         break;
       }
       case 'morphStart': { // Minior (immune) or Ditto changing form
-        // Minior's Rock form breaking: Star Form's own, full HP bar.
+        // A form that starts with its own HP: a fresh, full HP bar.
         if (ev.maxHp && newest()) { a.maxHp = ev.maxHp; a.hp = ev.hp; a.shield = 0; later(ctx.hitDelay.get(a.id) ?? 0, () => bars(a)); }
         if (!animate) break;
         const immune = catalog[a.unitId].ability?.kind === 'transform';

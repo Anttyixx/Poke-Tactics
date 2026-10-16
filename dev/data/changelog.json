@@ -1,5 +1,16 @@
 [
   {
+    "id": "2026-10-16-minior-low-hp",
+    "version": "0.42.0",
+    "date": "2026-10-16",
+    "title": "Minior transforms at 35% HP",
+    "intro": "Minior now works like the other Pokémon that transform: one HP bar, and when it faints, it really faints.",
+    "changes": [
+      { "pokemon": "minior", "kind": "change", "text": "Shining Star now goes off at 35% HP instead of when Minior is knocked out. Rock form becomes Star Form and keeps the HP it has left." },
+      { "pokemon": "minior", "kind": "change", "text": "Rock form's HP now covers both forms: 1700 / 2890 / 4913 / 8330 HP, about the same as the two forms' HP added together before. Star Form no longer gets its own HP." }
+    ]
+  },
+  {
     "id": "2026-10-16-stat-shape-scale",
     "version": "0.41.0",
     "date": "2026-10-16",

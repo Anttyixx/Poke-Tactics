@@ -1,3 +1,4 @@
+3512198	dev	2026-10-16 03:46 UTC	Minior transforms at 35% HP with one shared HP pool (0.42.0)
 5bc6cd9	dev	2026-10-16 03:09 UTC	Stat shapes share one scale across Pokémon and levels (0.41.0)
 27bf768	dev	2026-10-16 02:54 UTC	Use the Oxford comma in ability descriptions (0.40.5)
 db441e1	dev	2026-10-16 02:18 UTC	Show the key numbers in short ability descriptions (0.40.4)
@@ -27,4 +28,3 @@ cd50a55	dev	2026-10-15 04:41 UTC	Dreepy landing hit doubled: 100/120/144/172 (0.
 692f7ed	dev	2026-10-15 04:35 UTC	Dragapult fires a Dreepy on its own 0.5s after its power fills (no attack used); attacks every 0.9s (0.34.1)
 6029e64	dev	2026-10-15 04:17 UTC	Dragapult: 3-charge power fires one Dreepy per full charge (max 2 out), attacks every 0.7s (0.34.0)
 4c243a7	dev	2026-10-15 03:29 UTC	Saved Dragapult version points at commit 45c1684
-f8c4cb9	dev	2026-10-15 03:29 UTC	Save Dragapult + Dreepy as dragapult-v1 (stats, rules, win rates) to restore later

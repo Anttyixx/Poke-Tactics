@@ -259,10 +259,10 @@ test a set of changes together. Team styles to pit against each other live in `A
     enemies are attacking: 40% less damage, and the first stun or shove (knockback, Psywave) that
     would land breaks the shield instead, blocking anything else in that same tick. Treats land
     at the end of the tick. Shielded Pokémon show a bubble.
-  - Minior, **Shining Star**: two lives. Rock form is a slow, soft-hitting wall (very slow, 30 damage
-    every 3.0s, 1100 HP). When it would be knocked out it doesn't faint: at the end of that tick it gets
-    Star Form's own HP (600), spends 0.5s transforming, immune to everything (damage, stuns, knockbacks,
-    sudden death), then becomes Star Form for the rest of the fight. Changing sends out a shock wave
+  - Minior, **Shining Star**: Rock form is a slow, soft-hitting wall (very slow, 30 damage every 3.0s,
+    1700 HP). At 35% HP (at the end of that tick) it spends 0.5s transforming, immune to everything
+    (damage, stuns, knockbacks, sudden death), then becomes Star Form for the rest of the fight, keeping
+    the HP it has left. Being knocked out is a real knockout, in either form. Changing sends out a shock wave
     that stuns every enemy in the 3x3 around it for 1s. Star Form attacks every 0.3s for 20 and doesn't
     walk: it zips straight to the open square beside its target (if all are taken, it walks). Its own
     ability, every 10 attacks: it picks a different enemy (a seeded pick among those with a free square
