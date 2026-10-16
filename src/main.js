@@ -466,3 +466,5 @@ startPresence();
 // An online match this browser was in (before a reload) can be picked back up.
 const unfinished = serverUrl() ? loadSession() : null;
 if (unfinished) ui.showLobby('resume', { code: unfinished.code, opponent: unfinished.opponent });
+// The first screen is drawn: show the page (index.html keeps it hidden while loading).
+document.documentElement.classList.remove('booting');

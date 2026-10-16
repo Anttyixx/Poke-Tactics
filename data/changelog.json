@@ -1,5 +1,14 @@
 [
   {
+    "id": "2026-10-16-clean-start",
+    "version": "0.37.7",
+    "date": "2026-10-16",
+    "title": "Clean main screen on open",
+    "changes": [
+      { "kind": "fix", "text": "Opening the game no longer flashes the battle board, shop and top bar while it loads, or behind the main screen. You see only the main screen." }
+    ]
+  },
+  {
     "id": "2026-10-16-coin-sprite",
     "version": "0.37.6",
     "date": "2026-10-16",
