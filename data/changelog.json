@@ -1,5 +1,15 @@
 [
   {
+    "id": "2026-10-16-stat-shape-scale",
+    "version": "0.41.0",
+    "date": "2026-10-16",
+    "title": "Stat shapes you can compare",
+    "changes": [
+      { "kind": "change", "text": "The Pokédex stat shape now uses one scale for every Pokémon at every level, so you can compare any two shapes at a glance, even at different levels." },
+      { "kind": "fix", "text": "The stat shape always grows when a Pokémon levels up. Before, some stats could shrink on a level up even though they went up." }
+    ]
+  },
+  {
     "id": "2026-10-16-oxford-comma",
     "version": "0.40.5",
     "date": "2026-10-16",
