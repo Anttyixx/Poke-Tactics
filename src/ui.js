@@ -191,12 +191,46 @@ if (typeof document !== 'undefined') {
   document.addEventListener('click', (e) => {
     if (!e.target.closest?.('.pw-toggle')) return;
     moreOpen = !moreOpen;
-    for (const box of document.querySelectorAll('.pw-text')) {
-      box.classList.toggle('full', moreOpen);
-      box.querySelector('.pw-toggle').setAttribute('aria-expanded', String(moreOpen));
-      box.querySelector(moreOpen ? '.pw-full' : '.pw-short').animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: 'ease-out' });
-    }
+    for (const box of document.querySelectorAll('.pw-text')) swapAbilityText(box);
   });
+}
+// The box grows or shrinks to the new text while the old text drifts up and
+// fades, and the new one unrolls from the top, line by line as the box opens.
+function swapAbilityText(box) {
+  const btn = box.querySelector('.pw-toggle');
+  btn.setAttribute('aria-expanded', String(moreOpen));
+  const calm = !box.animate || !box.offsetParent || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  for (const a of box.getAnimations?.({ subtree: true }) ?? []) a.finish();
+  box.querySelector('.pw-ghost')?.remove();
+  const outText = box.querySelector(moreOpen ? '.pw-short' : '.pw-full');
+  const from = box.offsetHeight;
+  box.classList.toggle('full', moreOpen);
+  if (calm) return;
+  const to = box.offsetHeight;
+  const inText = box.querySelector(moreOpen ? '.pw-full' : '.pw-short');
+  const ease = 'cubic-bezier(0.22, 1, 0.36, 1)';
+  const ms = Math.min(520, 280 + Math.abs(to - from) * 0.8);
+  box.style.overflow = 'hidden'; // only while it resizes, so the button's focus ring shows
+  box.animate([{ height: `${from}px` }, { height: `${to}px` }], { duration: ms, easing: ease }).onfinish = () => { box.style.overflow = ''; };
+  // The old text, as a ghost on top, leaving.
+  const ghost = outText.cloneNode(true);
+  ghost.classList.add('pw-ghost');
+  ghost.removeAttribute('data-k');
+  ghost.style.width = `${inText.offsetWidth}px`;
+  box.prepend(ghost);
+  ghost.animate([
+    { opacity: 1, transform: 'none', filter: 'blur(0)' },
+    { opacity: 0, transform: 'translateY(-6px)', filter: 'blur(3px)' },
+  ], { duration: 200, easing: 'ease-in', fill: 'forwards' }).onfinish = () => ghost.remove();
+  inText.animate([
+    { opacity: 0, transform: 'translateY(8px)', filter: 'blur(3px)', clipPath: 'inset(0 0 100% 0)' },
+    { opacity: 1, transform: 'none', filter: 'blur(0)', clipPath: 'inset(0 0 0 0)' },
+  ], { duration: ms + 60, delay: 70, easing: ease, fill: 'backwards' });
+  // The new numbers light up once they are in.
+  inText.querySelectorAll('.v').forEach((v, i) => v.animate([
+    { textShadow: '0 0 0 transparent' }, { textShadow: '0 0 10px currentColor' }, { textShadow: '0 0 0 transparent' },
+  ], { duration: 600, delay: 200 + i * 60, easing: 'ease-out' }));
+  btn.animate([{ transform: 'scale(0.92)' }, { transform: 'scale(1.04)' }, { transform: 'none' }], { duration: 260, easing: ease });
 }
 // `lead` goes before either text (the name in the info panel); `keyed` marks
 // the texts so a level change in the Pokédex can count their numbers.

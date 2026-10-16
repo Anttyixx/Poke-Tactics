@@ -1,5 +1,14 @@
 [
   {
+    "id": "2026-10-16-ability-swap-animation",
+    "version": "0.40.2",
+    "date": "2026-10-16",
+    "title": "Smoother ability details",
+    "changes": [
+      { "kind": "change", "text": "Switching between the short and full ability text is animated: the box smoothly grows or shrinks, the old text drifts away and the new text unrolls from the top, with its key numbers lighting up." }
+    ]
+  },
+  {
     "id": "2026-10-16-ability-swap",
     "version": "0.40.1",
     "date": "2026-10-16",
