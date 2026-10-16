@@ -98,11 +98,12 @@ function abilityTexts(def, star, catalog) {
   const lvl = star ?? 0;
   const dmg = powerDamage(def, lvl);
   const hit = p.damagePct ? `${vDmg(`${p.damagePct}%`)} damage (${vDmg(show(dmg))})` : '';
+  const pct = p.damagePct ? `${vDmg(`${p.damagePct}%`)} damage` : ''; // the short texts give just the share
   const every = `Every ${def.energy} attacks`;
   switch (p.kind) {
     case 'empower': {
-      if (p.dash) return { when: every, text: `Dashes to the farthest enemy and hits it hard, stunning everything in its path.`, more: `Dashes in a straight line to the farthest enemy, immune to everything on the way, and hits it for ${hit}. The target and every enemy it passes through are stunned for ${vTime(p.stun)}.` };
-      if (p.teleport) return { when: every, text: `Teleports next to the farthest enemy and hits it hard.`, more: `Teleports next to the farthest enemy and hits it for ${hit}${p.lifestealPct ? `, healing for ${vHeal(`${p.lifestealPct}%`)} of the damage dealt` : ''}.` };
+      if (p.dash) return { when: every, text: `Dashes to the farthest enemy and deals ${pct} to it, stunning every enemy in its path.`, more: `Dashes in a straight line to the farthest enemy, immune to everything on the way, and hits it for ${hit}. The target and every enemy it passes through are stunned for ${vTime(p.stun)}.` };
+      if (p.teleport) return { when: every, text: `Teleports next to the farthest enemy and deals ${pct} to it.`, more: `Teleports next to the farthest enemy and hits it for ${hit}${p.lifestealPct ? `, healing for ${vHeal(`${p.lifestealPct}%`)} of the damage dealt` : ''}.` };
       const extra = [
         p.knockback && `knocks the target back ${vNum(p.knockback)} squares`,
         p.stun && `stuns ${p.knockback ? 'it' : 'the target'} for ${vTime(p.stun)}`,
@@ -110,7 +111,7 @@ function abilityTexts(def, star, catalog) {
       ].filter(Boolean);
       const short = [p.knockback && 'knocks the target back', p.stun && (p.knockback ? 'stuns it' : 'stuns the target'), p.lifestealPct && 'heals it'].filter(Boolean);
       const join = (xs) => (xs.length ? `${xs.length === 1 ? ' and ' : ', '}${xs.join(' and ')}` : '');
-      return { when: every, text: `Its next attack hits much harder${join(short)}.`, more: `Its next attack hits for ${hit}${join(extra)}.` };
+      return { when: every, text: `Its next attack deals ${pct}${join(short)}.`, more: `Its next attack hits for ${hit}${join(extra)}.` };
     }
     case 'bind': {
       if (p.targeted) {
@@ -122,7 +123,7 @@ function abilityTexts(def, star, catalog) {
       return { when: `After ${def.energy} attacks`, text: `Pins the next enemy that tries to move in place for ${vTime(p.duration)}.`, more: `${start} after ${vNum(def.energy)} attacks, then waits until an enemy tries to move. Hoopa binds that Pokémon in place for ${vTime(p.duration)}: it can't walk, zip or dash, but it still attacks anything in range.${p.noRepeat ? ' It never binds the same Pokémon twice in a row.' : ''}${p.chargedForm ? ` While charged it becomes ${esc(p.chargedForm.name)}.` : ''}` };
     }
     case 'taunt': return { when: every, text: `Makes a nearby enemy attack ${esc(def.name)} instead of its friends.`, more: `Spreads its spores: the hardest-hitting enemy within the ${area(p.radius)} around it that is attacking someone else must attack ${esc(def.name)} for ${vTime(p.duration)}.` };
-    case 'rage': return { when: 'Every attack', text: `Attacks faster with every hit while it stands still.`, more: `Each attack in a row without moving makes it attack ${vNum(`${p.stackPct}%`)} faster, up to ${vNum(`${p.stackPct * p.maxStacks}%`)} after ${vNum(p.maxStacks)} attacks. Moving resets it.` };
+    case 'rage': return { when: 'Every attack', text: `Attacks faster with every hit while it stands still, up to ${vNum(`${p.stackPct * p.maxStacks}%`)} faster.`, more: `Each attack in a row without moving makes it attack ${vNum(`${p.stackPct}%`)} faster, up to ${vNum(`${p.stackPct * p.maxStacks}%`)} after ${vNum(p.maxStacks)} attacks. Moving resets it.` };
     case 'darts': {
       const name = catalog?.[p.unit]?.name ?? p.unit;
       const shot = p.perShot ?? p.count;
@@ -135,11 +136,11 @@ function abilityTexts(def, star, catalog) {
       const impact = p.impactDamage ? `, hitting for ${vDmg(show(Math.round(p.impactDamage[lvl] * STAT_SCALE)))}` : p.impactPct ? `, hitting for ${vDmg(`${p.impactPct}%`)} damage (${vDmg(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.impactPct) / 100)))})` : '';
       return {
         when: def.energy === 1 ? 'Every other action' : def.energy ? `Every ${def.energy} attacks` : 'All home',
-        text: `Launches ${shot === 1 ? `a ${name}` : `${name}`} at a far-away enemy. It crashes in${p.impactStun ? ', stuns its target' : ''} and stays to fight.`,
+        text: `Launches ${shot === 1 ? `a ${name}` : `${name}`} at a far-away enemy. It crashes in${impact ? ` for ${impact.replace(/^, hitting for /, '').replace(/ damage .*/, '')} damage` : ''}${p.impactStun ? ', stuns its target' : ''} and stays to fight.`,
         more: `${ready}, at ${at}${impact}${p.impactStun ? ` and stunning it for ${vTime(p.impactStun)}` : ''}. It ${p.displace ? 'crashes into its target, shoving it aside onto a square next to it, then stays' : 'lands beside its target'} and fights.${p.lure ? ` Once the stun wears off, its target drops whoever it was attacking and attacks the ${name} right away, until it faints.` : ''} A ${name} that faints flies back (${vTime(Math.round(p.returnSec * 10))}). They come at ${esc(def.name)}'s level.`,
       };
     }
-    case 'boost': return { when: every, text: `Charges up the abilities of the allies next to it.`, more: `Charges up the allies directly left, right, in front of and behind it: each gains ${vNum(`+${p.charges}`)} toward its ability (Pokémon without an ability counter don't benefit).` };
+    case 'boost': return { when: every, text: `Gives the allies next to it ${vNum(`+${p.charges}`)} charge toward their abilities.`, more: `Charges up the allies directly left, right, in front of and behind it: each gains ${vNum(`+${p.charges}`)} toward its ability (Pokémon without an ability counter don't benefit).` };
     case 'snipe': return { when: every, text: `The attack also zaps the farthest enemy for ${hit}.` };
     case 'summon': {
       const name = catalog?.[p.unit]?.name ?? p.unit;
@@ -147,15 +148,15 @@ function abilityTexts(def, star, catalog) {
       const level = p.summonStar !== undefined ? `They are always ${levelMark(p.summonStar)}.` : `They come at ${def.name}'s level.`;
       return { when: every, text: `Summons ${vNum(n)} ${name} to fight beside it.`, more: `Summons ${vNum(n)} ${name} beside it. ${level}` };
     }
-    case 'stealth': return { when: every, text: `Turns invisible for a while${p.hastePct ? ' and attacks faster' : ''}.`, more: `Turns invisible for ${vTime(p.duration)}${p.hastePct ? ` and attacks ${vNum(`${p.hastePct}%`)} faster` : ''}. Enemies can't target or follow it while it's invisible.` };
+    case 'stealth': return { when: every, text: `Turns invisible for ${vTime(p.duration)}${p.hastePct ? ` and attacks ${vNum(`${p.hastePct}%`)} faster` : ''}.`, more: `Turns invisible for ${vTime(p.duration)}${p.hastePct ? ` and attacks ${vNum(`${p.hastePct}%`)} faster` : ''}. Enemies can't target or follow it while it's invisible.` };
     case 'haste': return { when: every, text: `Attacks ${vNum(`${p.hastePct}%`)} faster for ${vTime(p.duration)}.` };
-    case 'quake': return { when: every, text: `Shakes the whole board, hurting${p.stun ? ' and stunning' : ''} every enemy.`, more: `Every enemy takes ${hit}${p.stun ? ` and is stunned for ${vTime(p.stun)}` : ''}.` };
-    case 'chill': return { when: 'Every attack', text: `Slows down the enemy it hits.`, more: `Chills the target for ${vTime(p.duration)}: it attacks and moves ${vNum(`${p.slowPct}%`)} slower. Another hit restarts the timer.` };
+    case 'quake': return { when: every, text: `Shakes the whole board, dealing ${pct} to every enemy${p.stun ? ' and stunning them' : ''}.`, more: `Every enemy takes ${hit}${p.stun ? ` and is stunned for ${vTime(p.stun)}` : ''}.` };
+    case 'chill': return { when: 'Every attack', text: `Slows the enemy it hits by ${vNum(`${p.slowPct}%`)}.`, more: `Chills the target for ${vTime(p.duration)}: it attacks and moves ${vNum(`${p.slowPct}%`)} slower. Another hit restarts the timer.` };
     case 'splashHeal': {
       const where = p.radius ? `in the ${area(p.radius)} around its target` : 'directly left, right, above and below its target';
-      return { when: 'Every attack', text: `Each attack also heals your Pokémon near its target.`, more: `Heals your Pokémon ${where} for ${vHeal(`${p.healPct}%`)} of its damage (${vHeal(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.healPct) / 100)))}).` };
+      return { when: 'Every attack', text: `Each attack also heals your Pokémon near its target for ${vHeal(`${p.healPct}%`)} of its damage.`, more: `Heals your Pokémon ${where} for ${vHeal(`${p.healPct}%`)} of its damage (${vHeal(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.healPct) / 100)))}).` };
     }
-    case 'selfdestruct': return { when: 'When knocked out', text: `Explodes a moment later, hurting the enemies around it.`, more: `Stays on its square for ${vTime(p.delay)}, then explodes: enemies in the ${area(p.radius)} around it take ${hit}.` };
+    case 'selfdestruct': return { when: 'When knocked out', text: `Explodes after fainting and deals ${pct} to the enemies around it.`, more: `Stays on its square for ${vTime(p.delay)}, then explodes: enemies in the ${area(p.radius)} around it take ${hit}.` };
     case 'copy': return { when: 'Always', text: `Transforms into the nearest enemy and copies its stats.`, more: `Walks to the nearest enemy and takes ${vTime(p.morph)} to transform into it, copying its HP, damage, attack speed, range and crit (not its ability or movement). It keeps its share of HP and stands still while transformed. When that Pokémon faints, it turns back and walks to the next one.` };
     case 'transform': {
       const f = p.form;
@@ -173,7 +174,7 @@ function abilityTexts(def, star, catalog) {
       const guard = fl.guard && `<b>${esc(fl.guard.name.replace(/.*\((.*)\)/, '$1'))}</b> shields the ally most enemies are attacking for ${vTime(p.duration)}: ${vNum(`${fl.guard.guardPct}%`)} less damage, and the first stun or knockback only breaks the shield`;
       return { when: every, text: `Changes into a random flavour that heals, speeds up or shields an ally.`, more: `Changes into a random flavour and treats one ally. ${[heal, haste, guard].filter(Boolean).join('. ')}.` };
     }
-    case 'opening': return { when: 'At battle start', text: `Fires a wave down its column that sweeps the first enemy to the far end of the board.`, more: `Fires a wave down its column. The first enemy hit takes ${hit}, is carried to the far end of the board${p.stun ? ` and is stunned for ${vTime(p.stun)}` : ''}.` };
+    case 'opening': return { when: 'At battle start', text: `Fires a wave down its column: the first enemy hit takes ${pct} and is swept to the far end of the board.`, more: `Fires a wave down its column. The first enemy hit takes ${hit}, is carried to the far end of the board${p.stun ? ` and is stunned for ${vTime(p.stun)}` : ''}.` };
     default: return null;
   }
 }
