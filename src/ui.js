@@ -417,7 +417,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     const btn = e.target.closest('button, [data-dex-info]');
     if (btn?.id === 'battle') { started = true; overlay.classList.remove('start-screen'); return showTeamBuilder(); }
     if (btn?.id === 'friend') return onLobby('open');
-    if (btn?.id === 'vs-friend') return onLobby('friend');
+    if (btn?.id === 'start-friends') return openMenu('friends', { noBack: true }); // straight from the main screen: just close
     if (btn?.dataset.lobby === 'friends') return openMenu('friends');
     if (btn?.dataset.lobby) return onLobby(btn.dataset.lobby, lobbyValues());
     if (btn?.dataset.copy) return copyText(btn.dataset.copy, btn);
@@ -514,6 +514,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   }
 
   const ICON_MENU = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>';
+  const ICON_FRIENDS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><circle cx="17" cy="9" r="2.8"/><path d="M16.5 14.2c2.9.2 5 2.3 5 5.3"/></svg>';
   const ICON_DEX = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><path d="M3 12h6m6 0h6"/><circle cx="12" cy="12" r="3"/></svg>';
 
   function renderHud() {
@@ -532,7 +533,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
 
   // ---- menu ------------------------------------------------------------------
 
-  function openMenu(view = 'main') {
+  function openMenu(view = 'main', { noBack = false } = {}) {
     menuView = view;
     const panel = menuEl.querySelector('.menu-panel');
     panel.classList.toggle('help', view === 'help');
@@ -591,7 +592,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       return;
     } else if (view === 'friends') {
       confirmRemove = null;
-      panel.innerHTML = `${close}${back}<h1>Friends</h1><div class="friends-body">${friendsViewHTML()}</div>`;
+      panel.innerHTML = `${close}${noBack ? '' : back}<h1>Friends</h1><div class="friends-body">${friendsViewHTML()}</div>`;
       menuEl.hidden = false;
       return;
     } else if (view === 'lastlog') {
@@ -613,7 +614,6 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       // From the start screen: everything a player can start from here.
       panel.innerHTML = `${close}<h1>Menu</h1>
         <div class="menu-list">
-          <button data-menu="friends" class="${getFriends()?.incoming.length ? 'unread' : ''}"><span>♥</span><div>Friends<small>${friendsSub()}</small></div></button>
           <button data-menu="profile"><span>☺</span><div>Profile<small>Your name, picture and stats</small></div></button>
           <button data-menu="news" class="${hasUnread() ? 'unread' : ''}"><span>★</span><div>What's new<small>${esc(changelog[0]?.title ?? 'Updates to the game')}</small></div></button>
           <button data-menu="help"><span>?</span><div>How to play<small>Rules, controls and keys</small></div></button>
@@ -825,6 +825,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   // Friends data changed: refresh whatever shows it.
   function showFriends() {
     renderChallenge();
+    const fb = overlay.querySelector('#start-friends');
+    if (fb) { const n = onlineCount(); fb.innerHTML = friendsBtnHTML(); fb.title = getFriends()?.available ? `Friends (${n} online)` : 'Friends'; }
     const mine = lobbyEl.querySelector('#my-friend-code');
     const code = getFriends()?.code;
     if (mine && code) {
@@ -1721,6 +1723,14 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     </button>`;
   }
 
+  // The main screen's Friends button: an icon, with how many friends are online
+  // (and a dot for friend requests waiting).
+  function friendsBtnHTML() {
+    const f = getFriends();
+    const n = f?.available ? onlineCount() : 0;
+    const asks = f?.incoming.length ?? 0;
+    return `${ICON_FRIENDS}${n ? `<span class="online-count" title="${n} online">${n}</span>` : ''}${asks ? `<span class="asks-dot" title="${asks} friend request${asks === 1 ? '' : 's'}"></span>` : ''}`;
+  }
   function profileChip() {
     const p = getProfile();
     return `<button id="profile-chip" class="profile-chip" title="Your profile">${avatar(p.avatar)}<span>${p.saved && p.name ? esc(p.name) : 'Set up your profile'}</span></button>`;
@@ -1736,14 +1746,13 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         <div class="parade" aria-hidden="true">${parade}</div>
         <div class="start-modes">
           <button id="friend" class="primary battle-btn">Battle</button>
-          <button id="vs-friend" class="battle-btn training-btn">Battle a friend</button>
           <button id="battle" class="battle-btn training-btn">Training</button>
         </div>
         <div class="start-corner">
           <button id="start-dex" class="icon-btn dex-button" title="Every Pokémon's stats (P)">${ICON_DEX}<span class="label-text">Pokédex</span></button>
           <button id="start-menu" class="icon-btn start-menu${hasUnread() ? ' unread' : ''}" title="Menu (M)" aria-label="Menu">${ICON_MENU}</button>
         </div>
-        ${profileChip()}
+        <div class="start-people">${profileChip()}<button id="start-friends" class="icon-btn friends-btn" aria-label="Friends" title="Friends">${friendsBtnHTML()}</button></div>
         ${versionText ? `<div class="start-version">${esc(versionText)}</div>` : ''}
       </div>`);
     overlay.classList.add('start-screen');
