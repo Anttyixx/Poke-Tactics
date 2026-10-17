@@ -6,20 +6,20 @@
 //            the player does and shows the state the server sends back
 //            (connection: src/online.js).
 
-import { createGame, applyIntent } from './game.js?v=e49419b';
-import { botTurn } from './bot.js?v=e49419b';
-import { fightSummary } from './matchlog.js?v=e49419b';
-import { createUI } from './ui.js?v=e49419b';
-import { hashSeed } from './rng.js?v=e49419b';
-import { connect, isCode, playerId, serverUrl, checkServer, netLog, note } from './online.js?v=e49419b';
-import { loadProfile, saveProfile, recordBattle, recordMatch, BOT_AVATAR } from './profile.js?v=e49419b';
+import { createGame, applyIntent } from './game.js?v=c8a2a58';
+import { botTurn } from './bot.js?v=c8a2a58';
+import { fightSummary } from './matchlog.js?v=c8a2a58';
+import { createUI } from './ui.js?v=c8a2a58';
+import { hashSeed } from './rng.js?v=c8a2a58';
+import { connect, isCode, playerId, serverUrl, checkServer, netLog, note } from './online.js?v=c8a2a58';
+import { loadProfile, saveProfile, recordBattle, recordMatch, BOT_AVATAR } from './profile.js?v=c8a2a58';
 
 const BOT = 1;
 
-const catalogText = await (await fetch('data/units.json?v=e49419b')).text();
+const catalogText = await (await fetch('data/units.json?v=c8a2a58')).text();
 const catalog = JSON.parse(catalogText);
 // What's new: newest first. Add an entry to data/changelog.json with each update.
-const changelog = await fetch('data/changelog.json?v=e49419b').then((r) => (r.ok ? r.json() : [])).catch(() => []);
+const changelog = await fetch('data/changelog.json?v=c8a2a58').then((r) => (r.ok ? r.json() : [])).catch(() => []);
 // Which deploy this is (the deploy tags every file with ?v=<commit>). The
 // server only lets in players on its own build, so everyone runs the same rules.
 const BUILD = new URL(import.meta.url).searchParams.get('v') ?? 'local';
@@ -466,3 +466,5 @@ startPresence();
 // An online match this browser was in (before a reload) can be picked back up.
 const unfinished = serverUrl() ? loadSession() : null;
 if (unfinished) ui.showLobby('resume', { code: unfinished.code, opponent: unfinished.opponent });
+// The first screen is drawn: show the page (index.html keeps it hidden while loading).
+document.documentElement.classList.remove('booting');

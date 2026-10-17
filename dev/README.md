@@ -237,17 +237,17 @@ test a set of changes together. Team styles to pit against each other live in `A
     home (at most 2 can be out at once; with both out, attacks don't charge it), its next action (an attack or a step, after its usual 0.8s wait)
     fires one Dreepy instead, at the farthest enemy outside the 3x3 around it (never at a Pokémon
     right next to it; with none that far, it just attacks). The Dreepy crashes into its target for 35
-    damage at ★ (96 / 125 / 138 at higher levels) and a 0.5s stun, taking its square and shoving it aside (a
+    damage at ★ (120 / 156 / 173 at higher levels) and a 0.5s stun, taking its square and shoving it aside (a
     shield breaks instead); once the stun wears off the target attacks that Dreepy right away until
     it faints. Dreepy have 161 HP and hit for 12 every 0.5s at ★, growing slowly with level. A fainted
-    Dreepy flies back (0.5s). Dragapult: 800 HP, 50 damage every 0.8s. Darts fire at the end of the
+    Dreepy flies back (0.5s). Dragapult: 840 HP, 50 damage every 0.8s. Darts fire at the end of the
     tick, aiming and landing from where everyone stood when it began, so neither side gets an edge.
-  - Greninja, **Battle Bond**: after 5 attacks, becomes Ash-Greninja for the rest of the fight: fast
+  - Greninja, **Battle Bond**: after 4 attacks, becomes Ash-Greninja for the rest of the fight: fast
     movement, attacks every 0.8s, more damage (105 at ★), range 3 (same HP).
   - Torterra, **Earthquake**: with every 5th attack, every enemy on the board takes 30% and is stunned 1.5s.
   - Lilligant, **Aromatherapy**: every attack heals your Pokémon in the 3x3 around the square it hits
     (diagonals too), for 60% of its damage.
-  - Golem, **Self-Destruct**: when knocked out it stays on its square for 2s (it can't be hit), then
+  - Golem, **Self-Destruct**: when knocked out it stays on its square for 1s (it can't be hit), then
     explodes for 300% on enemies in the 3x3 square around it. The fight waits for it.
   - Frosmoth (cost 3, Special, range 2, attacks every 1.25s), **Frostbite**: no charged ability. Every
     hit chills the target for 3s: it attacks 30% slower and waits 30% longer between steps; another
