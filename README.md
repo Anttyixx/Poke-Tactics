@@ -271,8 +271,9 @@ test a set of changes together. Team styles to pit against each other live in `A
     target, and with none free it stays. The purple bar counts toward the next hop. A form with a
     faster attack speed doesn't wait out the old form's attack timer.
   - Tapu Koko (range 2, attacks every 1.1s), **Wild Charge**: after 4 attacks, the next dashes in a straight line onto the
-    farthest enemy's square, shoving it to a square beside it (a shield, or no room: it stops on the open
-    square next to it instead). The dash takes 0.1s per square (at least 0.2s), and Tapu Koko is immune to
+    farthest enemy's square, shoving it to a square beside it (a shield, no room, or a target that moved
+    this tick or is itself charged to dash: it stops on the open square next to it instead). It dashes
+    whenever that enemy isn't already right next to it; otherwise it hits from where it stands. The dash takes 0.1s per square (at least 0.2s), and Tapu Koko is immune to
     everything on the way. When it arrives it hits for 200% and stuns the target for 1.5s; every enemy it
     passed through takes 30% and is stunned for 0.5s.
   - Ditto, **Transform**: walks (medium speed) toward the nearest enemy until it's within that enemy's

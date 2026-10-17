@@ -1109,8 +1109,14 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
       const far = farthestEnemy(u);
       // `crash`: it dashes onto the target's own square and shoves it aside
       // (like a Dreepy; a shield or no room: it stops beside it instead).
-      const shove = far && u.power.crash && !immune(far) && !blocks(far) ? displaceSpot(far) : null;
-      const cell = far && reach(u, at(far)) > u.range && (shove ? { x: far.x, y: far.y } : dashSpot(u, far));
+      // Not a target that moved this tick or is charged to dash itself, so two
+      // dashers crashing into each other resolve the same either way round.
+      const still = far && far.x === at(far).x && far.y === at(far).y;
+      const dasher = far && far.powerKind === 'empower' && far.power.dash && far.maxMana > 0 && far.mana >= far.maxMana;
+      const shove = far && u.power.crash && still && !dasher && !immune(far) && !blocks(far) ? displaceSpot(far) : null;
+      // A crash dash goes whenever the farthest enemy isn't already right next to
+      // it; the older dash only when that enemy is out of its attack range.
+      const cell = far && reach(u, at(far)) > (u.power.crash ? 1 : u.range) && (shove ? { x: far.x, y: far.y } : dashSpot(u, far));
       if (cell && !heldBack(u)) {
         const from = { x: u.x, y: u.y };
         const p = u.power;

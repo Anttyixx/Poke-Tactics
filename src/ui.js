@@ -104,7 +104,7 @@ function abilityTexts(def, star, catalog) {
     case 'empower': {
       if (p.dash && p.crash) {
         const pass = p.passPct ? `Enemies it passes through take ${vDmg(`${p.passPct}%`)} damage (${vDmg(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.passPct) / 100)))}) and are stunned for ${vTime(p.passStun ?? p.stun)}.` : '';
-        return { when: every, text: `Crashes into the farthest enemy, knocking it aside and dealing ${pct} to it.`, more: `Dashes in a straight line to the farthest enemy, immune to everything on the way, lands on its square and shoves it aside, then hits it for ${hit} and stuns it for ${vTime(p.stun)}. ${pass}`.trim() };
+        return { when: every, text: `Crashes into the farthest enemy, knocking it aside and dealing ${pct} to it.`, more: `Dashes in a straight line to the farthest enemy, immune to everything on the way, lands on its square and shoves it aside, then hits it for ${hit} and stuns it for ${vTime(p.stun)}. ${pass} If every enemy is already right next to it, it hits from where it stands instead.`.replace('  ', ' ') };
       }
       if (p.dash) return { when: every, text: `Dashes to the farthest enemy and deals ${pct} to it, stunning every enemy in its path.`, more: `Dashes in a straight line to the farthest enemy, immune to everything on the way, and hits it for ${hit}. The target and every enemy it passes through are stunned for ${vTime(p.stun)}.` };
       if (p.teleport) return { when: every, text: `Teleports next to the farthest enemy and deals ${pct} to it.`, more: `Teleports next to the farthest enemy and hits it for ${hit}${p.lifestealPct ? `, healing for ${vHeal(`${p.lifestealPct}%`)} of the damage dealt` : ''}.` };
