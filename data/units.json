@@ -62,7 +62,7 @@
   },
   "minior": {
     "name": "Minior", "sprite": "assets/sprites/minior.png", "fx": "#ff7aa8", "type": "mage", "cost": 4,
-    "hp": [642, 1091, 1855, 3146], "shield": [1177, 2001, 3402, 5767], "damage": [30, 51, 87, 147], "range": 1, "moveSpeed": "very slow", "secPerHit": 3.0, "critChance": 15, "energy": 0,
+    "hp": [674, 1146, 1948, 3303], "shield": [1236, 2101, 3572, 6055], "damage": [32, 54, 91, 154], "range": 1, "moveSpeed": "very slow", "secPerHit": 3.0, "critChance": 15, "energy": 0,
     "ability": {"name": "Shining Star", "kind": "transform", "trigger": "shieldBreak", "morph": 5, "form": {"name": "Minior (Star Form)", "sprite": "assets/sprites/minior-star.png", "moveSpeed": "very fast", "secPerHit": 0.3, "damage": [20, 34, 58, 98], "range": 1, "blink": true, "shockwave": {"radius": 1, "stun": 10}, "hop": true, "energy": 10}}
   },
   "tapukoko": {
