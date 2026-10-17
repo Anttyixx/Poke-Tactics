@@ -3,12 +3,17 @@
     "id": "2026-10-17-koko-dash",
     "version": "0.45.2",
     "date": "2026-10-17",
-    "title": "Tapu Koko dashes more",
+    "title": "Tapu Koko dashes more, Minior buff",
     "changes": [
       {
         "pokemon": "tapukoko",
         "kind": "fix",
         "text": "Wild Charge now dashes whenever the farthest enemy isn't already right next to Tapu Koko. Before, it only dashed when that enemy was out of its attack range, so in a close fight it often just hit from where it stood."
+      },
+      {
+        "pokemon": "minior",
+        "kind": "buff",
+        "text": "HP, shield, and damage +5%."
       }
     ]
   },
