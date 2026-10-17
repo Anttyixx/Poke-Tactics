@@ -29,12 +29,12 @@
       {
         "pokemon": "dragapult",
         "kind": "buff",
-        "text": "Dreepy are 25% stronger at ★★ and up (HP, damage, and crash damage). Dragapult HP +5%."
+        "text": "Dreepy are 30% stronger at ★★ and up (HP, damage, and crash damage). Dragapult HP +5%."
       },
       {
         "pokemon": "minior",
         "kind": "buff",
-        "text": "HP and shield +4%."
+        "text": "HP and shield +7%."
       },
       {
         "pokemon": "annihilape",
