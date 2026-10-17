@@ -1,3 +1,4 @@
+cd6dbe2	dev	2026-10-17 04:36 UTC	Dragapult's Dreepy +30% at ★★ and up, Minior +7% HP and shield (0.45.1)
 c8a2a58	dev	2026-10-17 04:31 UTC	Balance fine-tuning: Torterra, Golem, Greninja, Amoonguss, Dragapult, small top-ups (0.45.1)
 210a768	dev	2026-10-16 22:25 UTC	Balance pass from the review: Coalossal, Tapu Koko, Decidueye, Torterra, Golem, Vespiquen, Greninja, Amoonguss, Beheeyem, Infernape, Ditto, Dragapult (0.45.0)
 de87d5a	dev	2026-10-16 22:11 UTC	Engine support for crash dashes, lure targeting, burns and Ditto copy strength (unused for now)
@@ -27,4 +28,3 @@ fc41cb1	dev	2026-10-16 01:29 UTC	Short ability descriptions with a More details 
 06a4d53	dev	2026-10-15 23:57 UTC	Hoopa's Binding Ring needs 4 attacks instead of 5 (0.37.4)
 3d1c200	dev	2026-10-15 23:50 UTC	Hoopa binds a Pokémon just before it moves, stopping the move or moving power (0.37.3)
 9ed27e4	dev	2026-10-15 23:41 UTC	Hoopa binds the first enemy that moves by itself; the rings stop its next 3 tries (0.37.2)
-2a0d20e	dev	2026-10-15 18:54 UTC	Hoopa holds a full charge and binds the first enemy with nobody in its attack range (0.37.1)

@@ -237,7 +237,7 @@ test a set of changes together. Team styles to pit against each other live in `A
     home (at most 2 can be out at once; with both out, attacks don't charge it), its next action (an attack or a step, after its usual 0.8s wait)
     fires one Dreepy instead, at the farthest enemy outside the 3x3 around it (never at a Pokémon
     right next to it; with none that far, it just attacks). The Dreepy crashes into its target for 35
-    damage at ★ (120 / 156 / 173 at higher levels) and a 0.5s stun, taking its square and shoving it aside (a
+    damage at ★ (125 / 163 / 179 at higher levels) and a 0.5s stun, taking its square and shoving it aside (a
     shield breaks instead); once the stun wears off the target attacks that Dreepy right away until
     it faints. Dreepy have 161 HP and hit for 12 every 0.5s at ★, growing slowly with level. A fainted
     Dreepy flies back (0.5s). Dragapult: 840 HP, 50 damage every 0.8s. Darts fire at the end of the
