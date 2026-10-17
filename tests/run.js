@@ -964,7 +964,7 @@ test('Aromatherapy (Lilligant): each attack heals allies in the 3x3 around the s
   assert.equal(evs(r, 'heal', unitOf(r, 3).id).length, 0, 'an ally elsewhere is not');
 });
 
-test('Battle Bond (Greninja): after 5 attacks it becomes Ash-Greninja (faster, harder hitting, range 3)', () => {
+test('Battle Bond (Greninja): after 4 attacks it becomes Ash-Greninja (faster, harder hitting, range 3)', () => {
   const r = simulate(powerCat(), [[{ uid: 1, unitId: 'greninja', star: 1, x: 2, y: 0 }], [{ uid: 2, unitId: 'wall', star: 0, x: 2, y: 0 }]], 1);
   const g = unitOf(r, 1).id;
   const tf = evs(r, 'transform', g)[0];
@@ -978,7 +978,7 @@ test('Battle Bond (Greninja): after 5 attacks it becomes Ash-Greninja (faster, h
   assert.equal(evs(r, 'transform', g).length, 1, 'once per fight');
 });
 
-test('Self-Destruct (Golem): knocked out, it stays put 3s, then explodes on adjacent enemies; the fight waits for it', () => {
+test('Self-Destruct (Golem): knocked out, it stays put for its fuse (1s), then explodes on adjacent enemies; the fight waits for it', () => {
   const cat = powerCat();
   cat.brute = { ...cat.wall, range: 1, secPerHit: 1, damage: [600, 600, 600, 600] };
   cat.bystander = { ...cat.wall, hp: [2000, 2000, 2000, 2000] };

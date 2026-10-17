@@ -1,5 +1,59 @@
 [
   {
+    "id": "2026-10-17-balance-tune",
+    "version": "0.45.1",
+    "date": "2026-10-17",
+    "title": "Balance fine-tuning",
+    "intro": "Follow-up tweaks to the big balance pass: Torterra, Golem, Greninja and Amoonguss closer to 50%, Dragapult a little on the strong side, and small top-ups for Pokémon the other buffs pushed down.",
+    "changes": [
+      {
+        "pokemon": "torterra",
+        "kind": "buff",
+        "text": "HP and damage +12%."
+      },
+      {
+        "pokemon": "golem",
+        "kind": "buff",
+        "text": "Self-Destruct explodes after 1s instead of 2s. HP +9%."
+      },
+      {
+        "pokemon": "greninja",
+        "kind": "buff",
+        "text": "Battle Bond goes off after 4 attacks instead of 5."
+      },
+      {
+        "pokemon": "amoonguss",
+        "kind": "buff",
+        "text": "HP +8%."
+      },
+      {
+        "pokemon": "dragapult",
+        "kind": "buff",
+        "text": "Dreepy are 25% stronger at ★★ and up (HP, damage, and crash damage). Dragapult HP +5%."
+      },
+      {
+        "pokemon": "minior",
+        "kind": "buff",
+        "text": "HP and shield +4%."
+      },
+      {
+        "pokemon": "annihilape",
+        "kind": "buff",
+        "text": "HP +4%."
+      },
+      {
+        "pokemon": "coalossal",
+        "kind": "buff",
+        "text": "HP +8%."
+      },
+      {
+        "pokemon": "decidueye",
+        "kind": "buff",
+        "text": "Damage +4%."
+      }
+    ]
+  },
+  {
     "id": "2026-10-16-balance-pass",
     "version": "0.45.0",
     "date": "2026-10-16",
