@@ -24,10 +24,14 @@
 //   { type: 'ready' }                         lock in planning; combat starts when all are ready
 //   { type: 'continue' }                      done watching combat; next round starts when all continue
 
-import { randInt } from './rng.js?v=4359a81';
-import { simulate, COLS, HALF } from './combat.js?v=4359a81';
+import { randInt, rand, hashSeed } from './rng.js?v=2ea6167';
+import { simulate, COLS, HALF } from './combat.js?v=2ea6167';
 
 export const TEAM_SIZE = 6;
+// Arena: ARENA_SIZE players, paired up in 1v1 fights each round (a new
+// opponent whenever possible; with an odd number left, one sits the round out).
+// The last one standing wins.
+export const ARENA_SIZE = 4;
 export const COPIES_PER_TROOP = 4;
 export const SHOP_SIZE = 3;
 export const START_HP = 100;
@@ -59,9 +63,12 @@ const isIndex = (v, n) => Number.isInteger(v) && v >= 0 && v < n;
 // `featured` (optional, for testing): a troop id that is put in the first shop
 // slot whenever the player's pool still has a copy of it. Invalid ids are ignored.
 // `avatars` (optional): each player's profile picture id, for display only.
-export function createGame({ seed, catalog, names, avatars = [], featured = null }) {
+export function createGame({ seed, catalog, names, avatars = [], featured = null, mode = 'duel' }) {
+  const arena = mode === 'arena';
   return {
     version: 3,
+    mode: arena ? 'arena' : 'duel',
+    ...(arena && { pairs: [], bye: null, met: {}, byes: {}, out: [] }),
     seed: seed >>> 0,
     featured: troopIds(catalog).includes(featured) ? featured : null,
     round: 0,
@@ -86,7 +93,7 @@ export function createGame({ seed, catalog, names, avatars = [], featured = null
       // regardless of the order the host receives intents in.
       rng: (seed ^ Math.imul(i + 1, 0x9e3779b9)) >>> 0,
     })),
-    combat: null, // { round, result, damage: [p0, p1] } while phase === 'combat'
+    combat: null, // { round, result, damage: [p0, p1] } while phase === 'combat' (arena: { round, fights: [{ pair, seed, result, damage }], bye })
     winner: null, // player index, or null for a draw, once phase === 'gameover'
   };
 }
@@ -192,6 +199,7 @@ const HANDLERS = {
 
 function planningGuard(state, player) {
   if (state.phase !== 'planning') return fail('Not in the planning phase');
+  if (state.mode === 'arena' && player.hp <= 0) return fail('You are out of this match');
   if (player.ready) return fail('You are locked in for this round');
   return null;
 }
@@ -218,6 +226,83 @@ function startRound(state, catalog) {
     p.ready = false;
     rollShop(p, state.featured);
   }
+  if (state.mode === 'arena') {
+    for (const p of state.players) if (p.hp <= 0) p.ready = true; // out: nothing left to do
+    pairUp(state);
+  }
+}
+
+// ---- arena -------------------------------------------------------------------
+
+const pairKey = (a, b) => (a < b ? `${a}-${b}` : `${b}-${a}`);
+export const aliveIn = (state) => state.players.map((p, i) => (p.hp > 0 ? i : -1)).filter((i) => i >= 0);
+
+// This round's fights: a new opponent whenever possible (never last round's if
+// there's any other way), then whoever has met least often. With an odd number
+// left, one player sits out: never the same one twice in a row, fewest byes first.
+// Ties are broken by the match seed, so pairings replay exactly.
+function pairUp(state) {
+  const tie = { rng: hashSeed(`${state.seed}:${state.round}:pairs`) };
+  const order = aliveIn(state).map((i) => [rand(tie), i]).sort((a, b) => a[0] - b[0]).map((x) => x[1]);
+  let pool = order;
+  let bye = null;
+  if (order.length % 2) {
+    const byes = (i) => state.byes[i] ?? 0;
+    bye = [...order].sort((a, b) => (a === state.bye) - (b === state.bye) || byes(a) - byes(b))[0];
+    pool = order.filter((i) => i !== bye);
+    state.byes[bye] = byes(bye) + 1;
+  }
+  const last = new Set(state.pairs.map(([a, b]) => pairKey(a, b)));
+  const cost = (pairs) => pairs.reduce((sum, [a, b]) => sum + (last.has(pairKey(a, b)) ? 100 : 0) + (state.met[pairKey(a, b)] ?? 0), 0);
+  let best = null;
+  for (const pairs of matchings(pool)) if (!best || cost(pairs) < cost(best)) best = pairs;
+  state.pairs = (best ?? []).map(([a, b]) => (a < b ? [a, b] : [b, a]));
+  state.bye = bye;
+}
+// Every way to split `list` into pairs (in the list's order, so the first found wins ties).
+function* matchings(list) {
+  if (list.length < 2) { yield []; return; }
+  const [first, ...rest] = list;
+  for (let k = 0; k < rest.length; k++) {
+    for (const more of matchings(rest.filter((_, j) => j !== k))) yield [[first, rest[k]], ...more];
+  }
+}
+
+// Arena: a player who leaves is knocked out on the spot. Returns true if that
+// ended the match.
+export function forfeit(state, catalog, index) {
+  const p = state.players[index];
+  if (state.mode !== 'arena' || !p || p.hp <= 0 || state.phase === 'gameover') return false;
+  p.hp = 0;
+  p.ready = true;
+  state.out.push([index]);
+  if (aliveIn(state).length <= 1) {
+    state.phase = 'gameover';
+    state.winner = aliveIn(state)[0] ?? null;
+    return true;
+  }
+  // Their leaving may be all that everyone else was waiting for.
+  if (state.players.every((q) => q.ready)) {
+    if (state.phase === 'planning') beginCombat(state, catalog);
+    else if (state.phase === 'combat') endRound(state, catalog);
+    else if (state.phase === 'team') startRound(state, catalog);
+  }
+  return false;
+}
+
+// Where a player finished: 1 for the winner, then by when they were knocked out
+// (players knocked out in the same round share a place). null while still in.
+export function arenaPlace(state, index) {
+  if (state.mode !== 'arena') return null;
+  if (state.phase === 'gameover' && state.winner === index) return 1;
+  let after = 0; // players knocked out after this one, or still standing
+  // A winner decided on HP after everyone left went out together isn't standing, but is ahead.
+  const ahead = state.phase === 'gameover' && state.winner !== null && state.players[state.winner].hp <= 0 ? 1 : 0;
+  for (let g = state.out.length - 1; g >= 0; g--) {
+    if (state.out[g].includes(index)) return 1 + after + aliveIn(state).length + ahead;
+    after += state.out[g].length;
+  }
+  return null;
 }
 
 export function roundDamage(result, round) {
@@ -238,6 +323,7 @@ export function lostCount(result, side) {
 function beginCombat(state, catalog) {
   // Per-round combat seed derived from the match seed, so fights replay exactly.
   const seed = (state.seed + Math.imul(state.round, 0x9e3779b9)) >>> 0;
+  if (state.mode === 'arena') return beginArenaCombat(state, catalog, seed);
   const result = simulate(catalog, state.players.map((p) => p.board), seed);
   state.combat = { round: state.round, seed, result, damage: roundDamage(result, state.round) };
   for (const p of state.players) p.lastBoard = p.board.map(({ unitId, star, x, y }) => ({ unitId, star, x, y }));
@@ -245,9 +331,63 @@ function beginCombat(state, catalog) {
   for (const p of state.players) p.ready = false;
 }
 
+function beginArenaCombat(state, catalog, seed) {
+  // A pair whose player left in the planning phase doesn't fight: the other one sits out instead.
+  const fights = state.pairs.filter(([a, b]) => state.players[a].hp > 0 && state.players[b].hp > 0).map(([a, b], k) => {
+    const fseed = (seed + Math.imul(k + 1, 0x85ebca6b)) >>> 0;
+    const result = simulate(catalog, [state.players[a].board, state.players[b].board], fseed);
+    state.met[pairKey(a, b)] = (state.met[pairKey(a, b)] ?? 0) + 1;
+    return { pair: [a, b], seed: fseed, result, damage: roundDamage(result, state.round) };
+  });
+  state.combat = { round: state.round, fights, bye: state.bye };
+  for (const p of state.players) p.lastBoard = p.board.map(({ unitId, star, x, y }) => ({ unitId, star, x, y }));
+  state.phase = 'combat';
+  // Only the players who fought have a battle to watch.
+  const fighting = new Set(fights.flatMap((f) => f.pair));
+  state.players.forEach((p, i) => { p.ready = !fighting.has(i); });
+  if (!fighting.size) endRound(state, catalog);
+}
+
+function endArenaRound(state, catalog) {
+  const before = aliveIn(state);
+  const hpBefore = state.players.map((p) => p.hp);
+  const fought = new Set();
+  for (const { pair, result, damage } of state.combat.fights) {
+    pair.forEach((i, side) => {
+      const p = state.players[i];
+      fought.add(i);
+      p.hp = Math.max(0, p.hp - damage[side]);
+      const lost = lostCount(result, side);
+      p.lastIncome = { base: ROUND_COINS, lost: lost * LOST_COIN };
+      p.coins += ROUND_COINS + lost * LOST_COIN;
+    });
+  }
+  for (const i of before) {
+    if (fought.has(i)) continue;
+    const p = state.players[i]; // sat out: the round's coins, nothing lost
+    p.lastIncome = { base: ROUND_COINS, lost: 0 };
+    p.coins += ROUND_COINS;
+  }
+  const knocked = before.filter((i) => state.players[i].hp <= 0);
+  if (knocked.length) state.out.push(knocked);
+  const alive = aliveIn(state);
+  if (alive.length <= 1) {
+    state.phase = 'gameover';
+    // Everyone left knocked out at once: whoever had the most HP going in wins
+    // (a draw only if that's a tie too).
+    const top = Math.max(...knocked.map((i) => hpBefore[i]));
+    const best = knocked.filter((i) => hpBefore[i] === top);
+    state.winner = alive[0] ?? (best.length === 1 ? best[0] : null);
+    if (alive.length === 0 && state.winner !== null) state.out[state.out.length - 1] = knocked.filter((i) => i !== state.winner);
+    return;
+  }
+  startRound(state, catalog);
+}
+
 // Damage is applied only after everyone has watched the fight, so the HUD
 // never spoils the result while combat is still animating.
 function endRound(state, catalog) {
+  if (state.mode === 'arena') return endArenaRound(state, catalog);
   const { result, damage } = state.combat;
   state.players.forEach((p, i) => {
     p.hp = Math.max(0, p.hp - damage[i]);
@@ -262,4 +402,40 @@ function endRound(state, catalog) {
     return;
   }
   startRound(state, catalog);
+}
+
+// What one arena player sees, shaped like a duel so the same screens work:
+// `players` is [this player, their opponent] in fight order (`viewer` says
+// which one is them), `combat` is their own fight. Sitting out a battle looks
+// like waiting, locked in; being knocked out looks like game over. `arena`
+// adds the standings for everyone. A duel comes back unchanged.
+export function viewFor(state, me) {
+  if (state.mode !== 'arena') return { view: state, viewer: me };
+  const P = state.players;
+  const empty = (name) => ({ name, avatar: null, hp: 0, coins: 0, team: [], pool: {}, shop: [], board: [], lastBoard: [], ready: true, empty: true });
+  const pairOf = (i) => (state.phase === 'combat' ? state.combat.fights.map((f) => f.pair) : state.pairs).find((pr) => pr.includes(i)) ?? null;
+  const standings = P.map((p, i) => {
+    const pr = state.phase === 'planning' || state.phase === 'combat' ? pairOf(i) : null;
+    return { index: i, name: p.name, avatar: p.avatar, hp: p.hp, out: p.hp <= 0, place: arenaPlace(state, i), opponent: pr ? pr.find((j) => j !== i) : null, bye: (state.phase === 'planning' || state.phase === 'combat') && p.hp > 0 && !pr };
+  });
+  const arena = { you: me, standings, place: arenaPlace(state, me), left: aliveIn(state).length, size: P.length };
+  const base = { ...state, arena };
+  if (state.phase === 'gameover' || P[me].hp <= 0) {
+    const champ = state.winner ?? null;
+    const other = champ !== null && champ !== me ? P[champ] : empty(state.phase === 'gameover' ? 'Nobody' : `${arena.left} still fighting`);
+    return { view: { ...base, phase: 'gameover', players: [P[me], other], winner: champ === me ? 0 : champ === null && state.phase === 'gameover' ? null : 1, combat: null }, viewer: 0 };
+  }
+  if (state.phase === 'team') return { view: { ...base, players: [P[me], empty('3 rivals')] }, viewer: 0 };
+  const pr = pairOf(me);
+  if (!pr) {
+    // Sitting out this round: planning as usual; during the battles, locked in and waiting.
+    const sit = empty('Sitting out');
+    if (state.phase === 'combat') return { view: { ...base, phase: 'planning', combat: null, players: [{ ...P[me], ready: true }, sit] }, viewer: 0 };
+    return { view: { ...base, players: [P[me], sit] }, viewer: 0 };
+  }
+  const players = [P[pr[0]], P[pr[1]]];
+  const viewer = pr.indexOf(me);
+  if (state.phase !== 'combat') return { view: { ...base, players }, viewer };
+  const fight = state.combat.fights.find((f) => f.pair === pr);
+  return { view: { ...base, players, combat: { round: state.combat.round, seed: fight.seed, result: fight.result, damage: fight.damage } }, viewer };
 }

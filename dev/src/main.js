@@ -6,20 +6,18 @@
 //            the player does and shows the state the server sends back
 //            (connection: src/online.js).
 
-import { createGame, applyIntent, viewFor } from './game.js?v=96111b4';
-import { botTurn } from './bot.js?v=96111b4';
-import { fightSummary } from './matchlog.js?v=96111b4';
-import { createUI } from './ui.js?v=96111b4';
-import { hashSeed } from './rng.js?v=96111b4';
-import { connect, isCode, playerId, serverUrl, checkServer, netLog, note } from './online.js?v=96111b4';
-import { loadProfile, saveProfile, recordBattle, recordMatch, BOT_AVATAR } from './profile.js?v=96111b4';
+import { createGame, applyIntent, viewFor } from './game.js?v=2ea6167';
+import { botTurn } from './bot.js?v=2ea6167';
+import { fightSummary } from './matchlog.js?v=2ea6167';
+import { createUI } from './ui.js?v=2ea6167';
+import { hashSeed } from './rng.js?v=2ea6167';
+import { connect, isCode, playerId, serverUrl, checkServer, netLog, note } from './online.js?v=2ea6167';
+import { loadProfile, saveProfile, recordBattle, recordMatch, BOT_AVATAR } from './profile.js?v=2ea6167';
 
-const BOT = 1;
-
-const catalogText = await (await fetch('data/units.json?v=96111b4')).text();
+const catalogText = await (await fetch('data/units.json?v=2ea6167')).text();
 const catalog = JSON.parse(catalogText);
 // What's new: newest first. Add an entry to data/changelog.json with each update.
-const changelog = await fetch('data/changelog.json?v=96111b4').then((r) => (r.ok ? r.json() : [])).catch(() => []);
+const changelog = await fetch('data/changelog.json?v=2ea6167').then((r) => (r.ok ? r.json() : [])).catch(() => []);
 // Which deploy this is (the deploy tags every file with ?v=<commit>). The
 // server only lets in players on its own build, so everyone runs the same rules.
 const BUILD = new URL(import.meta.url).searchParams.get('v') ?? 'local';
@@ -31,8 +29,11 @@ let conn = null; // online: the connection to the server (a room, or the queue)
 let roomCode = null; // online: the match's code
 let profile = loadProfile(); // name and picture, saved in this browser
 const myName = () => profile.name || 'You';
-let names = [myName(), 'Bot'];
-let avatars = [profile.avatar, BOT_AVATAR];
+let trainingMode = 'duel'; // training: a duel with the bot, or an arena with 3 bots
+const botNames = () => (trainingMode === 'arena' ? [myName(), 'Bot 1', 'Bot 2', 'Bot 3'] : [myName(), 'Bot']);
+const botAvatars = () => (trainingMode === 'arena' ? [profile.avatar, BOT_AVATAR, BOT_AVATAR, BOT_AVATAR] : [profile.avatar, BOT_AVATAR]);
+let names = botNames();
+let avatars = botAvatars();
 let me = 0; // which player this browser is
 // Every move both players make, in order. With the game's seed this rebuilds
 // the whole match exactly (tools/replay.mjs), for analysis afterwards. Online,
@@ -111,10 +112,10 @@ function newGame() {
   firstGame = false;
   // ?unit=<id> puts that unit in the first slot of every shop (for testing new units).
   const featured = mode === 'bot' ? params.get('unit')?.toLowerCase() || null : null;
-  state = createGame({ seed, catalog, names, avatars, featured });
+  state = createGame({ seed, catalog, names, avatars, featured, mode: mode === 'bot' ? trainingMode : 'duel' });
   matchLog = {
     format: 'poke-tactics-match', v: 1, build: BUILD, catalogHash: hashSeed(catalogText),
-    mode: mode === 'bot' ? 'training' : 'pvp', started: new Date().toISOString(),
+    mode: mode === 'bot' ? (trainingMode === 'arena' ? 'training-arena' : 'training') : 'pvp', started: new Date().toISOString(),
     seed: state.seed, names: [...names], featured: state.featured, intents: [],
   };
   if (featured && !state.featured) setTimeout(() => ui.toast(`Unknown unit "${featured}" in ?unit=`), 0);
@@ -135,15 +136,22 @@ function dispatch(player, intent) {
   return res;
 }
 
+// Every seat but the player's is a bot. In an arena each bot plays its own
+// 1v1 view of the match (viewFor), the same way the player sees it.
 function runBot() {
-  if (mode !== 'bot' || state.players[BOT].ready) return;
-  const send = (intent) => {
-    const res = applyIntent(state, catalog, BOT, intent);
-    if (res.ok) record(BOT, intent);
-    return res;
-  };
-  if (state.phase === 'planning' || state.phase === 'team') botTurn(state, catalog, BOT, send);
-  else if (state.phase === 'combat') send({ type: 'continue' });
+  if (mode !== 'bot') return;
+  for (let bot = 0; bot < state.players.length; bot++) {
+    if (bot === me || state.players[bot].ready || state.phase === 'gameover') continue;
+    const send = (intent) => {
+      const res = applyIntent(state, catalog, bot, intent);
+      if (res.ok) record(bot, intent);
+      return res;
+    };
+    if (state.phase === 'planning' || state.phase === 'team') {
+      const { view, viewer } = state.mode === 'arena' && state.phase === 'planning' ? viewFor(state, bot) : { view: state, viewer: bot };
+      botTurn(view, catalog, viewer, send);
+    } else if (state.phase === 'combat') send({ type: 'continue' });
+  }
 }
 
 // Online, keep the screen on: phones lock themselves after a short while
@@ -179,8 +187,8 @@ function show() {
   saveLastLog();
   keepAwake();
   const { view, viewer } = viewNow();
-  if (mode === 'online' && viewer !== shownViewer) {
-    if (shownViewer === null) ui.setOnline({ viewer }); else ui.setViewer(viewer);
+  if ((mode === 'online' || state.mode === 'arena') && viewer !== shownViewer) {
+    if (shownViewer === null && mode === 'online') ui.setOnline({ viewer }); else ui.setViewer(viewer);
     shownViewer = viewer;
   }
   ui.render(view);
@@ -230,8 +238,8 @@ function updateProfile(next) {
   profile = saveProfile(next);
   presence?.send({ type: 'profile', name: profile.name || 'Player', avatar: profile.avatar });
   if (mode === 'bot') {
-    names = [myName(), 'Bot'];
-    avatars = [profile.avatar, BOT_AVATAR];
+    names = botNames();
+    avatars = botAvatars();
     if (state) { state.players[0].name = names[0]; state.players[0].avatar = avatars[0]; show(); }
   }
   return profile;
@@ -259,6 +267,17 @@ function lobby(action, data = {}) {
     });
   }
   if (action === 'home') { stopOnline(); return goHome(); }
+  // Training: a duel with the bot, or an arena with 3 bots.
+  if (action === 'train') {
+    const want = data.mode === 'arena' ? 'arena' : 'duel';
+    if (want === trainingMode && state?.phase === 'team') return;
+    trainingMode = want;
+    names = botNames();
+    avatars = botAvatars();
+    shownViewer = null;
+    ui.setViewer(0);
+    return newGame();
+  }
   if (action === 'resume') {
     const saved = loadSession();
     if (!saved || !serverUrl()) { ui.toast('That match has expired.'); return goHome(); }
@@ -395,8 +414,9 @@ function goHome() {
   mode = 'bot';
   me = 0;
   roomCode = null;
-  names = [myName(), 'Bot'];
-  avatars = [profile.avatar, BOT_AVATAR];
+  names = botNames();
+  avatars = botAvatars();
+  shownViewer = null;
   ui.setOnline(null);
   newGame();
 }

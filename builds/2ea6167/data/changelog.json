@@ -1,5 +1,402 @@
 [
   {
+    "id": "2026-10-21-arena-training",
+    "version": "0.46.1",
+    "date": "2026-10-21",
+    "title": "Arena training, cleaner top bar",
+    "changes": [
+      {
+        "kind": "new",
+        "text": "Training now follows the Duel / Arena switch: train in an arena against 3 bots, with the same pairings, byes and standings as online."
+      },
+      {
+        "kind": "change",
+        "text": "The two health bars at the top are gone. Every player now has a container with their name and HP: you and your opponent in a duel, all four in an arena."
+      }
+    ]
+  },
+  {
+    "id": "2026-10-21-arena",
+    "version": "0.46.0",
+    "date": "2026-10-21",
+    "title": "Arena: 4-player battles",
+    "intro": "A new way to battle: four players, one arena, last one standing wins.",
+    "changes": [
+      {
+        "kind": "new",
+        "text": "Battle now has two modes. Pick Duel (1 vs 1) or Arena (4 players) with the switch under the Battle button. Your choice is remembered."
+      },
+      {
+        "kind": "new",
+        "text": "Arena: once 4 players are found, everyone picks a team and fights 1v1 battles each round against a different player. Battles work exactly like a duel."
+      },
+      {
+        "kind": "new",
+        "text": "With 3 players left, one sits the round out: no battle, no damage, and the round's coins anyway. Nobody sits out twice in a row."
+      },
+      {
+        "kind": "new",
+        "text": "The last player standing wins. A standings strip under the top bar shows everyone's HP and who's fighting whom, and the end screen shows the final places."
+      }
+    ]
+  },
+  {
+    "id": "2026-10-17-koko-dash",
+    "version": "0.45.2",
+    "date": "2026-10-17",
+    "title": "Tapu Koko dashes more, Minior buff",
+    "changes": [
+      {
+        "pokemon": "tapukoko",
+        "kind": "fix",
+        "text": "Wild Charge now dashes whenever the farthest enemy isn't already right next to Tapu Koko. Before, it only dashed when that enemy was out of its attack range, so in a close fight it often just hit from where it stood."
+      },
+      {
+        "pokemon": "minior",
+        "kind": "buff",
+        "text": "HP, shield, and damage +5%."
+      }
+    ]
+  },
+  {
+    "id": "2026-10-17-balance-tune",
+    "version": "0.45.1",
+    "date": "2026-10-17",
+    "title": "Balance fine-tuning",
+    "intro": "Follow-up tweaks to the big balance pass: Torterra, Golem, Greninja and Amoonguss closer to 50%, Dragapult a little on the strong side, and small top-ups for Pokémon the other buffs pushed down.",
+    "changes": [
+      {
+        "pokemon": "torterra",
+        "kind": "buff",
+        "text": "HP and damage +12%."
+      },
+      {
+        "pokemon": "golem",
+        "kind": "buff",
+        "text": "Self-Destruct explodes after 1s instead of 2s. HP +9%."
+      },
+      {
+        "pokemon": "greninja",
+        "kind": "buff",
+        "text": "Battle Bond goes off after 4 attacks instead of 5."
+      },
+      {
+        "pokemon": "amoonguss",
+        "kind": "buff",
+        "text": "HP +8%."
+      },
+      {
+        "pokemon": "dragapult",
+        "kind": "buff",
+        "text": "Dreepy are 30% stronger at ★★ and up (HP, damage, and crash damage). Dragapult HP +5%."
+      },
+      {
+        "pokemon": "minior",
+        "kind": "buff",
+        "text": "HP and shield +7%."
+      },
+      {
+        "pokemon": "annihilape",
+        "kind": "buff",
+        "text": "HP +4%."
+      },
+      {
+        "pokemon": "coalossal",
+        "kind": "buff",
+        "text": "HP +8%."
+      },
+      {
+        "pokemon": "decidueye",
+        "kind": "buff",
+        "text": "Damage +4%."
+      }
+    ]
+  },
+  {
+    "id": "2026-10-16-balance-pass",
+    "version": "0.45.0",
+    "date": "2026-10-16",
+    "title": "Big balance pass",
+    "intro": "Changes from the full balance review: the weakest Pokémon got stronger, the strongest got toned down, and a few got new twists.",
+    "changes": [
+      {
+        "pokemon": "coalossal",
+        "kind": "buff",
+        "text": "Heat Crash goes off every 4 attacks instead of 6, and stuns for 3s instead of 1s. HP and damage +18%."
+      },
+      {
+        "pokemon": "tapukoko",
+        "kind": "change",
+        "text": "Wild Charge now crashes onto the farthest enemy's square, shoving it aside, then hits for 200% (was 150%) and stuns it for 1.5s. Enemies it passes through take 30% damage and a short 0.5s stun instead of a full 1s stun. HP +10%."
+      },
+      {
+        "pokemon": "decidueye",
+        "kind": "buff",
+        "text": "Phantom Force goes off every 6 attacks instead of 8, and makes it attack 50% faster instead of 30%."
+      },
+      {
+        "pokemon": "torterra",
+        "kind": "buff",
+        "text": "Earthquake stuns for 1.5s instead of 1s."
+      },
+      {
+        "pokemon": "golem",
+        "kind": "buff",
+        "text": "Self-Destruct explodes after 2s instead of 3s. HP +12%, damage +5%."
+      },
+      {
+        "pokemon": "vespiquen",
+        "kind": "nerf",
+        "text": "Attack Order goes off every 7 attacks instead of 6."
+      },
+      {
+        "pokemon": "greninja",
+        "kind": "nerf",
+        "text": "Ash-Greninja deals 5% less damage."
+      },
+      {
+        "pokemon": "amoonguss",
+        "kind": "change",
+        "text": "Rage Powder is now always on: an enemy picking a new target goes for Amoonguss if it can already hit it without moving. Enemies that would have to move pick as usual. No more ability counter."
+      },
+      {
+        "pokemon": "beheeyem",
+        "kind": "change",
+        "text": "Stats now grow with levels like everyone else's: weaker at ★ (588 HP, 97 damage), much stronger at ✦ (2881 HP, 475 damage)."
+      },
+      {
+        "pokemon": "infernape",
+        "kind": "change",
+        "text": "Blaze also burns: each hit while it lasts burns the target for 20% of Infernape's damage every second for 3s. Its stats now grow with levels like everyone else's: weaker at ★, stronger at ✦."
+      },
+      {
+        "pokemon": "ditto",
+        "kind": "change",
+        "text": "The copy's strength now depends on Ditto's level: 60% / 78% / 95% / 108% of the original's HP and damage. Levelling Ditto up finally pays off."
+      },
+      {
+        "pokemon": "dragapult",
+        "kind": "change",
+        "text": "Dreepy hits for 35 at ★ (was 50) and 125 at ★★★ (was 115), and have 161 HP at ★ (was 230). Toned down early, a little stronger later."
+      }
+    ]
+  },
+  {
+    "id": "2026-10-16-annihilape-no-cap",
+    "version": "0.44.1",
+    "date": "2026-10-16",
+    "title": "Annihilape rages on, and fewer bars",
+    "changes": [
+      { "pokemon": "annihilape", "kind": "change", "text": "Rage Fist has no cap anymore: every attack in a row without moving makes Annihilape attack faster, for as long as it keeps going. To balance it, each attack adds 12% speed instead of 20%." },
+      { "kind": "change", "text": "In battle, Pokémon without an ability counter no longer show an empty ability bar: Annihilape, Frosmoth, Lilligant, Golem, Ditto, Beheeyem, Minior's Rock form, Combee, and Dreepy. Minior gets its bar once it becomes Star Form." }
+    ]
+  },
+  {
+    "id": "2026-10-16-minior-short-stun",
+    "version": "0.43.4",
+    "date": "2026-10-16",
+    "title": "Shining Star mentions its stun",
+    "changes": [
+      { "pokemon": "minior", "kind": "change", "text": "Shining Star's short description now mentions the stun: Transforms into Minior (Star Form) for the rest of the fight, stunning nearby enemies." }
+    ]
+  },
+  {
+    "id": "2026-10-16-star-form-text",
+    "version": "0.43.3",
+    "date": "2026-10-16",
+    "title": "Shorter form descriptions",
+    "changes": [
+      { "pokemon": "minior", "kind": "change", "text": "Star Form's Pokédex entry now only says what it does differently: it zips straight to its target instead of walking, and every 10 attacks zips to a different enemy. How it transforms is on Minior's own entry." },
+      { "pokemon": "greninja", "kind": "change", "text": "Ash-Greninja's entry no longer repeats how Greninja transforms; its stats say it all." }
+    ]
+  },
+  {
+    "id": "2026-10-16-dex-sort",
+    "version": "0.43.2",
+    "date": "2026-10-16",
+    "title": "Sort the Pokédex",
+    "changes": [
+      { "kind": "change", "text": "The Pokédex is now sorted by cost (cheapest first), with ties in name order." },
+      { "kind": "new", "text": "Sort buttons above the Pokédex: Cost, Name, Class, HP (shield included), or Damage. Tap the chosen one again to reverse the order. The cards glide to their new places, and your choice is remembered." }
+    ]
+  },
+  {
+    "id": "2026-10-16-dex-entry-animations",
+    "version": "0.43.1",
+    "date": "2026-10-16",
+    "title": "Livelier Pokédex entries",
+    "changes": [
+      { "kind": "change", "text": "Stat chips are always in the same places in every Pokédex entry: HP, Damage, Attacks every, Range, Speed, then Shield last for Pokémon that have one. Ditto's copied stats now say Copied instead of going missing, and its stat shape stays in place." },
+      { "kind": "new", "text": "Opening an entry animates it in: the Pokémon pops in, its name sweeps in, the stat shape spins in and grows, the chips pop in one by one, and the ability rises into place." },
+      { "kind": "new", "text": "Switching to a form or related Pokémon has its own animation: the name slides in, chips ripple as their values count, a chip that's gone shrinks away while others glide to their new spot, and the ability box resizes as its text slides in." }
+    ]
+  },
+  {
+    "id": "2026-10-16-shields",
+    "version": "0.43.0",
+    "date": "2026-10-16",
+    "title": "Shields",
+    "intro": "New: shields. A shield is a second bar above a Pokémon's HP that takes every hit first.",
+    "changes": [
+      { "kind": "new", "text": "Shields: while a Pokémon's shield lasts, its HP can't go down. A hit bigger than what's left breaks the shield, and the extra damage is wasted. A broken shield is gone for the fight, and healing only restores HP." },
+      { "pokemon": "minior", "kind": "change", "text": "Rock form is now a shield: Minior starts with a 1100 / 1870 / 3179 / 5390 shield over its 600 / 1020 / 1734 / 2940 HP. When the shield breaks, it becomes Star Form with its HP untouched." },
+      { "pokemon": "minior", "kind": "change", "text": "When Star Form is knocked out, Minior faints for real." }
+    ]
+  },
+  {
+    "id": "2026-10-16-minior-low-hp",
+    "version": "0.42.0",
+    "date": "2026-10-16",
+    "title": "Minior transforms at 35% HP",
+    "intro": "Minior now works like the other Pokémon that transform: one HP bar, and when it faints, it really faints.",
+    "changes": [
+      { "pokemon": "minior", "kind": "change", "text": "Shining Star now goes off at 35% HP instead of when Minior is knocked out. Rock form becomes Star Form and keeps the HP it has left." },
+      { "pokemon": "minior", "kind": "change", "text": "Rock form's HP now covers both forms: 1700 / 2890 / 4913 / 8330 HP, about the same as the two forms' HP added together before. Star Form no longer gets its own HP." }
+    ]
+  },
+  {
+    "id": "2026-10-16-stat-shape-scale",
+    "version": "0.41.0",
+    "date": "2026-10-16",
+    "title": "Stat shapes you can compare",
+    "changes": [
+      { "kind": "change", "text": "The Pokédex stat shape now uses one scale for every Pokémon at every level, so you can compare any two shapes at a glance, even at different levels." },
+      { "kind": "fix", "text": "The stat shape always grows when a Pokémon levels up. Before, some stats could shrink on a level up even though they went up." }
+    ]
+  },
+  {
+    "id": "2026-10-16-oxford-comma",
+    "version": "0.40.5",
+    "date": "2026-10-16",
+    "title": "Tidier ability wording",
+    "changes": [
+      { "kind": "fix", "text": "Ability descriptions now use the Oxford comma in lists, like Coalossal: Its next attack deals 130% damage, knocks the target back, and stuns it." }
+    ]
+  },
+  {
+    "id": "2026-10-16-ability-short-numbers",
+    "version": "0.40.4",
+    "date": "2026-10-16",
+    "title": "Key numbers in short ability descriptions",
+    "changes": [
+      { "kind": "change", "text": "Short ability descriptions now include the basic numbers, like how much damage it deals, heals, slows or speeds up. For example, Golem: Explodes after fainting and deals 300% damage to the enemies around it." }
+    ]
+  },
+  {
+    "id": "2026-10-16-ability-button-corner",
+    "version": "0.40.3",
+    "date": "2026-10-16",
+    "title": "More details button stays put",
+    "changes": [
+      { "kind": "change", "text": "The More details button now sits in the top-right corner of the ability box, next to the ability's name, so it stays in the same spot when the text grows or shrinks." }
+    ]
+  },
+  {
+    "id": "2026-10-16-ability-swap-animation",
+    "version": "0.40.2",
+    "date": "2026-10-16",
+    "title": "Smoother ability details",
+    "changes": [
+      { "kind": "change", "text": "Switching between the short and full ability text is animated: the box smoothly grows or shrinks, the old text drifts away and the new text unrolls from the top, with its key numbers lighting up." }
+    ]
+  },
+  {
+    "id": "2026-10-16-ability-swap",
+    "version": "0.40.1",
+    "date": "2026-10-16",
+    "title": "More details, in place",
+    "changes": [
+      { "kind": "change", "text": "The More details button now swaps the short ability description for the full one right where it is, instead of opening a section underneath. Fewer details swaps it back." }
+    ]
+  },
+  {
+    "id": "2026-10-16-ability-summaries",
+    "version": "0.40.0",
+    "date": "2026-10-16",
+    "title": "Easier ability descriptions",
+    "intro": "Every ability now opens with a short, plain description. Want the exact numbers and rules? Tap More details.",
+    "changes": [
+      {
+        "kind": "change",
+        "text": "Ability descriptions in the Pokédex and the info panel are now a short summary of what the ability does."
+      },
+      {
+        "kind": "new",
+        "text": "Abilities with more to know have a More details button that unfolds the full description, with all the numbers. Once opened, it stays open as you look at other Pokémon."
+      }
+    ]
+  },
+  {
+    "id": "2026-10-16-dex-cards-cost-only",
+    "version": "0.39.1",
+    "date": "2026-10-16",
+    "title": "Cleaner Pokédex cards",
+    "changes": [
+      { "kind": "change", "text": "Pokédex cards no longer show the class: just the cost in the corner. The class is on each Pokémon's Pokédex entry." }
+    ]
+  },
+  {
+    "id": "2026-10-16-dex-links-classes",
+    "version": "0.39.0",
+    "date": "2026-10-16",
+    "title": "New class names and a livelier Pokédex",
+    "changes": [
+      { "kind": "change", "text": "Classes have new names: Warrior is now Tank, Mage is Special, Ranger is Ranged, Rogue is Speedster and Cleric is Healer." },
+      { "kind": "new", "text": "A Pokémon or form named in an ability (like Dreepy, Combee or Ash-Greninja) can be tapped to open its Pokédex entry." },
+      { "kind": "change", "text": "Switching to another Pokémon or form inside a Pokédex entry no longer redraws everything: the stat chips count to their new values, the stat shape morphs, and the ability box fades to the new text." },
+      { "kind": "change", "text": "Pokédex cards show the cost in the top left corner and the class in the top right." }
+    ]
+  },
+  {
+    "id": "2026-10-16-abilities",
+    "version": "0.38.0",
+    "date": "2026-10-16",
+    "title": "Powers are now Abilities",
+    "changes": [
+      { "kind": "change", "text": "Powers are now called abilities, like in the real games." },
+      { "pokemon": "greninja", "kind": "change", "text": "Battle Bond now just says when and how Greninja transforms. Ash-Greninja's stats are on its own Pokédex entry." },
+      { "pokemon": "minior", "kind": "change", "text": "Shining Star now just says when and how Minior transforms. Star Form's stats are on its own Pokédex entry." }
+    ]
+  },
+  {
+    "id": "2026-10-16-friends-button",
+    "version": "0.37.9",
+    "date": "2026-10-16",
+    "title": "Friends button on the main screen",
+    "changes": [
+      { "kind": "new", "text": "A Friends button next to your profile on the main screen shows how many friends are online, with a dot when someone sent you a friend request. Tap it to add and manage friends, or ask an online friend to battle." },
+      { "kind": "change", "text": "The Battle a friend button is gone from the main screen: battle friends from the Friends button instead. Friends also left the main screen's menu, since it has its own button now." }
+    ]
+  },
+  {
+    "id": "2026-10-16-tidy-menu",
+    "version": "0.37.8",
+    "date": "2026-10-16",
+    "title": "Tidier menu, Pokédex on the main screen",
+    "changes": [
+      { "kind": "change", "text": "The main screen has its own Pokédex button in the top right, next to the menu, like in battle." },
+      { "kind": "change", "text": "The menu now only holds the things you need now and then: Friends, Profile, What's new and How to play. Battle, Battle a friend and Training are on the main screen, and the Pokédex has its own button." }
+    ]
+  },
+  {
+    "id": "2026-10-16-clean-start",
+    "version": "0.37.7",
+    "date": "2026-10-16",
+    "title": "Clean main screen on open",
+    "changes": [
+      { "kind": "fix", "text": "Opening the game no longer flashes the battle board, shop and top bar while it loads, or behind the main screen. You see only the main screen." }
+    ]
+  },
+  {
+    "id": "2026-10-16-coin-sprite",
+    "version": "0.37.6",
+    "date": "2026-10-16",
+    "title": "New coin art",
+    "changes": [
+      { "kind": "change", "text": "Coins now use a proper coin sprite: next to your coin count, on shop card prices, and in the team picker and Pokédex." }
+    ]
+  },
+  {
     "id": "2026-10-16-hoopa-attack",
     "version": "0.37.5",
     "date": "2026-10-16",
