@@ -757,7 +757,7 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .modal { z-index: 60; }
 :is(#overlay, #lobby)[hidden], .modal[hidden] { display: none; }
 @keyframes fade-in { from { opacity: 0; } }
-:is(#overlay, #lobby) .card, .dex-panel, .menu-panel {
+:is(#overlay, #lobby) .card, .dex-panel, .menu-panel, .mode-panel {
   position: relative;
   margin: auto; /* centred, but scrolls instead of clipping when taller than the screen */
   width: 100%;
@@ -1213,8 +1213,6 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 /* ---- Online play ---- */
 .start-modes { display: flex; flex-direction: column; align-items: center; gap: 14px; }
 :is(#overlay, #lobby) .start-modes .battle-btn { margin-top: 0; }
-.training-btn { background: var(--panel-2); border: 2px solid var(--line-2); }
-.training-btn:hover:not(:disabled) { border-color: var(--ally); }
 :is(#overlay, #lobby).lobby .card { max-width: 560px; }
 :is(#overlay, #lobby).lobby h2 { font-size: 17px; margin: 0 0 4px; }
 :is(#overlay, #lobby).lobby p { margin: 6px 0; }
@@ -1245,8 +1243,6 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 }
 @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
 .start-modes .battle-btn { font-size: 26px; padding: 18px 56px; }
-.start-modes .training-btn { font-size: 15px; padding: 9px 26px; letter-spacing: 0.08em; }
-.start-modes .training-btn { animation: none; }
 
 /* Online: the Fight button counts down the last 10 seconds of planning. */
 #ready.hurry { animation: hurry 0.5s ease-in-out infinite alternate; }
@@ -1552,17 +1548,51 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 @keyframes strain { 0%, 100% { translate: 0 0; } 25% { translate: -4% 0; } 75% { translate: 4% 0; } }
 @media (prefers-reduced-motion: reduce) { .unit.strain .body { animation: none; } }
 
-/* ---- Battle mode (duel / arena) on the start screen ---- */
-.battle-pick { display: flex; flex-direction: column; align-items: center; gap: 10px; }
-.start-modes .battle-btn small { display: block; margin-top: 2px; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; opacity: 0.85; text-transform: none; }
-.mode-switch { display: inline-flex; padding: 3px; gap: 3px; border-radius: 99px; background: var(--panel-2); border: 1px solid var(--line-2); }
-:is(#overlay, #lobby) .mode-switch button {
-  min-width: 0; margin: 0; padding: 6px 16px; border-radius: 99px; border: 0; font-size: 14px; font-weight: 800;
-  background: transparent; color: var(--muted); box-shadow: none; animation: none;
+/* ---- Battle pop-up: Duel and Arena cards, each with a Training corner button ---- */
+.mode-panel { max-width: 560px; padding: 24px; text-align: center; }
+.mode-panel h1 { font-size: 30px; margin-bottom: 4px; }
+.mode-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
+.mode-card { position: relative; animation: pop-in 0.4s var(--spring) backwards; animation-delay: calc(var(--i) * 70ms + 80ms); }
+.mode-main {
+  width: 100%; min-width: 0; margin: 0; height: 100%;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 18px 12px 16px; border-radius: 16px; border: 2px solid var(--line-2);
+  background: linear-gradient(180deg, var(--panel-3), var(--panel-2));
+  transition: transform 0.2s var(--spring), border-color 0.2s, box-shadow 0.2s;
 }
-:is(#overlay, #lobby) .mode-switch button:hover:not([aria-checked="true"]) { color: var(--text); background: color-mix(in srgb, var(--panel-3) 60%, transparent); }
-:is(#overlay, #lobby) .mode-switch button[aria-checked="true"] { background: var(--gold); color: #10131f; }
-.mode-switch button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.mode-card.duel .mode-main { --accent: var(--ally); }
+.mode-card.arena .mode-main { --accent: var(--gold); }
+.mode-main:hover, .mode-main:focus-visible { transform: translateY(-3px); border-color: var(--accent); box-shadow: 0 10px 28px #0008, 0 0 0 1px var(--accent); }
+.mode-main b { font-size: 24px; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+.mode-main small { color: var(--muted); font-size: 13px; font-weight: 700; }
+.mode-art { position: relative; width: 120px; height: 96px; margin-bottom: 4px; }
+.mode-art .portrait { position: absolute; width: 52px; height: 52px; }
+.mode-art .sprite { animation: walk 0.6s steps(4) infinite; }
+.duel .mode-art .l { left: 4px; top: 26px; }
+.duel .mode-art .r { right: 4px; top: 26px; }
+.arena .mode-art .portrait { width: 44px; height: 44px; }
+.arena .mode-art .t { left: 38px; top: 0; }
+.arena .mode-art .l { left: 0; top: 26px; }
+.arena .mode-art .r { right: 0; top: 26px; }
+.arena .mode-art .b { left: 38px; top: 52px; }
+.mode-main:hover .mode-art .portrait { animation: mode-hop 0.5s ease-in-out infinite alternate; }
+.mode-main:hover .mode-art .portrait:nth-child(even) { animation-delay: 0.25s; }
+@keyframes mode-hop { to { translate: 0 -5px; } }
+:is(#overlay, #lobby, .modal) .mode-train {
+  position: absolute; top: 8px; right: 8px; margin: 0; min-width: 0;
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 9px 4px 6px; border-radius: 99px; font-size: 11px; font-weight: 800; letter-spacing: 0.04em;
+  background: var(--panel); border: 1px solid var(--line-2); color: var(--muted);
+  transition: color 0.15s, border-color 0.15s, transform 0.15s var(--spring);
+}
+.mode-train svg { width: 16px; height: 16px; }
+.mode-train:hover, .mode-train:focus-visible { color: var(--text); border-color: var(--good); transform: scale(1.06); }
+@media (max-width: 520px) {
+  .mode-panel { padding: 20px 14px; }
+  .mode-cards { grid-template-columns: 1fr; }
+  .mode-main { padding-top: 22px; }
+}
+@media (prefers-reduced-motion: reduce) { .mode-card, .mode-main:hover .mode-art .portrait, .mode-art .sprite { animation: none; } }
 
 /* Arena queue: one seat per player found. */
 .arena-seats { display: flex; justify-content: center; gap: 10px; margin: 6px 0 2px; }

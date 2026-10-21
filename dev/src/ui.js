@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=6d9d96d';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=e021a30';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=6d9d96d';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=6d9d96d';
+} from './game.js?v=e021a30';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=e021a30';
 
 const TICK_MS = 100;
 // Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
@@ -567,25 +567,52 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   }
 
   // Which mode Battle queues for: a 1v1 duel, or a 4-player arena. Remembered here.
-  const BATTLE_MODES = { duel: 'Duel · 1 vs 1', arena: 'Arena · 4 players' };
-  const TRAINING_MODES = { duel: 'vs 1 bot', arena: 'Arena vs 3 bots' };
-  const BATTLE_MODE_KEY = 'poke-tactics-battle-mode';
-  let battleMode = (() => { try { const m = localStorage.getItem(BATTLE_MODE_KEY); return m in BATTLE_MODES ? m : 'duel'; } catch { return 'duel'; } })();
+  // Battle opens a pop-up with the two modes. Each card plays online; the
+  // little Training button in its corner plays the same mode against bots.
+  const MODES = {
+    duel: { name: 'Duel', text: '1 vs 1 against a random player', train: 'Duel against 1 bot' },
+    arena: { name: 'Arena', text: '4 players, last one standing wins', train: 'Arena against 3 bots' },
+  };
+  const ICON_BOT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 4v4M9 13h.01M15 13h.01M9.5 17h5"/><circle cx="12" cy="3.5" r="1"/></svg>';
+  const modeEl = $('mode-pick');
+  function openModePick() {
+    const ids = troopIds(catalog).filter((id) => catalog[id].sprite).sort(() => Math.random() - 0.5);
+    const mon = (id, facing, cls) => `<span class="portrait ${cls}" data-facing="${facing}"><span class="sprite" ${spriteStyle(catalog[id])}></span></span>`;
+    const art = {
+      duel: mon(ids[0], 'right', 'l') + mon(ids[1], 'left', 'r'),
+      arena: mon(ids[2], 'down', 't') + mon(ids[3], 'right', 'l') + mon(ids[4], 'left', 'r') + mon(ids[5], 'up', 'b'),
+    };
+    modeEl.querySelector('.mode-panel').innerHTML = `
+      <button class="menu-close ghost" data-mode-close aria-label="Close">✕</button>
+      <h1>Battle</h1>
+      <p class="muted">Pick a mode. Tap <b>Training</b> in a corner to play it against bots.</p>
+      <div class="mode-cards">${Object.entries(MODES).map(([m, d], i) => `
+        <div class="mode-card ${m}" style="--i:${i}">
+          <button class="mode-main" data-play="${m}"><span class="mode-art">${art[m]}</span><b>${d.name}</b><small>${d.text}</small></button>
+          <button class="mode-train" data-train="${m}" title="${d.train}" aria-label="Training: ${d.train}">${ICON_BOT}<span>Training</span></button>
+        </div>`).join('')}
+      </div>`;
+    modeEl.classList.remove('closing');
+    modeEl.hidden = false;
+    modeEl.querySelector('[data-play]').focus();
+  }
+  modeEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (e.target === modeEl || btn?.dataset.modeClose !== undefined) return closeAnimated(modeEl);
+    if (btn?.dataset.play) { modeEl.hidden = true; return onLobby('open', { mode: btn.dataset.play }); }
+    if (btn?.dataset.train) {
+      modeEl.hidden = true;
+      started = true;
+      overlay.classList.remove('start-screen');
+      onLobby('train', { mode: btn.dataset.train });
+      return showTeamBuilder();
+    }
+  });
+  modeEl.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAnimated(modeEl); });
 
   const overlayClick = (e) => {
     const btn = e.target.closest('button, [data-dex-info]');
-    if (btn?.id === 'battle') { started = true; overlay.classList.remove('start-screen'); onLobby('train', { mode: battleMode }); return showTeamBuilder(); }
-    if (btn?.id === 'friend') return onLobby('open', { mode: battleMode });
-    if (btn?.dataset.battleMode) {
-      battleMode = btn.dataset.battleMode;
-      try { localStorage.setItem(BATTLE_MODE_KEY, battleMode); } catch {}
-      for (const b of overlay.querySelectorAll('[data-battle-mode]')) b.setAttribute('aria-checked', b.dataset.battleMode === battleMode);
-      for (const [id, text] of [['#battle-mode-label', BATTLE_MODES], ['#training-mode-label', TRAINING_MODES]]) {
-        const label = overlay.querySelector(id);
-        if (label) { label.textContent = text[battleMode]; label.animate?.([{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], { duration: 220, easing: 'ease-out' }); }
-      }
-      return;
-    }
+    if (btn?.id === 'friend') return openModePick();
     if (btn?.id === 'start-friends') return openMenu('friends', { noBack: true }); // straight from the main screen: just close
     if (btn?.dataset.lobby === 'friends') return openMenu('friends');
     if (btn?.dataset.lobby) return onLobby(btn.dataset.lobby, lobbyValues());
@@ -625,6 +652,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     const key = e.key.toLowerCase();
     if (!dexEl.hidden || !entryEl.hidden) { dexKey(key); return; }
     if (!menuEl.hidden) { if (key === 'escape' || key === 'm') closeMenu(); return; }
+    if (!modeEl.hidden) return;
     if (peek && key === 'escape') return closeInfo();
     if (key === 'p') openDex();
     else if (key === 'm') openMenu();
@@ -2076,13 +2104,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         <p class="tagline">Draft a team, place your Pokémon, and watch them battle it out.</p>
         <div class="parade" aria-hidden="true">${parade}</div>
         <div class="start-modes">
-          <div class="battle-pick">
-            <button id="friend" class="primary battle-btn">Battle<small id="battle-mode-label">${BATTLE_MODES[battleMode]}</small></button>
-            <div class="mode-switch" role="radiogroup" aria-label="Battle mode">
-              ${Object.keys(BATTLE_MODES).map((m) => `<button type="button" role="radio" data-battle-mode="${m}" aria-checked="${m === battleMode}">${m === 'duel' ? 'Duel' : 'Arena'}</button>`).join('')}
-            </div>
-          </div>
-          <button id="battle" class="battle-btn training-btn">Training<small id="training-mode-label">${TRAINING_MODES[battleMode]}</small></button>
+          <button id="friend" class="primary battle-btn">Battle</button>
         </div>
         <div class="start-corner">
           <button id="start-dex" class="icon-btn dex-button" title="Every Pokémon's stats (P)">${ICON_DEX}<span class="label-text">Pokédex</span></button>

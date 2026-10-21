@@ -24,8 +24,8 @@
 //   { type: 'ready' }                         lock in planning; combat starts when all are ready
 //   { type: 'continue' }                      done watching combat; next round starts when all continue
 
-import { randInt, rand, hashSeed } from './rng.js?v=6d9d96d';
-import { simulate, COLS, HALF } from './combat.js?v=6d9d96d';
+import { randInt, rand, hashSeed } from './rng.js?v=e021a30';
+import { simulate, COLS, HALF } from './combat.js?v=e021a30';
 
 export const TEAM_SIZE = 6;
 // Arena: ARENA_SIZE players, paired up in 1v1 fights each round (a new

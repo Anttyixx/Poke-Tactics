@@ -9,12 +9,10 @@ Cloudflare Worker (`server/`), deployed by the same workflow.
 
 ## Online play
 
-The start screen has **Battle** (straight into the matchmaking queue: "Waiting for opponent"
-until the next player looking is found), **Battle a friend** (enter a friend code to send that
-player a battle request) and **Training** (the bot).
-
-**Battle** and **Training** have two modes, picked with the switch under Battle (remembered in the browser,
-`poke-tactics-battle-mode`):
+The start screen has one **Battle** button. It opens a pop-up with two cards, **Duel** and
+**Arena**: tapping a card joins that mode's matchmaking queue ("Waiting for opponent" until
+enough players are found); the small **Training** button in each card's top-right corner plays
+the same mode against bots instead. Friends (the people button) can send a battle request.
 
 - **Duel** (1 vs 1): the classic match against one random opponent.
 - **Arena** (4 players): online, the queue (`/queue?mode=arena`, its own Durable Object)
@@ -29,7 +27,7 @@ player a battle request) and **Training** (the bot).
   to the start screen. Each player watches their own battle (shown as a duel, from their own
   side), with everyone's HP and pairings in a standings strip under the HUD
   (`viewFor()` in `src/game.js` builds each player's view). The game over screen shows the
-  final places. **Training** follows the same switch: an arena against 3 bots (each bot plays
+  final places. **Training** (the Arena card's corner button) is an arena against 3 bots (each bot plays
   its own 1v1 view of the match), with **Play again** at the end.
 
 - **The match runs on a server**, not in either player's browser: a Cloudflare Worker
