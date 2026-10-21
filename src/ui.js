@@ -555,19 +555,22 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
 
   // Which mode Battle queues for: a 1v1 duel, or a 4-player arena. Remembered here.
   const BATTLE_MODES = { duel: 'Duel · 1 vs 1', arena: 'Arena · 4 players' };
+  const TRAINING_MODES = { duel: 'vs 1 bot', arena: 'Arena vs 3 bots' };
   const BATTLE_MODE_KEY = 'poke-tactics-battle-mode';
   let battleMode = (() => { try { const m = localStorage.getItem(BATTLE_MODE_KEY); return m in BATTLE_MODES ? m : 'duel'; } catch { return 'duel'; } })();
 
   const overlayClick = (e) => {
     const btn = e.target.closest('button, [data-dex-info]');
-    if (btn?.id === 'battle') { started = true; overlay.classList.remove('start-screen'); return showTeamBuilder(); }
+    if (btn?.id === 'battle') { started = true; overlay.classList.remove('start-screen'); onLobby('train', { mode: battleMode }); return showTeamBuilder(); }
     if (btn?.id === 'friend') return onLobby('open', { mode: battleMode });
     if (btn?.dataset.battleMode) {
       battleMode = btn.dataset.battleMode;
       try { localStorage.setItem(BATTLE_MODE_KEY, battleMode); } catch {}
       for (const b of overlay.querySelectorAll('[data-battle-mode]')) b.setAttribute('aria-checked', b.dataset.battleMode === battleMode);
-      const label = overlay.querySelector('#battle-mode-label');
-      if (label) { label.textContent = BATTLE_MODES[battleMode]; label.animate?.([{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], { duration: 220, easing: 'ease-out' }); }
+      for (const [id, text] of [['#battle-mode-label', BATTLE_MODES], ['#training-mode-label', TRAINING_MODES]]) {
+        const label = overlay.querySelector(id);
+        if (label) { label.textContent = text[battleMode]; label.animate?.([{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], { duration: 220, easing: 'ease-out' }); }
+      }
       return;
     }
     if (btn?.id === 'start-friends') return openMenu('friends', { noBack: true }); // straight from the main screen: just close
@@ -657,23 +660,20 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     if (state.phase === 'gameover') showGameOver();
   }
 
-  function hpBox(p, side) {
-    if (p.empty) return `<div class="hpbox ${side} empty"><span class="name">${esc(p.name)}</span></div>`;
-    const pct = Math.max(0, p.hp);
-    return `<div class="hpbox ${side}" title="${esc(p.name)}: ${p.hp} HP">
-      ${side === 'ally' ? `${avatar(p.avatar, 'hud-avatar')}<span class="name">${esc(p.name)}</span>` : `<b>${p.hp}</b>`}
-      <div class="hpbar"><i style="width:${pct}%"></i></div>
-      ${side === 'ally' ? `<b>${p.hp}</b>` : `<span class="name">${esc(p.name)}</span>${avatar(p.avatar, 'hud-avatar')}`}
-    </div>`;
-  }
-
-  // Arena: everyone's HP and what they're doing this round, in seat order.
-  function arenaStrip(a) {
-    const tag = (s) => (s.index === a.you ? 'You' : s.out ? `Out · ${ordinal(s.place)}` : s.bye ? 'Sitting out' : s.opponent === a.you ? 'Your opponent' : s.opponent !== null ? `vs ${esc(a.standings[s.opponent].name)}` : '');
-    return `<div class="arena-strip" aria-label="Arena standings">${a.standings.map((s) => `
-      <div class="arena-seat${s.index === a.you ? ' me' : ''}${s.out ? ' out' : ''}${s.opponent === a.you ? ' foe' : ''}" title="${esc(s.name)}: ${s.hp} HP">
-        ${avatar(s.avatar, 'hud-avatar')}<span class="arena-name">${esc(s.name)}</span><b>${s.hp}</b>
-        <div class="hpbar"><i style="width:${Math.max(0, s.hp)}%"></i></div><small>${tag(s)}</small>
+  // Every player's name and HP in their own container: you and your opponent
+  // in a duel; all four, with what each is doing this round, in an arena.
+  function playerStrip() {
+    const a = state.arena ?? {
+      you: viewer,
+      standings: state.players.map((p, i) => ({ index: i, name: p.name, avatar: p.avatar, hp: p.hp, out: false, opponent: 1 - i, bye: false })),
+    };
+    const tag = (s) => (s.index === a.you ? 'You' : s.out ? `Out · ${ordinal(s.place)}` : s.bye ? 'Sitting out' : s.opponent === a.you ? (state.arena ? 'Your opponent' : 'Opponent') : s.opponent !== null ? `vs ${esc(a.standings[s.opponent].name)}` : '');
+    // You first in a duel, then your opponent; an arena keeps its seat order.
+    const list = state.arena ? a.standings : [...a.standings].sort((x, y) => (y.index === a.you) - (x.index === a.you));
+    return `<div class="player-strip seats-${list.length}" aria-label="Players">${list.map((s) => `
+      <div class="player-seat${s.index === a.you ? ' me' : ''}${s.out ? ' out' : ''}${s.opponent === a.you ? ' foe' : ''}" title="${esc(s.name)}: ${s.hp} HP">
+        ${avatar(s.avatar, 'hud-avatar')}<span class="seat-name">${esc(s.name)}</span><b>${s.hp}</b>
+        <div class="hpbar"><i style="width:${Math.max(0, Math.min(100, s.hp))}%"></i></div><small>${tag(s)}</small>
       </div>`).join('')}</div>`;
   }
   const ordinal = (n) => (n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`);
@@ -689,8 +689,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     hudEl.innerHTML = `
       <span class="chip"><span class="label">Round</span><b>${state.round || '–'}</b></span>
       <span class="chip coins" title="Each round: +${ROUND_COINS}, plus ${LOST_COIN} for each of your Pokémon knocked out last battle. Coins carry over."><b class="gold${coinsChanged ? ' bump' : ''}">${p.coins}</b></span>
-      <div class="duel">${hpBox(p, 'ally')}<span class="vs">VS</span>${hpBox(foe(), 'enemy')}</div>
-      ${state.arena ? arenaStrip(state.arena) : ''}
+      ${playerStrip()}
       <div class="hud-actions">
         <button id="open-dex" class="icon-btn dex-button" title="Every Pokémon's stats (P)">${ICON_DEX}<span class="label-text">Pokédex</span></button>
         <button id="open-menu" class="icon-btn${hasUnread() ? ' unread' : ''}" title="Menu (M)" aria-label="Menu">${ICON_MENU}<span class="label-text">Menu</span></button>
@@ -1935,7 +1934,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
               ${Object.keys(BATTLE_MODES).map((m) => `<button type="button" role="radio" data-battle-mode="${m}" aria-checked="${m === battleMode}">${m === 'duel' ? 'Duel' : 'Arena'}</button>`).join('')}
             </div>
           </div>
-          <button id="battle" class="battle-btn training-btn">Training</button>
+          <button id="battle" class="battle-btn training-btn">Training<small id="training-mode-label">${TRAINING_MODES[battleMode]}</small></button>
         </div>
         <div class="start-corner">
           <button id="start-dex" class="icon-btn dex-button" title="Every Pokémon's stats (P)">${ICON_DEX}<span class="label-text">Pokédex</span></button>
@@ -1989,7 +1988,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         <h1 class="${a.place === 1 ? 'win' : 'loss'}">${title}</h1>
         <p>${a.place === 1 ? `Last one standing after ${state.round} rounds.` : done ? (champ ? `${esc(champ.name)} won the arena after ${state.round} rounds.` : `The arena ended after ${state.round} rounds.`) : `You were knocked out in round ${state.round}. ${a.left} players are still fighting.`}</p>
         <ol class="arena-final">${[...a.standings].sort((x, y) => (x.place ?? 0) - (y.place ?? 0)).map((x) => `<li class="${x.index === a.you ? 'me' : ''}"><span>${x.place ? ordinal(x.place) : 'Still in'}</span>${avatar(x.avatar, 'hud-avatar')}<b>${esc(x.name)}</b><small>${x.hp} HP</small></li>`).join('')}</ol>
-        <button id="to-menu" class="primary">Main menu</button>
+        ${online ? '' : '<button id="play-again" class="primary">Play again</button>'}
+        <button id="to-menu"${online ? ' class="primary"' : ''}>Main menu</button>
         <button id="game-log" class="ghost">Match log (copy or download)</button>`);
       return;
     }

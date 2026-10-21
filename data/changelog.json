@@ -1,5 +1,21 @@
 [
   {
+    "id": "2026-10-21-arena-training",
+    "version": "0.46.1",
+    "date": "2026-10-21",
+    "title": "Arena training, cleaner top bar",
+    "changes": [
+      {
+        "kind": "new",
+        "text": "Training now follows the Duel / Arena switch: train in an arena against 3 bots, with the same pairings, byes and standings as online."
+      },
+      {
+        "kind": "change",
+        "text": "The two health bars at the top are gone. Every player now has a container with their name and HP: you and your opponent in a duel, all four in an arena."
+      }
+    ]
+  },
+  {
     "id": "2026-10-21-arena",
     "version": "0.46.0",
     "date": "2026-10-21",
