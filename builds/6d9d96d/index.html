@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap">
-  <link rel="stylesheet" href="styles.css?v=1441bb9">
+  <link rel="stylesheet" href="styles.css?v=6d9d96d">
 </head>
 <body>
   <div id="app">
@@ -24,24 +24,22 @@
       </div>
       <div id="combat-controls" hidden>
         <span id="clock" title="When the timer runs out, sudden death starts">0:30</span>
-        <div class="speeds" role="group" aria-label="Playback speed">
-          <button data-speed="1" class="active">1×</button>
-          <button data-speed="2">2×</button>
-          <button data-speed="4">4×</button>
-        </div>
         <button id="skip">Skip ⏭</button>
       </div>
     </section>
 
     <aside id="info"></aside>
 
+    <div id="shop-slot">
     <section id="shop-wrap">
       <div id="shop"></div>
       <div id="shop-actions">
+        <span id="coins" class="chip coins"></span>
         <button id="reroll"></button>
         <button id="ready" class="primary">Fight!</button>
       </div>
     </section>
+    </div>
   </div>
 
   <div id="info-backdrop" hidden></div>
@@ -51,7 +49,7 @@
   <div id="menu" class="modal" hidden role="dialog" aria-label="Menu"><div class="menu-panel"></div></div>
   <div id="toast" hidden></div>
 
-  <script type="module" src="src/main.js?v=1441bb9"></script>
-  <a class="build-badge dev" href="https://github.com/Anttyixx/Poke-Tactics/commit/1441bb904ca6d1290ca5559a326c9ecba3a054e5">dev · 1441bb9</a>
+  <script type="module" src="src/main.js?v=6d9d96d"></script>
+  <a class="build-badge dev" href="https://github.com/Anttyixx/Poke-Tactics/commit/6d9d96d5491ec829464eb1d92c1906d1cf632ebd">dev · 6d9d96d</a>
 </body>
 </html>

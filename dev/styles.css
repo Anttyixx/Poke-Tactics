@@ -738,6 +738,9 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 #shop .card .levelup { font-size: 11px; font-weight: 900; color: var(--gold); }
 #shop-actions { display: flex; flex-direction: column; gap: 8px; width: 150px; }
 #shop-actions button { flex: 1; border-radius: 12px; }
+#shop-actions .chip.coins { justify-content: center; padding: 6px 12px; }
+#shop-actions .chip.coins b { font-size: 20px; }
+#shop-actions .chip.coins { flex: none; align-items: center; }
 #ready { font-size: 17px; }
 #ready:not(:disabled) { animation: ready-glow 2.2s ease-in-out infinite; }
 @keyframes ready-glow { 50% { box-shadow: 0 4px 22px #4d8dffaa, inset 0 1px 0 #ffffff40; } }
@@ -1045,6 +1048,8 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   #shop .card .cost { top: 5px; right: 5px; font-size: 12px; padding: 0 6px 0 2px; }
   #shop-actions { flex-direction: row; width: 100%; }
   #shop-actions button { padding: 10px; }
+  #shop-actions button { white-space: nowrap; }
+  #shop-actions .chip.coins .label { display: none; }
   .pick-grid { grid-template-columns: 1fr; }
   :is(#overlay, #lobby) .card { padding: 20px 16px; }
   :is(#overlay, #lobby) .leader-card { display: grid; grid-template-columns: 72px 1fr; text-align: left; align-items: center; column-gap: 12px; }
@@ -1084,6 +1089,8 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   .hud-actions .label-text { display: none; }
   #shop-wrap { flex-direction: row; padding: 6px; }
   #shop-actions { flex-direction: column; width: 110px; }
+  #shop-actions .chip.coins { padding: 4px 8px; }
+  #shop-actions .chip.coins .label { display: none; }
   #shop .card .portrait { width: 34px; height: 34px; }
   #shop .card .left, #shop .card .type { display: none; }
   #arena-wrap { gap: 4px; }

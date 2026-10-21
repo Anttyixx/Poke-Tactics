@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=5044d2b';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=6d9d96d';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=5044d2b';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=5044d2b';
+} from './game.js?v=6d9d96d';
+import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=6d9d96d';
 
 const TICK_MS = 100;
 // Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
@@ -276,6 +276,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   const controls = $('combat-controls');
   const rerollBtn = $('reroll');
   const readyBtn = $('ready');
+  const coinsEl = $('coins');
   const toastEl = $('toast');
   const dexEl = $('dex');
   let dexPick = null; // unit id shown in the Pokédex entry
@@ -739,12 +740,15 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     shownCoins = p.coins;
     hudEl.innerHTML = `
       <span class="chip"><span class="label">Round</span><b>${state.round || '–'}</b></span>
-      <span class="chip coins" title="Each round: +${ROUND_COINS}, plus ${LOST_COIN} for each of your Pokémon knocked out last battle. Coins carry over."><b class="gold${coinsChanged ? ' bump' : ''}">${p.coins}</b></span>
       ${playerStrip()}
       <div class="hud-actions">
         <button id="open-dex" class="icon-btn dex-button" title="Every Pokémon's stats (P)">${ICON_DEX}<span class="label-text">Pokédex</span></button>
         <button id="open-menu" class="icon-btn${hasUnread() ? ' unread' : ''}" title="Menu (M)" aria-label="Menu">${ICON_MENU}<span class="label-text">Menu</span></button>
-      </div>`;    animateSeats();
+      </div>`;
+    // Your coins sit by the shop, where you look when deciding what to buy.
+    coinsEl.title = `Each round: +${ROUND_COINS}, plus ${LOST_COIN} for each of your Pokémon knocked out last battle. Coins carry over.`;
+    coinsEl.innerHTML = `<span class="label">Coins</span><b class="gold${coinsChanged ? ' bump' : ''}">${p.coins}</b>`;
+    animateSeats();
   }
 
   // ---- menu ------------------------------------------------------------------

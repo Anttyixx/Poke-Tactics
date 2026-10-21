@@ -1,5 +1,17 @@
 [
   {
+    "id": "2026-10-21-coins-by-shop",
+    "version": "0.46.4",
+    "date": "2026-10-21",
+    "title": "Coins by the shop",
+    "changes": [
+      {
+        "kind": "change",
+        "text": "Your coin count moved from the top bar to the shop, next to Reroll and Fight!, so it's right there while you pick Pokémon to buy."
+      }
+    ]
+  },
+  {
     "id": "2026-10-21-bigger-fights",
     "version": "0.46.3",
     "date": "2026-10-21",
