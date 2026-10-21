@@ -91,7 +91,8 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   margin: 0 auto;
   padding: max(12px, env(safe-area-inset-top)) 16px max(12px, env(safe-area-inset-bottom));
   display: grid;
-  gap: 12px;
+  --gap: 12px;
+  gap: var(--gap);
   grid-template-columns: minmax(0, 1fr) 300px;
   grid-template-rows: auto minmax(0, 1fr) auto;
   grid-template-areas:
@@ -182,9 +183,6 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 #combat-controls { display: flex; justify-content: center; align-items: center; gap: 8px; flex-wrap: wrap; }
 #combat-controls[hidden] { display: flex; visibility: hidden; } /* keep its space: the board doesn't jump */
 #combat-controls button { padding: 5px 12px; }
-.speeds { display: inline-flex; background: var(--panel-2); border: 1px solid var(--line); border-radius: 99px; padding: 2px; }
-.speeds button { border: 0; background: transparent; border-radius: 99px; padding: 4px 12px; }
-.speeds button.active { background: var(--ally); color: #fff; }
 #skip { border-radius: 99px; }
 #clock {
   min-width: 70px; padding: 4px 12px; border-radius: 99px;
@@ -360,6 +358,15 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .unit .body { position: absolute; inset: 0; transform-origin: 50% 90%; transition: filter 0.15s; }
 .unit.sprite-unit .body { animation: idle 1.8s ease-in-out infinite alternate; animation-delay: var(--idle-delay, 0s); }
 .unit.hop .body { animation: hop var(--hop) linear; }
+/* Fight! pressed: a little spin-hop as each Pokémon turns to face the enemy. */
+.unit.turning .body { animation: turn-hop 0.34s ease-out; }
+@keyframes turn-hop {
+  0% { transform: translateY(0) scale(1, 1); }
+  30% { transform: translateY(-14%) scale(0.9, 1.08); }
+  70% { transform: translateY(-4%) scale(1.04, 0.97); }
+  100% { transform: translateY(0) scale(1, 1); }
+}
+@media (prefers-reduced-motion: reduce) { .unit.turning .body { animation: none; } }
 .unit.hop .shadow { animation: hop-shadow var(--hop) linear; }
 .unit.lunge .body { animation: lunge calc(0.3s / var(--speed, 1)) ease-out; }
 .unit.shoot .body { animation: shoot calc(0.26s / var(--speed, 1)) ease-out; }
@@ -675,8 +682,19 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .pips i.on { background: var(--gold); box-shadow: 0 0 4px #ffc93c88; }
 
 /* ---- Shop ---- */
-#shop-wrap {
+/* During a fight the shop slides off the bottom and its row folds away, so the
+   board grows into the room; it slides back in for planning. */
+#shop-slot {
   grid-area: shop;
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.45s var(--glide), margin-top 0.45s var(--glide);
+}
+#shop-wrap { min-height: 0; transition: transform 0.45s var(--glide), opacity 0.3s; }
+#app.fighting #shop-slot { grid-template-rows: 0fr; margin-top: calc(-1 * var(--gap)); }
+#app.fighting #shop-wrap { transform: translateY(calc(100% + 40px)); opacity: 0; visibility: hidden; transition: transform 0.45s var(--glide), opacity 0.3s 0.15s, visibility 0s 0.45s; }
+@media (prefers-reduced-motion: reduce) { #shop-slot, #shop-wrap, #app.fighting #shop-wrap { transition: none; } }
+#shop-wrap {
   display: flex;
   gap: 10px;
   align-items: stretch;
@@ -991,7 +1009,7 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr) auto auto;
     grid-template-areas: "hud" "arena" "info" "shop";
-    gap: 8px;
+    --gap: 8px;
     padding: max(8px, env(safe-area-inset-top)) 10px max(8px, env(safe-area-inset-bottom));
   }
   /* Details are a pop-up sheet, opened with an ⓘ button; the layout never
@@ -1055,7 +1073,7 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
     grid-template-columns: minmax(0, 1fr) minmax(300px, 46%);
     grid-template-rows: auto minmax(0, 1fr) auto;
     grid-template-areas: "arena hud" "arena info" "arena shop";
-    gap: 6px;
+    --gap: 6px;
     padding: max(6px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
   }
   #app.info-idle #info { display: block; }

@@ -288,7 +288,12 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   let draft = { troops: [] }; // team builder picks
   let playedRound = 0; // last combat round we started animating
   let playback = null;
-  let speed = 1;
+  // Everyone watches fights at the same pace (no speed buttons), so nobody
+  // finishes a round before their opponent.
+  const speed = 1;
+  let turnedAt = null; // { round, at }: when your Pokémon turned to face the enemy (Fight! pressed)
+  let pendingStart = 0; // timer: the fight starts once that turn has played
+  const TURN_MS = 480; // one Pokémon's turn, start to finish
   let toastTimer = 0;
   const appEl = $('app');
   const menuEl = $('menu');
@@ -612,12 +617,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   overlay.addEventListener('click', overlayClick);
   lobbyEl.addEventListener('click', overlayClick);
   controls.addEventListener('click', (e) => {
-    if (e.target.id === 'skip') return playback?.skip();
-    const s = +e.target.dataset.speed;
-    if (!s) return;
-    speed = s;
-    arena.style.setProperty('--speed', s);
-    controls.querySelectorAll('[data-speed]').forEach((b) => b.classList.toggle('active', +b.dataset.speed === s));
+    if (e.target.id === 'skip' && !online) return playback?.skip();
   });
   document.addEventListener('keydown', (e) => {
     if (!state || e.ctrlKey || e.metaKey || e.altKey || e.target.matches('input, textarea')) return;
@@ -631,7 +631,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     else if (key === 'f' && canPlan()) intent({ type: 'ready' });
     else if (key === 'e' && canPlan() && selected !== null) intent({ type: 'sell', uid: selected });
     else if (key === 'escape' && state.phase === 'planning') select(null);
-    else if (key === ' ' && playback) { e.preventDefault(); playback.skip(); }
+    else if (key === ' ' && playback && !online) { e.preventDefault(); playback.skip(); }
   });
 
   // ---- rendering -----------------------------------------------------------
@@ -644,6 +644,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     if (!state || next.seed !== state.seed || next.round < state.round) {
       // New match: forget anything tied to the previous one.
       playback?.cancel();
+      clearTimeout(pendingStart);
+      pendingStart = 0;
       playedRound = 0;
       selected = null;
       buying = null;
@@ -655,6 +657,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     }
     // Training mutates one state object, so the phase seen last is kept separately.
     const backFromFight = lastPhase === 'combat' && next.phase === 'planning' && !reduceMotion();
+    const prevPhase = lastPhase;
     lastPhase = next.phase;
     const before = backFromFight ? boardSnapshot() : null;
     state = next;
@@ -664,8 +667,14 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
 
     if (state.phase === 'combat') {
       renderShop();
-      if (playedRound !== state.combat.round) startPlayback();
-      else if (!playback) afterFight();
+      if (playedRound !== state.combat.round) {
+        // Let your Pokémon finish turning to face the enemy before it starts.
+        const wait = turnWait(prevPhase);
+        if (wait > 0) {
+          playedRound = state.combat.round;
+          pendingStart = setTimeout(() => { pendingStart = 0; startPlayback(); }, wait);
+        } else startPlayback();
+      } else if (!playback && !pendingStart) afterFight();
       return;
     }
     overlay.hidden = true;
@@ -762,7 +771,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
           <li><b>Win</b> by bringing your opponent from 100 HP to 0. The loser of a battle loses HP for every Pokémon still standing.</li>
           <li><b>Arena</b> (Battle → Arena): 4 players, a 1v1 battle against a different player each round. With 3 left, one sits the round out (no damage, coins as usual). Last one standing wins.</li>
         </ul>
-        <p class="muted">Keys: <kbd>D</kbd> reroll · <kbd>F</kbd> fight · <kbd>E</kbd> sell · <kbd>Space</kbd> skip · <kbd>P</kbd> Pokédex · <kbd>M</kbd> menu</p>`;
+        <p class="muted">Keys: <kbd>D</kbd> reroll · <kbd>F</kbd> fight · <kbd>E</kbd> sell · <kbd>Space</kbd> skip the fight (training) · <kbd>P</kbd> Pokédex · <kbd>M</kbd> menu</p>`;
     } else if (view === 'news') {
       try { localStorage.setItem(SEEN_KEY, latestUpdate); } catch {}
       hudEl.querySelector('#open-menu')?.classList.remove('unread');
@@ -1080,6 +1089,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
 
   function renderPlanning() {
     arena.classList.remove('in-combat', 'sudden-death');
+    appEl.classList.remove('fighting');
     controls.hidden = true;
     const draggable = canPlan();
     const buyingId = buying !== null ? me().shop[buying] : null;
@@ -1106,9 +1116,13 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       return el;
     });
 
+    // Fight! pressed: your Pokémon turn around to face the enemy's side.
+    const ready = state.phase === 'planning' && me().ready;
+    if (!ready) turnedAt = null;
+    else if (turnedAt?.round !== state.round) turnedAt = { round: state.round, at: performance.now() };
     const fresh = state.round !== seenUids.round;
     if (fresh) seenUids = Object.assign(new Set(), { round: state.round });
-    layer.replaceChildren(...ghostEls, ...me().board.map((u) => {
+    layer.replaceChildren(...ghostEls, ...me().board.map((u, i) => {
       const el = unitEl(u.unitId, u.star);
       // Newly bought (or levelled up): drop onto the board with a bounce.
       const key = `${u.uid}:${u.star}`;
@@ -1120,11 +1134,46 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       // Highlight the troop the picked shop copy would level up.
       el.classList.toggle('combine-target', u.unitId === buyingId);
       place(el, u.x, u.y + HALF);
+      if (turnedAt) turnAround(el, u, i);
       return el;
     }));
 
     renderShop();
     renderInfo();
+  }
+
+  // One Pokémon turning to face the enemy: a quarter turn to the side, then its
+  // back to you, with a little hop; each a beat after the last. Timed from when
+  // Fight! was pressed, so a redraw mid-turn picks up where it was.
+  function turnAround(el, u, i) {
+    if (!el.dataset.facing) return;
+    const side = u.x < COLS / 2 ? 'left' : 'right';
+    const steps = [[0, side], [130, 'up']];
+    const start = reduceMotion() ? -Infinity : turnedAt.at + i * 70;
+    const now = performance.now();
+    el.dataset.facing = 'down';
+    for (const [at, facing] of steps) {
+      const wait = start + at - now;
+      if (wait <= 0) el.dataset.facing = facing;
+      else setTimeout(() => (el.dataset.facing = facing), wait);
+    }
+    const hop = start - now;
+    if (hop > -340) setTimeout(() => el.classList.add('turning'), Math.max(0, hop));
+  }
+
+  // How long until every Pokémon on your side has turned around. When the fight
+  // starts the moment you press Fight! (your opponent was already waiting), the
+  // turn plays here first.
+  function turnWait(prev) {
+    if (reduceMotion()) return 0;
+    const board = me().board;
+    if (!board.length) return 0;
+    if (turnedAt?.round !== state.combat.round) {
+      if (prev !== 'planning') return 0;
+      turnedAt = { round: state.combat.round, at: performance.now() };
+      board.forEach((u, i) => { const el = layer.querySelector(`.unit[data-uid="${u.uid}"]`); if (el) turnAround(el, u, i); });
+    }
+    return Math.max(0, turnedAt.at + (board.length - 1) * 70 + TURN_MS - performance.now());
   }
 
   function renderShop() {
@@ -1226,11 +1275,13 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     selected = null;
     overlay.hidden = true;
     arena.classList.add('in-combat');
+    appEl.classList.add('fighting');
     arena.classList.remove('sudden-death', 'buying', 'has-ghosts', 'hinting');
     closeInfo();
     buying = null;
     setClock(0);
     controls.hidden = false;
+    $('skip').hidden = online; // online, everyone watches the whole fight
     renderInfo();
 
     const actors = new Map();

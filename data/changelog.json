@@ -1,5 +1,29 @@
 [
   {
+    "id": "2026-10-21-bigger-fights",
+    "version": "0.46.3",
+    "date": "2026-10-21",
+    "title": "Bigger battles",
+    "changes": [
+      {
+        "kind": "new",
+        "text": "During a fight the shop slides off screen and the board grows to fill the space. The shop slides back when planning starts."
+      },
+      {
+        "kind": "new",
+        "text": "When you press Fight!, your Pokémon turn around to face the enemy."
+      },
+      {
+        "kind": "change",
+        "text": "The battle speed buttons are gone: every fight plays at the same speed, so nobody finishes a round before their opponent."
+      },
+      {
+        "kind": "change",
+        "text": "Skip (and the Space key) now only works in Training."
+      }
+    ]
+  },
+  {
     "id": "2026-10-21-victory-dance",
     "version": "0.46.2",
     "date": "2026-10-21",

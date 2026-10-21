@@ -44,6 +44,9 @@ player a battle request) and **Training** (the bot).
   who hasn't moved on within 20 seconds is moved on. (The game moves on by itself: when a
   fight ends the winners dance for about 2 seconds, the loser's HP drains in their container,
   then the board animates back to the planning setup; there is no results pop-up.)
+- **Fights play at one fixed speed** for everyone (no speed buttons), and online there is no
+  Skip, so nobody finishes a round before their opponent. Pressing Fight! turns your Pokémon
+  around to face the enemy; during the fight the shop slides off screen and the board grows.
 - **Dropping out and coming back:** each browser keeps a random player id
   (`poke-tactics-pid` in localStorage), which is how the server knows a returning player. The
   connection pings every 5 seconds; silence for 15 seconds, the page coming back on screen,
@@ -319,7 +322,7 @@ test a set of changes together. Team styles to pit against each other live in `A
   A broken shield is gone for the fight, and healing only ever restores HP.
 - **Damage:** the loser takes `round + 2 × (copies in the winner's surviving troops)`. A draw (the last
   Pokémon on both sides fall at the same moment) costs each player `ceil(round / 2)`. Everyone starts at 100 HP.
-- **Keys:** `D` reroll, `F` fight, `E` sell the selected troop, `Space` skip the combat replay, `P` Pokédex,
+- **Keys:** `D` reroll, `F` fight, `E` sell the selected troop, `Space` skip the combat replay (training only), `P` Pokédex,
   `M` menu (How to play, Pokédex, New game), `Esc` deselect or close.
 
 ## Project layout
