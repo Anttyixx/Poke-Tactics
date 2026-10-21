@@ -7,7 +7,7 @@
     "changes": [
       {
         "kind": "new",
-        "text": "Training now follows the Duel / Arena switch: train in an arena against 3 bots, with the same pairings, byes and standings as online."
+        "text": "Training now follows the Duel / Arena switch: train in an arena against 3 bots, with the same pairings, byes and standings as online. If you're knocked out, the bots play the rest out at once so you see the final places."
       },
       {
         "kind": "change",

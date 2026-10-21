@@ -138,8 +138,17 @@ function dispatch(player, intent) {
 
 // Every seat but the player's is a bot. In an arena each bot plays its own
 // 1v1 view of the match (viewFor), the same way the player sees it.
+// Bots keep going until they're waiting on the player; once the player is
+// out of an arena, the bots play the rest of it out at once.
 function runBot() {
   if (mode !== 'bot') return;
+  for (let pass = 0; pass < 2000; pass++) {
+    const key = `${state.round}:${state.phase}:${state.players.map((p) => +p.ready).join('')}`;
+    botPass();
+    if (`${state.round}:${state.phase}:${state.players.map((p) => +p.ready).join('')}` === key) return;
+  }
+}
+function botPass() {
   for (let bot = 0; bot < state.players.length; bot++) {
     if (bot === me || state.players[bot].ready || state.phase === 'gameover') continue;
     const send = (intent) => {
