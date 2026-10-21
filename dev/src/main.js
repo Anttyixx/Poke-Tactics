@@ -6,18 +6,18 @@
 //            the player does and shows the state the server sends back
 //            (connection: src/online.js).
 
-import { createGame, applyIntent, viewFor } from './game.js?v=2ea6167';
-import { botTurn } from './bot.js?v=2ea6167';
-import { fightSummary } from './matchlog.js?v=2ea6167';
-import { createUI } from './ui.js?v=2ea6167';
-import { hashSeed } from './rng.js?v=2ea6167';
-import { connect, isCode, playerId, serverUrl, checkServer, netLog, note } from './online.js?v=2ea6167';
-import { loadProfile, saveProfile, recordBattle, recordMatch, BOT_AVATAR } from './profile.js?v=2ea6167';
+import { createGame, applyIntent, viewFor } from './game.js?v=b1c32ce';
+import { botTurn } from './bot.js?v=b1c32ce';
+import { fightSummary } from './matchlog.js?v=b1c32ce';
+import { createUI } from './ui.js?v=b1c32ce';
+import { hashSeed } from './rng.js?v=b1c32ce';
+import { connect, isCode, playerId, serverUrl, checkServer, netLog, note } from './online.js?v=b1c32ce';
+import { loadProfile, saveProfile, recordBattle, recordMatch, BOT_AVATAR } from './profile.js?v=b1c32ce';
 
-const catalogText = await (await fetch('data/units.json?v=2ea6167')).text();
+const catalogText = await (await fetch('data/units.json?v=b1c32ce')).text();
 const catalog = JSON.parse(catalogText);
 // What's new: newest first. Add an entry to data/changelog.json with each update.
-const changelog = await fetch('data/changelog.json?v=2ea6167').then((r) => (r.ok ? r.json() : [])).catch(() => []);
+const changelog = await fetch('data/changelog.json?v=b1c32ce').then((r) => (r.ok ? r.json() : [])).catch(() => []);
 // Which deploy this is (the deploy tags every file with ?v=<commit>). The
 // server only lets in players on its own build, so everyone runs the same rules.
 const BUILD = new URL(import.meta.url).searchParams.get('v') ?? 'local';
@@ -138,8 +138,17 @@ function dispatch(player, intent) {
 
 // Every seat but the player's is a bot. In an arena each bot plays its own
 // 1v1 view of the match (viewFor), the same way the player sees it.
+// Bots keep going until they're waiting on the player; once the player is
+// out of an arena, the bots play the rest of it out at once.
 function runBot() {
   if (mode !== 'bot') return;
+  for (let pass = 0; pass < 2000; pass++) {
+    const key = `${state.round}:${state.phase}:${state.players.map((p) => +p.ready).join('')}`;
+    botPass();
+    if (`${state.round}:${state.phase}:${state.players.map((p) => +p.ready).join('')}` === key) return;
+  }
+}
+function botPass() {
   for (let bot = 0; bot < state.players.length; bot++) {
     if (bot === me || state.players[bot].ready || state.phase === 'gameover') continue;
     const send = (intent) => {

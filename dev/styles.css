@@ -1564,7 +1564,11 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .player-seat.foe { border-color: var(--enemy); }
 .player-seat.foe .hpbar i { background: linear-gradient(90deg, #e33a52, var(--enemy)); }
 .player-seat.out { opacity: 0.45; }
-@media (max-width: 640px) {
+/* Narrow screens: the players get their own row under the round and coins. */
+@media (max-width: 820px) {
+  .player-strip { order: 5; flex-basis: 100%; margin: 0; }
+}
+@media (max-width: 520px) {
   .player-strip.seats-4 { --seats: 2; }
 }
 
