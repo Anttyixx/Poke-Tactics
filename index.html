@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="booting">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap">
-  <link rel="stylesheet" href="styles.css?v=e106d6e">
+  <link rel="stylesheet" href="styles.css?v=e021a30">
 </head>
 <body>
   <div id="app">
@@ -24,33 +24,33 @@
       </div>
       <div id="combat-controls" hidden>
         <span id="clock" title="When the timer runs out, sudden death starts">0:30</span>
-        <div class="speeds" role="group" aria-label="Playback speed">
-          <button data-speed="1" class="active">1×</button>
-          <button data-speed="2">2×</button>
-          <button data-speed="4">4×</button>
-        </div>
         <button id="skip">Skip ⏭</button>
       </div>
     </section>
 
     <aside id="info"></aside>
 
+    <div id="shop-slot">
     <section id="shop-wrap">
       <div id="shop"></div>
       <div id="shop-actions">
+        <span id="coins" class="chip coins"></span>
         <button id="reroll"></button>
         <button id="ready" class="primary">Fight!</button>
       </div>
     </section>
+    </div>
   </div>
 
   <div id="info-backdrop" hidden></div>
   <div id="overlay" hidden><div class="card"></div></div>
   <div id="dex" class="modal" hidden role="dialog" aria-label="Pokédex"><div class="dex-panel"></div></div>
+  <div id="dex-entry" class="modal" hidden role="dialog" aria-label="Pokémon info"><div class="dex-panel entry-panel"></div></div>
+  <div id="mode-pick" class="modal" hidden role="dialog" aria-label="Choose a battle"><div class="mode-panel"></div></div>
   <div id="menu" class="modal" hidden role="dialog" aria-label="Menu"><div class="menu-panel"></div></div>
   <div id="toast" hidden></div>
 
-  <script type="module" src="src/main.js?v=e106d6e"></script>
-  <a class="build-badge stable" href="https://github.com/Anttyixx/Poke-Tactics/commit/e106d6efee06cf9e1a5e7d0684bfa2c4bbb17b02">stable · e106d6e</a>
+  <script type="module" src="src/main.js?v=e021a30"></script>
+  <a class="build-badge stable" href="https://github.com/Anttyixx/Poke-Tactics/commit/e021a30c1f1a3e4429ff75b29c5c528278028b9a">stable · e021a30</a>
 </body>
 </html>
