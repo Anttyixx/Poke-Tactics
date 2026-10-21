@@ -1,5 +1,21 @@
 [
   {
+    "id": "2026-10-21-battle-popup",
+    "version": "0.46.5",
+    "date": "2026-10-21",
+    "title": "One Battle button",
+    "changes": [
+      {
+        "kind": "change",
+        "text": "The main screen has a single Battle button. It opens a pop-up where you pick Duel or Arena."
+      },
+      {
+        "kind": "new",
+        "text": "Each mode's card has a small Training button in its top-right corner: tap it to play that mode against bots."
+      }
+    ]
+  },
+  {
     "id": "2026-10-21-coins-by-shop",
     "version": "0.46.4",
     "date": "2026-10-21",
