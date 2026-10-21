@@ -1,5 +1,25 @@
 [
   {
+    "id": "2026-10-21-victory-dance",
+    "version": "0.46.2",
+    "date": "2026-10-21",
+    "title": "Victory dances",
+    "changes": [
+      {
+        "kind": "new",
+        "text": "When a fight ends, the winning side's Pokémon jump and do a little dance."
+      },
+      {
+        "kind": "change",
+        "text": "No more results pop-up after a fight. The loser's HP bar drains in their container, with the damage floating up, and the game moves on by itself."
+      },
+      {
+        "kind": "new",
+        "text": "The board resets with an animation: your Pokémon glide back to where you placed them, the ones knocked out pop back in, and the enemy fades away."
+      }
+    ]
+  },
+  {
     "id": "2026-10-21-arena-training",
     "version": "0.46.1",
     "date": "2026-10-21",

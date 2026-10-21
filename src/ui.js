@@ -4,7 +4,7 @@
 
 import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js';
 import {
-  COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
+  COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
 } from './game.js';
 import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js';
@@ -295,6 +295,13 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   let shownCoins = null; // last coin count drawn, to animate changes
   let shownShop = ''; // last shop drawn, to deal new cards in
   let seenUids = new Set(); // board units already drawn, to drop new ones in
+  // HP each player's container last showed, so a change animates (the bar
+  // drains and the damage floats up), and the HP shown early after a fight,
+  // before the server applies it: { round, hp: Map(seat -> hp) }.
+  let hpShown = new Map();
+  let hpEarly = null;
+  let celebrated = 0; // last round whose end-of-fight celebration has played
+  let lastPhase = null; // the phase drawn last time
   let started = false; // past the start screen (it shows once, when the game loads)
   let online = false; // playing a friend (the menu offers Leave instead of New game)
   let lobbyView = null; // which online-lobby screen is showing, if any
@@ -640,9 +647,16 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       playedRound = 0;
       selected = null;
       buying = null;
+      hpShown = new Map();
+      hpEarly = null;
+      celebrated = 0;
       // With exactly a team's worth of troops available, start with all of them picked.
       draft = { troops: troopIds(catalog).length === teamSize(catalog) ? troopIds(catalog) : [] };
     }
+    // Training mutates one state object, so the phase seen last is kept separately.
+    const backFromFight = lastPhase === 'combat' && next.phase === 'planning' && !reduceMotion();
+    lastPhase = next.phase;
+    const before = backFromFight ? boardSnapshot() : null;
     state = next;
     if (selected !== null && !owned(selected)) selected = null;
     if (buying !== null && !me().shop[buying]) buying = null;
@@ -651,11 +665,12 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     if (state.phase === 'combat') {
       renderShop();
       if (playedRound !== state.combat.round) startPlayback();
-      else if (!playback) showResult();
+      else if (!playback) afterFight();
       return;
     }
     overlay.hidden = true;
     renderPlanning();
+    if (before) animateBoardReset(before);
     if (state.phase === 'team') { if (started) showTeamBuilder(); else showStart(); }
     if (state.phase === 'gameover') showGameOver();
   }
@@ -670,11 +685,38 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     const tag = (s) => (s.index === a.you ? 'You' : s.out ? `Out · ${ordinal(s.place)}` : s.bye ? 'Sitting out' : s.opponent === a.you ? (state.arena ? 'Your opponent' : 'Opponent') : s.opponent !== null ? `vs ${esc(a.standings[s.opponent].name)}` : '');
     // You first in a duel, then your opponent; an arena keeps its seat order.
     const list = state.arena ? a.standings : [...a.standings].sort((x, y) => (y.index === a.you) - (x.index === a.you));
+    const early = state.phase === 'combat' && hpEarly?.round === state.combat.round ? hpEarly.hp : null;
+    const hpOf = (s) => early?.get(s.index) ?? s.hp;
     return `<div class="player-strip seats-${list.length}" aria-label="Players">${list.map((s) => `
-      <div class="player-seat${s.index === a.you ? ' me' : ''}${s.out ? ' out' : ''}${s.opponent === a.you ? ' foe' : ''}" title="${esc(s.name)}: ${s.hp} HP">
-        ${avatar(s.avatar, 'hud-avatar')}<span class="seat-name">${esc(s.name)}</span><b>${s.hp}</b>
-        <div class="hpbar"><i style="width:${Math.max(0, Math.min(100, s.hp))}%"></i></div><small>${tag(s)}</small>
+      <div class="player-seat${s.index === a.you ? ' me' : ''}${s.out ? ' out' : ''}${s.opponent === a.you ? ' foe' : ''}" data-seat="${s.index}" data-hp="${hpOf(s)}" title="${esc(s.name)}: ${hpOf(s)} HP">
+        ${avatar(s.avatar, 'hud-avatar')}<span class="seat-name">${esc(s.name)}</span><b>${hpOf(s)}</b>
+        <div class="hpbar"><i style="width:${Math.max(0, Math.min(100, hpOf(s)))}%"></i></div><small>${tag(s)}</small>
       </div>`).join('')}</div>`;
+  }
+  // A container whose HP changed since it was last drawn: the bar drains from
+  // the old value, the number counts down, and the damage floats up.
+  function animateSeats() {
+    for (const el of hudEl.querySelectorAll('.player-seat')) {
+      const seat = el.dataset.seat;
+      const hp = Number(el.dataset.hp);
+      const was = hpShown.get(seat);
+      hpShown.set(seat, hp);
+      if (was === undefined || was === hp || reduceMotion()) continue;
+      const bar = el.querySelector('.hpbar i');
+      bar.animate([{ width: `${Math.max(0, Math.min(100, was))}%` }, { width: `${Math.max(0, Math.min(100, hp))}%` }], { duration: 900, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' });
+      const num = el.querySelector('b');
+      const t0 = performance.now();
+      const step = (now) => { const k = Math.min(1, (now - t0) / 900); num.textContent = Math.round(was + (hp - was) * (1 - (1 - k) ** 3)); if (k < 1) requestAnimationFrame(step); };
+      requestAnimationFrame(step);
+      if (hp < was) {
+        el.classList.remove('hurt'); void el.offsetWidth; el.classList.add('hurt');
+        const pop = document.createElement('span');
+        pop.className = 'seat-damage';
+        pop.textContent = `-${was - hp}`;
+        el.append(pop);
+        pop.addEventListener('animationend', () => pop.remove());
+      }
+    }
   }
   const ordinal = (n) => (n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`);
 
@@ -693,7 +735,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       <div class="hud-actions">
         <button id="open-dex" class="icon-btn dex-button" title="Every Pokémon's stats (P)">${ICON_DEX}<span class="label-text">Pokédex</span></button>
         <button id="open-menu" class="icon-btn${hasUnread() ? ' unread' : ''}" title="Menu (M)" aria-label="Menu">${ICON_MENU}<span class="label-text">Menu</span></button>
-      </div>`;
+      </div>`;    animateSeats();
   }
 
   // ---- menu ------------------------------------------------------------------
@@ -1197,6 +1239,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       const ally = u.side === viewer;
       const a = { ...u, shield: u.shield ?? 0, maxShield: u.maxShield ?? 0, stunUntil: 0, el: unitEl(u.unitId, u.star, ally ? 'ally' : 'enemy', ally ? 'up' : 'down') };
       if (a.shield > 0) a.el.classList.add('shielded');
+      if (!u.summoned && u.uid > 0) a.el.dataset.fightUid = u.uid;
+      a.el.dataset.side = ally ? 'ally' : 'enemy';
       const p = viewPos(u.x, u.y);
       place(a.el, p.x, p.y);
       layer.append(a.el);
@@ -1246,7 +1290,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       cancelAnimationFrame(raf);
       playback = null;
       controls.hidden = true;
-      setTimeout(() => { if (state.phase === 'combat' && !playback) render(state); }, 700);
+      afterFight(actors);
     };
     const frame = (now) => {
       acc += Math.min(now - last, 250) * speed;
@@ -1872,25 +1916,74 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
 
   // ---- overlays ------------------------------------------------------------
 
-  function showResult() {
+  // A fight has played out: the winners celebrate, the loser's HP drains in
+  // their container, and the game moves on by itself (no results pop-up).
+  // The server applies the damage once everyone has moved on; until then the
+  // containers show the HP after this fight.
+  function afterFight(actors = null) {
     const { result, damage, round } = state.combat;
-    const won = result.winner === viewer;
-    const draw = result.winner === null;
-    const title = draw ? 'Draw' : won ? 'Victory!' : 'Defeat';
-    const detail = draw
-      ? `Both teams were knocked out at the same moment. Both players take ${damage[viewer]} damage.`
-      : won
-        ? `${result.survivors.length} of your units survived. ${esc(foe().name)} takes ${damage[1 - viewer]} damage.`
-        : `${result.survivors.length} enemy units survived. You take ${damage[viewer]} damage.`;
-    const hpAfter = Math.max(0, me().hp - damage[viewer]);
-    showOverlay(`
-      <h1 class="${draw ? '' : won ? 'win' : 'loss'}">${title}</h1>
-      <p>${detail}</p>
-      <p class="muted">Round ${round} · Your HP ${me().hp} → ${hpAfter} · +${ROUND_COINS + LOST_COIN * lostCount(result, viewer)} coins next round (${ROUND_COINS} + ${lostCount(result, viewer)} for Pokémon lost)</p>
-      ${me().ready
-        ? `<button disabled>${state.arena ? 'Waiting for the others…' : 'Waiting for opponent…'}</button>`
-        : '<button id="continue" class="primary" autofocus>Continue</button>'}`);
-    overlay.querySelector('#continue')?.focus();
+    clockEl.textContent = state.arena ? 'Waiting for the others…' : '';
+    clockEl.classList.remove('sudden');
+    if (celebrated === round) return;
+    celebrated = round;
+    if (result.winner !== null) {
+      const winners = [...layer.querySelectorAll(`.unit[data-side="${result.winner === viewer ? 'ally' : 'enemy'}"]:not(.dead)`)];
+      winners.forEach((el, i) => { el.style.setProperty('--dance-delay', `${i * 90}ms`); el.classList.add('victory'); });
+    }
+    // The HP after this fight, shown right away.
+    const seats = state.arena ? [state.arena.you, state.arena.standings.find((x) => x.opponent === state.arena.you)?.index] : [0, 1];
+    const sideOf = (seat) => (state.arena ? (seat === state.arena.you ? viewer : 1 - viewer) : seat);
+    hpEarly = { round, hp: new Map(seats.filter((x) => x !== undefined).map((seat) => {
+      const p = state.arena ? state.arena.standings[seat] : state.players[seat];
+      return [seat, Math.max(0, p.hp - damage[sideOf(seat)])];
+    })) };
+    setTimeout(() => renderHud(), reduceMotion() ? 0 : 450);
+    // Then on to the next round once the celebration has played.
+    setTimeout(() => {
+      if (state.phase === 'combat' && state.combat.round === round && !me().ready) onIntent({ type: 'continue' });
+    }, reduceMotion() ? 300 : 1900);
+  }
+
+  // Where every Pokémon on the board is right now (at the end of a fight), so
+  // the board can glide back to the planning setup.
+  function boardSnapshot() {
+    const box = layer.getBoundingClientRect();
+    const mine = new Map();
+    const leaving = [];
+    for (const el of layer.querySelectorAll('.unit')) {
+      const r = el.getBoundingClientRect();
+      const at = { x: r.left - box.left, y: r.top - box.top, w: r.width, h: r.height };
+      if (el.dataset.fightUid && el.dataset.side === 'ally' && !el.classList.contains('dead')) mine.set(el.dataset.fightUid, at);
+      else if (!el.classList.contains('dead')) leaving.push({ el, at });
+    }
+    return { mine, leaving };
+  }
+  // The board resets: your Pokémon glide back to where you placed them, the
+  // ones knocked out pop back in, and everyone else fades away.
+  function animateBoardReset({ mine, leaving }) {
+    const box = layer.getBoundingClientRect();
+    for (const { el, at } of leaving) {
+      const ghost = el.cloneNode(true);
+      ghost.classList.remove('victory');
+      Object.assign(ghost.style, { left: `${at.x}px`, top: `${at.y}px`, width: `${at.w}px`, height: `${at.h}px`, transition: 'none', pointerEvents: 'none' });
+      layer.append(ghost);
+      ghost.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scale(0.6) translateY(-10px)' }], { duration: 380, easing: 'ease-in', fill: 'forwards' }).onfinish = () => ghost.remove();
+    }
+    let k = 0;
+    for (const el of layer.querySelectorAll('.unit[data-uid]')) {
+      const from = mine.get(el.dataset.uid);
+      const r = el.getBoundingClientRect();
+      if (from) {
+        const dx = from.x - (r.left - box.left);
+        const dy = from.y - (r.top - box.top);
+        el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: `translate(${dx / 2}px, ${dy / 2 - 14}px)`, offset: 0.5 }, { transform: 'none' }], { duration: 520, delay: 120 + k * 40, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'backwards' });
+      } else {
+        // Knocked out in the fight: back on its square.
+        el.animate([{ opacity: 0, transform: 'scale(0.3)', filter: 'brightness(2.5)' }, { opacity: 1, transform: 'scale(1.12)', filter: 'brightness(1.6)', offset: 0.6 }, { opacity: 1, transform: 'none', filter: 'none' }], { duration: 520, delay: 260 + k * 40, easing: 'ease-out', fill: 'backwards' });
+      }
+      k++;
+    }
+    for (const el of layer.querySelectorAll('.unit.ghost')) el.animate([{ opacity: 0 }, { opacity: getComputedStyle(el).opacity }], { duration: 500, delay: 300, easing: 'ease-out', fill: 'backwards' });
   }
 
   // Team cards look like the Pokédex's: sprite in a glow, name, cost and type.

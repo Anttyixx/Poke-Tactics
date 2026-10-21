@@ -41,7 +41,9 @@ player a battle request) and **Training** (the bot).
   plain HTTPS, so it works on any network that can open a website (no relay needed).
 - **Each planning phase lasts 30 seconds** on the server's clock (both screens count down);
   then anyone still planning is locked in as they are. After a battle has played out, anyone
-  who hasn't pressed Continue within 20 seconds is moved on.
+  who hasn't moved on within 20 seconds is moved on. (The game moves on by itself: when a
+  fight ends the winners dance for about 2 seconds, the loser's HP drains in their container,
+  then the board animates back to the planning setup; there is no results pop-up.)
 - **Dropping out and coming back:** each browser keeps a random player id
   (`poke-tactics-pid` in localStorage), which is how the server knows a returning player. The
   connection pings every 5 seconds; silence for 15 seconds, the page coming back on screen,
