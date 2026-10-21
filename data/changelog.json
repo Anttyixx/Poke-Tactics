@@ -1,5 +1,30 @@
 [
   {
+    "id": "2026-10-21-arena",
+    "version": "0.46.0",
+    "date": "2026-10-21",
+    "title": "Arena: 4-player battles",
+    "intro": "A new way to battle: four players, one arena, last one standing wins.",
+    "changes": [
+      {
+        "kind": "new",
+        "text": "Battle now has two modes. Pick Duel (1 vs 1) or Arena (4 players) with the switch under the Battle button. Your choice is remembered."
+      },
+      {
+        "kind": "new",
+        "text": "Arena: once 4 players are found, everyone picks a team and fights 1v1 battles each round against a different player. Battles work exactly like a duel."
+      },
+      {
+        "kind": "new",
+        "text": "With 3 players left, one sits the round out: no battle, no damage, and the round's coins anyway. Nobody sits out twice in a row."
+      },
+      {
+        "kind": "new",
+        "text": "The last player standing wins. A standings strip under the top bar shows everyone's HP and who's fighting whom, and the end screen shows the final places."
+      }
+    ]
+  },
+  {
     "id": "2026-10-17-koko-dash",
     "version": "0.45.2",
     "date": "2026-10-17",

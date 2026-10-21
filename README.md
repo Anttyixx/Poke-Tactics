@@ -13,6 +13,24 @@ The start screen has **Battle** (straight into the matchmaking queue: "Waiting f
 until the next player looking is found), **Battle a friend** (enter a friend code to send that
 player a battle request) and **Training** (the bot).
 
+**Battle** has two modes, picked with the switch under it (remembered in the browser,
+`poke-tactics-battle-mode`):
+
+- **Duel** (1 vs 1): the classic match against one random opponent.
+- **Arena** (4 players, online only): the queue (`/queue?mode=arena`, its own Durable Object)
+  waits until 4 players are looking, showing how many have joined. Everyone picks a team as
+  usual; each round the players still in are paired up in 1v1 battles that work exactly like a
+  duel. Pairings avoid last round's opponent whenever possible, then whoever has met least
+  often (ties broken by the match seed). With 3 left, one player sits the round out: no
+  battle, no damage, the round's 5 coins, and never the same player twice in a row. A player
+  at 0 HP is out; the last one standing wins. If everyone left is knocked out in the same
+  round, whoever had the most HP going in wins (a draw only if that's a tie too). Leaving an
+  arena knocks you out on the spot; the others play on. There's no rematch: everyone goes back
+  to the start screen. Each player watches their own battle (shown as a duel, from their own
+  side), with everyone's HP and pairings in a standings strip under the HUD
+  (`viewFor()` in `src/game.js` builds each player's view). The game over screen shows the
+  final places.
+
 - **The match runs on a server**, not in either player's browser: a Cloudflare Worker
   (`server/worker.js`) with one Durable Object per match, found by its code. It runs the
   same rules code as the game (`src/game.js`, `data/units.json`), checks every move with

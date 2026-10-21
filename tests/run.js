@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import {
   createGame, applyIntent, fielded, troopIds, teamSize, poolSize, TEAM_SIZE,
   COPIES_PER_TROOP, MAX_STAR, SHOP_SIZE, START_COINS, ROUND_COINS, LOST_COIN, REROLL_COST, lostCount,
+  viewFor, forfeit, arenaPlace, ARENA_SIZE,
 } from '../src/game.js';
 import {
   simulate, MAX_TICKS, COLS, HALF, SUDDEN_DEATH_TICK, SUDDEN_DEATH_HP_PER_SECOND, MOVE_SPEEDS, STEP_TICKS, CRIT_PCT, STAT_SCALE, TICK_SECONDS,
@@ -31,6 +32,27 @@ function startedGame(seed = 7, opts = {}) {
   const s = createGame({ seed, catalog, names: ['A', 'B'], ...opts });
   for (const p of [0, 1]) assert.ok(applyIntent(s, catalog, p, team()).ok);
   return s;
+}
+
+// An arena: every seat picks a team, then bots shop and place each round.
+function arenaGame(seed = 5) {
+  const s = createGame({ seed, catalog, names: ['A', 'B', 'C', 'D'], mode: 'arena' });
+  const ids = troopIds(catalog);
+  s.players.forEach((_, p) => assert.ok(applyIntent(s, catalog, p, { type: 'chooseTeam', troops: ids.slice(p * 3, p * 3 + 6) }).ok));
+  return s;
+}
+// One step: everyone plans and locks in (into the battles), or everyone who
+// fought continues (into the next round).
+const arenaFullRound = (s) => { const r = s.round; while (s.phase !== 'gameover' && s.round === r) arenaRound(s); };
+function arenaRound(s) {
+  const phase = s.phase;
+  for (let p = 0; p < s.players.length && s.phase === phase; p++) {
+    if (s.players[p].ready) continue;
+    if (phase === 'combat') { assert.ok(applyIntent(s, catalog, p, { type: 'continue' }).ok); continue; }
+    const { view, viewer } = viewFor(s, p);
+    botTurn(view, catalog, viewer, (i) => (i.type === 'ready' ? { ok: true } : applyIntent(s, catalog, p, i)));
+    assert.ok(applyIntent(s, catalog, p, { type: 'ready' }).ok);
+  }
 }
 
 // Two bots play a full match. If `roundTrip` is set, state is JSON-cloned
@@ -1402,6 +1424,107 @@ test('every fight starts with power progress at 0 (Hoopa: full) and a full attac
 });
 
 // ---- profile -------------------------------------------------------------------
+
+test('arena: 4 players in two 1v1 fights a round, a new opponent each round, the last one standing wins', () => {
+  const s = arenaGame(5);
+  assert.equal(s.players.length, ARENA_SIZE);
+  assert.equal(s.phase, 'planning');
+  assert.equal(s.pairs.length, 2, 'two fights');
+  assert.equal(new Set(s.pairs.flat()).size, 4, 'everyone fights');
+  let last = null;
+  let rounds = 0;
+  while (s.phase !== 'gameover' && rounds < 60) {
+    const alive = s.players.filter((p) => p.hp > 0).length;
+    if (alive === 4 && last) assert.ok(s.pairs.every(([a, b]) => !last.some(([c, d]) => a === c && b === d)), 'never last round\'s opponent while 4 are in');
+    if (alive === 3) assert.ok(s.bye !== null && s.pairs.length === 1, 'with 3 left, one sits out');
+    last = s.pairs.map((p) => [...p]);
+    arenaRound(s); // into the battles
+    if (s.phase === 'combat') {
+      const fought = s.combat.fights.flatMap((f) => f.pair);
+      assert.ok(s.players.every((p, i) => p.ready === !fought.includes(i)), 'only fighters have a battle to watch');
+      arenaRound(s); // into the next round
+    }
+    rounds++;
+  }
+  assert.equal(s.phase, 'gameover');
+  const standing = s.players.filter((p) => p.hp > 0);
+  assert.ok(standing.length <= 1);
+  if (s.winner !== null) assert.equal(arenaPlace(s, s.winner), 1);
+  const places = s.players.map((_, i) => arenaPlace(s, i));
+  assert.ok(places.every((x) => x >= 1 && x <= 4), `everyone has a place: ${places}`);
+  assert.deepEqual(JSON.parse(JSON.stringify(s)), s, 'state stays plain JSON');
+});
+
+test('arena: the one sitting out never sits out twice in a row, keeps its HP and still gets the round\'s coins', () => {
+  const s = arenaGame(9);
+  forfeit(s, catalog, 3); // one gone already
+  arenaRound(s); // the battles
+  arenaRound(s); // into a round with 3 left
+  let prevBye = null;
+  for (let r = 0; r < 6 && s.phase !== 'gameover'; r++) {
+    assert.equal(s.pairs.length, 1);
+    const bye = s.bye;
+    assert.notEqual(bye, prevBye, 'never twice in a row');
+    const hp = s.players[bye].hp;
+    arenaFullRound(s);
+    if (s.phase === 'gameover') break;
+    assert.equal(s.players[bye].hp, hp, 'no damage while sitting out');
+    assert.deepEqual(s.players[bye].lastIncome, { base: ROUND_COINS, lost: 0 }, 'paid the round');
+    prevBye = bye;
+  }
+});
+
+test('arena: each player sees their own fight as a duel; sitting out looks like waiting; knocked out looks like game over', () => {
+  const s = arenaGame(3);
+  arenaRound(s); // into the battles
+  for (let p = 0; p < 4; p++) {
+    const { view, viewer } = viewFor(s, p);
+    const fight = s.combat.fights.find((f) => f.pair.includes(p));
+    if (fight) {
+      assert.equal(view.phase, 'combat');
+      assert.equal(view.players[viewer], s.players[p], 'they are the viewer');
+      assert.equal(view.combat.result, fight.result, 'their own fight');
+      assert.equal(viewer, fight.pair.indexOf(p));
+    } else assert.equal(view.phase, s.players[p].hp > 0 ? 'planning' : 'gameover');
+    assert.equal(view.arena.standings.length, 4);
+  }
+  forfeit(s, catalog, 0);
+  assert.equal(viewFor(s, 0).view.phase, 'gameover', 'out: game over for them');
+});
+
+test('arena: leaving knocks you out, and can end the match or start the next step for the others', () => {
+  const s = arenaGame(4);
+  for (let p = 0; p < 3; p++) assert.ok(applyIntent(s, catalog, p, { type: 'ready' }).ok);
+  assert.equal(s.phase, 'planning', 'still waiting for the last one');
+  forfeit(s, catalog, 3);
+  assert.equal(s.players[3].hp, 0);
+  assert.equal(s.phase, 'combat', 'their leaving was all the others waited for');
+  assert.ok(!s.combat.fights.some((f) => f.pair.includes(3)), 'they don\'t fight');
+  forfeit(s, catalog, 2);
+  forfeit(s, catalog, 1);
+  assert.equal(s.phase, 'gameover');
+  assert.equal(s.winner, 0);
+  assert.deepEqual([0, 1, 2, 3].map((i) => arenaPlace(s, i)), [1, 2, 3, 4]);
+});
+
+test('arena: everyone left knocked out in the same round: the one with the most HP going in wins', () => {
+  const s = arenaGame(6);
+  forfeit(s, catalog, 2);
+  forfeit(s, catalog, 3);
+  // Into the next round with just 0 and 1 left, both nearly out and with empty
+  // boards: a draw that knocks out both.
+  arenaFullRound(s);
+  assert.deepEqual(s.pairs, [[0, 1]]);
+  s.players[0].hp = 1; s.players[1].hp = 2;
+  s.round = 6; // a draw costs both ceil(6 / 2) = 3 HP
+  s.players[0].board = []; s.players[1].board = [];
+  for (const p of [0, 1]) assert.ok(applyIntent(s, catalog, p, { type: 'ready' }).ok);
+  for (const p of [0, 1]) assert.ok(applyIntent(s, catalog, p, { type: 'continue' }).ok);
+  assert.equal(s.phase, 'gameover');
+  assert.ok(s.players[0].hp === 0 && s.players[1].hp === 0, 'both knocked out');
+  assert.equal(s.winner, 1, 'more HP going in');
+  assert.deepEqual([0, 1].map((i) => arenaPlace(s, i)), [2, 1]);
+});
 
 test('profile: saved in browser storage and loaded back; old saved names carry over; bad data is cleaned', () => {
   const store = new Map();

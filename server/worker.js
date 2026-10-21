@@ -8,14 +8,14 @@
 //
 // Players talk to it over a WebSocket (protocol in src/online.js):
 //   wss://<worker>/room?code=CODE&pid=..&name=..&avatar=..&build=..[&create=1]
-//   wss://<worker>/queue?pid=..&name=..&avatar=..&build=..
+//   wss://<worker>/queue?pid=..&name=..&avatar=..&build=..[&mode=arena]   (arena: 4 players)
 //   wss://<worker>/presence?pid=..&name=..&avatar=..&build=..   (friends, online status, battle requests)
 // `pid` is a random id each browser keeps: it's how a returning player is
 // recognised. `build` must match this deploy, so both players and the server
 // always run the same rules.
 
 import { DurableObject } from 'cloudflare:workers';
-import { createGame, applyIntent } from '../src/game.js';
+import { createGame, applyIntent, forfeit, ARENA_SIZE } from '../src/game.js';
 import catalog from '../data/units.json';
 
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -49,7 +49,7 @@ export default {
     const q = url.searchParams;
     if (q.get('build') !== env.BUILD) return refuse('version', 'This version of the game is out of date. Refresh the page (or open the latest link) and try again.');
     if (!isPid(q.get('pid'))) return refuse('bad', 'Something went wrong. Refresh the page and try again.');
-    if (url.pathname === '/queue') return env.QUEUE.get(env.QUEUE.idFromName('queue')).fetch(req);
+    if (url.pathname === '/queue') return env.QUEUE.get(env.QUEUE.idFromName(q.get('mode') === 'arena' ? 'queue-arena' : 'queue')).fetch(req);
     if (url.pathname === '/presence') return env.PRESENCE.get(env.PRESENCE.idFromName('presence')).fetch(req);
     if (url.pathname === '/room') {
       const code = q.get('code');
@@ -62,11 +62,11 @@ export default {
 
 // A new room for two players who've already agreed to play (matchmaking, or a
 // friend accepting a battle request). Returns its code, or null.
-async function createRoom(env, players) {
+async function createRoom(env, players, mode = 'duel') {
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = randomCode();
     const res = await env.ROOMS.get(env.ROOMS.idFromName(code)).fetch('https://room/init', {
-      method: 'POST', body: JSON.stringify({ code, players }),
+      method: 'POST', body: JSON.stringify({ code, players, mode }),
     });
     if (res.ok) return code;
   }
@@ -105,16 +105,17 @@ export class Room extends DurableObject {
     this.broadcast({ type: 'presence', connected: this.connected(except) }, except);
   }
 
-  newRoom(code, players) {
-    this.room = { code, players, state: null, log: null, deadline: null, phaseKey: null, ended: null, lastActive: Date.now() };
+  newRoom(code, players, mode = 'duel') {
+    this.room = { code, players, mode, state: null, log: null, deadline: null, phaseKey: null, ended: null, lastActive: Date.now() };
   }
+  size() { return this.room.mode === 'arena' ? ARENA_SIZE : 2; }
 
   startGame() {
     const r = this.room;
     const seed = crypto.getRandomValues(new Uint32Array(1))[0];
     const names = r.players.map((p) => p.name);
-    r.state = createGame({ seed, catalog, names, avatars: r.players.map((p) => p.avatar) });
-    r.log = { format: 'poke-tactics-match', v: 1, build: this.env.BUILD, mode: 'pvp', started: new Date().toISOString(), seed, names, featured: null, intents: [] };
+    r.state = createGame({ seed, catalog, names, avatars: r.players.map((p) => p.avatar), mode: r.mode ?? 'duel' });
+    r.log = { format: 'poke-tactics-match', v: 1, build: this.env.BUILD, mode: r.mode === 'arena' ? 'arena' : 'pvp', started: new Date().toISOString(), seed, names, featured: null, intents: [] };
     r.phaseKey = null;
   }
 
@@ -127,7 +128,7 @@ export class Room extends DurableObject {
       if (key !== r.phaseKey) {
         r.phaseKey = key;
         r.deadline = s.phase === 'planning' ? Date.now() + PLAN_MS
-          : s.phase === 'combat' ? Date.now() + s.combat.result.ticks * 100 + RESULTS_MS
+          : s.phase === 'combat' ? Date.now() + Math.max(0, ...(s.combat.fights ?? [s.combat]).map((f) => f.result.ticks)) * 100 + RESULTS_MS
           : null;
       }
     }
@@ -150,9 +151,9 @@ export class Room extends DurableObject {
 
     // The queue made a match: both players are already in.
     if (url.pathname === '/init') {
-      const { code, players } = await req.json();
+      const { code, players, mode } = await req.json();
       if (this.room && !this.room.ended && this.room.players.length) return new Response('taken', { status: 409 });
-      this.newRoom(code, players);
+      this.newRoom(code, players, mode === 'arena' ? 'arena' : 'duel');
       this.startGame();
       await this.changed();
       return new Response('ok');
@@ -171,9 +172,9 @@ export class Room extends DurableObject {
     }
     let you = r.players.findIndex((p) => p.pid === pid);
     if (you < 0) {
-      if (r.players.length >= 2 || r.state) return refuse('full', 'That game already has two players.');
+      if (r.players.length >= this.size() || r.state) return refuse('full', r.mode === 'arena' ? 'That arena is full.' : 'That game already has two players.');
       r.players.push(me);
-      you = 1;
+      you = r.players.length - 1;
     }
     if (!r.state) r.players[you] = me; // before the match starts, names and pictures can change
 
@@ -189,7 +190,7 @@ export class Room extends DurableObject {
       r.deadline = Date.now() + (r.state?.phase === 'planning' ? PLAN_MS : RESULTS_MS);
     }
     send(server, { type: 'welcome', code: r.code, you });
-    if (!r.state && r.players.length === 2) {
+    if (!r.state && r.players.length === this.size()) {
       this.startGame();
       await this.changed();
     } else {
@@ -220,8 +221,17 @@ export class Room extends DurableObject {
       r.log.intents.push([you, msg.intent]);
       return this.changed();
     }
-    if (msg.type === 'rematch' && r.state?.phase === 'gameover') {
+    if (msg.type === 'rematch' && r.state?.phase === 'gameover' && r.mode !== 'arena') {
       this.startGame();
+      return this.changed();
+    }
+    if (msg.type === 'leave' && r.mode === 'arena' && r.state && r.state.phase !== 'gameover') {
+      // Leaving an arena knocks you out; the others play on.
+      if (r.state.players[you].hp > 0) {
+        forfeit(r.state, catalog, you);
+        r.log.intents.push([you, { type: 'forfeit' }]);
+      }
+      try { ws.close(1000, 'left'); } catch {}
       return this.changed();
     }
     if (msg.type === 'leave') {
@@ -264,7 +274,7 @@ export class Room extends DurableObject {
       const type = s.phase === 'planning' ? 'ready' : s.phase === 'combat' ? 'continue' : null;
       r.deadline = null;
       if (type) {
-        for (const p of [0, 1]) {
+        for (let p = 0; p < r.state.players.length; p++) {
           if (r.state.phase === s.phase && !r.state.players[p].ready) {
             const res = applyIntent(r.state, catalog, p, { type });
             if (res.ok) r.log.intents.push([p, { type }]);
@@ -290,19 +300,27 @@ export class Queue extends DurableObject {
     for (const old of this.ctx.getWebSockets(me.pid)) { try { old.close(4001, 'replaced'); } catch {} }
     const [client, server] = Object.values(new WebSocketPair());
     this.ctx.acceptWebSocket(server, [me.pid]);
-    server.serializeAttachment({ ...me, matching: false });
+    const arena = q.get('mode') === 'arena';
+    server.serializeAttachment({ ...me, matching: false, arena });
     send(server, { type: 'waiting' });
-    // Pair with whoever has waited longest.
-    const other = this.ctx.getWebSockets().find((ws) => ws !== server && ws.readyState === OPEN
-      && !ws.deserializeAttachment()?.matching && ws.deserializeAttachment()?.pid !== me.pid);
-    if (other) {
-      const them = other.deserializeAttachment();
-      other.serializeAttachment({ ...them, matching: true });
-      server.serializeAttachment({ ...me, matching: true });
-      const code = await createRoom(this.env, [{ pid: them.pid, name: them.name, avatar: them.avatar }, me]);
-      if (code) for (const ws of [other, server]) { send(ws, { type: 'matched', code }); try { ws.close(1000, 'matched'); } catch {} }
-    }
+    // Arena waits for ARENA_SIZE players; a duel pairs with whoever has waited longest.
+    const need = arena ? ARENA_SIZE : 2;
+    const others = this.ctx.getWebSockets().filter((ws) => ws !== server && ws.readyState === OPEN
+      && !ws.deserializeAttachment()?.matching && ws.deserializeAttachment()?.pid !== me.pid).slice(0, need - 1);
+    if (others.length === need - 1) {
+      const group = [...others, server];
+      const players = group.map((ws) => ws === server ? me : (({ pid, name, avatar }) => ({ pid, name, avatar }))(ws.deserializeAttachment()));
+      for (const ws of group) ws.serializeAttachment({ ...(ws === server ? me : ws.deserializeAttachment()), matching: true });
+      const code = await createRoom(this.env, players, arena ? 'arena' : 'duel');
+      if (code) for (const ws of group) { send(ws, { type: 'matched', code }); try { ws.close(1000, 'matched'); } catch {} }
+    } else if (arena) this.waitingCount();
     return new Response(null, { status: 101, webSocket: client });
+  }
+
+  // Arena: tell everyone waiting how many have joined so far.
+  waitingCount(except = null) {
+    const waiting = this.ctx.getWebSockets().filter((ws) => ws !== except && ws.readyState === OPEN && ws.deserializeAttachment()?.arena && !ws.deserializeAttachment()?.matching);
+    for (const ws of waiting) send(ws, { type: 'waiting', found: waiting.length, need: ARENA_SIZE });
   }
 
   async webSocketMessage(ws, raw) {
@@ -311,6 +329,7 @@ export class Queue extends DurableObject {
 
   async webSocketClose(ws, code) {
     try { ws.close(code === 1005 || code === 1006 ? 1000 : code, 'bye'); } catch {}
+    this.waitingCount(ws);
   }
 }
 

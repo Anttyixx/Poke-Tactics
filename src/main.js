@@ -6,7 +6,7 @@
 //            the player does and shows the state the server sends back
 //            (connection: src/online.js).
 
-import { createGame, applyIntent } from './game.js';
+import { createGame, applyIntent, viewFor } from './game.js';
 import { botTurn } from './bot.js';
 import { fightSummary } from './matchlog.js';
 import { createUI } from './ui.js';
@@ -76,7 +76,8 @@ function getLog() {
 const SESSION_KEY = 'poke-tactics-session';
 const SESSION_MS = 15 * 60 * 1000; // the server forgets an empty room after 15 minutes
 function saveSession() {
-  try { localStorage.setItem(SESSION_KEY, JSON.stringify({ code: roomCode, opponent: state?.players[1 - me]?.name ?? null, at: Date.now() })); } catch {}
+  const opponent = state?.mode === 'arena' ? 'the arena' : state?.players[1 - me]?.name ?? null;
+  try { localStorage.setItem(SESSION_KEY, JSON.stringify({ code: roomCode, opponent, at: Date.now() })); } catch {}
 }
 function loadSession() {
   try {
@@ -166,21 +167,34 @@ let wakeRefused = false;
 document.addEventListener('visibilitychange', () => keepAwake());
 document.addEventListener('pointerdown', () => { if (mode !== 'bot' && !(wakeLock && !wakeLock.released)) keepAwake(); });
 
+// What this player sees: in an arena, their own fight shaped like a duel (see
+// viewFor in game.js), plus the standings.
+let shownViewer = null;
+function viewNow() {
+  return state?.mode === 'arena' ? viewFor(state, me) : { view: state, viewer: me };
+}
 function show() {
   shareStatus();
   trackStats();
   saveLastLog();
   keepAwake();
-  ui.render(state);
+  const { view, viewer } = viewNow();
+  if (mode === 'online' && viewer !== shownViewer) {
+    if (shownViewer === null) ui.setOnline({ viewer }); else ui.setViewer(viewer);
+    shownViewer = viewer;
+  }
+  ui.render(view);
 }
 
 // Each fight's seed and chance outcomes (Alcremie's flavours, Minior's hops,
 // crits), kept for the match log so a reader can see what happened by chance.
 let fightLog = { seed: null, list: [] };
 function noteFight() {
+  const { view } = viewNow();
+  if (!view.combat?.result) return; // arena: sitting this one out
   if (fightLog.seed !== state.seed) fightLog = { seed: state.seed, list: [] };
-  if (fightLog.list.some((f) => f.round === state.combat.round)) return;
-  fightLog.list.push(fightSummary(state.combat, catalog, state.players.map((p) => p.name)));
+  if (fightLog.list.some((f) => f.round === view.combat.round)) return;
+  fightLog.list.push(fightSummary(view.combat, catalog, view.players.map((p) => p.name)));
 }
 const fightsFor = (seed) => (fightLog.seed === seed ? fightLog.list : []);
 
@@ -191,10 +205,12 @@ function trackStats() {
   const key = `${state.seed}:${state.round}:${state.phase}`;
   if (key === trackedKey) return;
   trackedKey = key;
-  if (state.phase === 'combat') {
+  const { view, viewer } = viewNow();
+  if (state.phase === 'combat' && view.combat?.result) {
     noteFight();
-    profile = recordBattle(state.combat.result.initial.filter((u) => u.side === me && !u.summoned).map((u) => u.unitId));
+    profile = recordBattle(view.combat.result.initial.filter((u) => u.side === viewer && !u.summoned).map((u) => u.unitId));
   } else if (state.phase === 'gameover') {
+    // An arena counts as a win only in first place.
     profile = recordMatch(mode === 'bot' ? 'training' : 'online', state.winner === me ? 'win' : state.winner === null ? 'draw' : 'loss');
   }
 }
@@ -225,7 +241,7 @@ const NO_SERVER = 'Online play isn\'t available in this copy of the game.';
 
 function lobby(action, data = {}) {
   // Battle: straight into the queue for the next player looking.
-  if (action === 'open' || action === 'queue') return serverUrl() ? findMatch() : ui.showLobby('error', { error: NO_SERVER });
+  if (action === 'open' || action === 'queue') return serverUrl() ? findMatch(data.mode === 'arena' ? 'arena' : 'duel') : ui.showLobby('error', { error: NO_SERVER });
   // Battle a friend: send a battle request to a friend code.
   if (action === 'friend') return serverUrl() ? ui.showLobby('friend', { myCode: friends.code }) : ui.showLobby('error', { error: NO_SERVER });
   if (action === 'challenge') {
@@ -261,14 +277,15 @@ function stopOnline() {
 
 // Find a random opponent: wait in the server's queue until it pairs us up,
 // then join the room it made.
-function findMatch() {
+function findMatch(battle = 'duel') {
   stopOnline();
-  ui.showLobby('queue');
-  note('looking for a match');
-  const c = connect('/queue', who(), {
+  ui.showLobby('queue', { mode: battle });
+  note(`looking for a match (${battle})`);
+  const c = connect('/queue', { ...who(), ...(battle === 'arena' && { mode: 'arena' }) }, {
     onMessage: (msg) => {
       if (c !== conn) return;
-      if (msg.type === 'matched') { note(`matched: ${msg.code}`); stopOnline(); openRoom(msg.code); }
+      if (msg.type === 'waiting' && battle === 'arena' && msg.found) ui.showLobby('queue', { mode: battle, found: msg.found, need: msg.need });
+      if (msg.type === 'matched') { note(`matched: ${msg.code}`); stopOnline(); openRoom(msg.code, { arena: battle === 'arena' }); }
       else if (msg.type === 'refuse') { stopOnline(); ui.showLobby('error', { error: msg.text }); }
     },
     onStatus: (s) => { if (c === conn && s === 'replaced') { stopOnline(); goHome(); } },
@@ -277,13 +294,13 @@ function findMatch() {
 }
 
 // Create (create: true), join or rejoin the room with this code.
-function openRoom(code, { resuming = false } = {}) {
+function openRoom(code, { resuming = false, arena = false } = {}) {
   stopOnline();
   roomCode = code;
   let inMatch = false; // this connection has had a state with a match in it
   let lastSeed = null;
   let planKey = null;
-  ui.showLobby('connecting', { text: resuming ? 'Getting back into your match…' : 'Opponent found! Starting the battle…', cancel: true });
+  ui.showLobby('connecting', { text: resuming ? 'Getting back into your match…' : arena ? 'All 4 players found! Starting the arena…' : 'Opponent found! Starting the battle…', cancel: true });
   note(`joining ${code}`);
   const c = connect('/room', { ...who(), code }, {
     onMessage: (msg) => {
@@ -294,13 +311,15 @@ function openRoom(code, { resuming = false } = {}) {
         const next = msg.state;
         if (mode !== 'online') {
           mode = 'online';
-          ui.setOnline({ viewer: me });
+          shownViewer = next.mode === 'arena' ? viewFor(next, me).viewer : me;
+          ui.setOnline({ viewer: shownViewer });
         }
         // A new match (the first, or a rematch): play the intro.
         if (next.seed !== lastSeed) {
           lastSeed = next.seed;
           if (next.phase === 'team' && !next.players[me].ready) {
-            ui.playIntro([next.players[me].name, next.players[1 - me].name], [next.players[me].avatar, next.players[1 - me].avatar]);
+            if (next.mode === 'arena') ui.playIntro([next.players[me].name, 'Arena · 4 players'], [next.players[me].avatar, null]);
+            else ui.playIntro([next.players[me].name, next.players[1 - me].name], [next.players[me].avatar, next.players[1 - me].avatar]);
           }
           matchLog = null;
         }
@@ -315,8 +334,11 @@ function openRoom(code, { resuming = false } = {}) {
         ui.setNetStatus(null);
         show();
       } else if (msg.type === 'presence') {
-        const there = msg.connected?.[1 - me];
-        const name = state?.players[1 - me]?.name ?? 'Your opponent';
+        // Arena: only this round's opponent matters here.
+        const foe = state?.mode === 'arena' ? (state.pairs ?? []).find((pr) => pr.includes(me))?.find((i) => i !== me) : 1 - me;
+        if (foe === undefined) return;
+        const there = msg.connected?.[foe];
+        const name = state?.players[foe]?.name ?? 'Your opponent';
         if (inMatch && state?.phase !== 'gameover') {
           if (there === false) ui.setNetStatus(`${name}'s connection dropped. They're locked in when the timer runs out; waiting for them to come back…`);
           else if (there) { if (ui.netStatus()) ui.toast(`${name} is back`); ui.setNetStatus(null); }

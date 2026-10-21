@@ -1537,3 +1537,54 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .unit.strain .body { animation: strain .3s ease-in-out; }
 @keyframes strain { 0%, 100% { translate: 0 0; } 25% { translate: -4% 0; } 75% { translate: 4% 0; } }
 @media (prefers-reduced-motion: reduce) { .unit.strain .body { animation: none; } }
+
+/* ---- Battle mode (duel / arena) on the start screen ---- */
+.battle-pick { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.start-modes .battle-btn small { display: block; margin-top: 2px; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; opacity: 0.85; text-transform: none; }
+.mode-switch { display: inline-flex; padding: 3px; gap: 3px; border-radius: 99px; background: var(--panel-2); border: 1px solid var(--line-2); }
+:is(#overlay, #lobby) .mode-switch button {
+  min-width: 0; margin: 0; padding: 6px 16px; border-radius: 99px; border: 0; font-size: 14px; font-weight: 800;
+  background: transparent; color: var(--muted); box-shadow: none; animation: none;
+}
+:is(#overlay, #lobby) .mode-switch button:hover:not([aria-checked="true"]) { color: var(--text); background: color-mix(in srgb, var(--panel-3) 60%, transparent); }
+:is(#overlay, #lobby) .mode-switch button[aria-checked="true"] { background: var(--gold); color: #10131f; }
+.mode-switch button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+/* Arena queue: one seat per player found. */
+.arena-seats { display: flex; justify-content: center; gap: 10px; margin: 6px 0 2px; }
+.arena-seats i { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--line-2); background: var(--panel-2); transition: background-color 0.3s, border-color 0.3s, transform 0.3s var(--spring); }
+.arena-seats i.on { background: var(--gold); border-color: var(--gold); transform: scale(1.1); }
+
+/* Arena standings in the HUD: everyone's HP and what they're up to. */
+#hud:has(.arena-strip) { flex-wrap: wrap; }
+.arena-strip { order: 10; flex-basis: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.arena-seat {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "pic name hp" "pic bar bar" "pic tag tag";
+  align-items: center; column-gap: 6px; row-gap: 2px; padding: 4px 8px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line);
+  min-width: 0; transition: opacity 0.3s, border-color 0.3s;
+}
+.arena-seat .hud-avatar { grid-area: pic; width: 26px; height: 26px; }
+.arena-seat .arena-name { grid-area: name; font-weight: 800; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.arena-seat b { grid-area: hp; font-size: 13px; font-variant-numeric: tabular-nums; }
+.arena-seat .hpbar { grid-area: bar; height: 5px; background: #0b0f1c; border-radius: 99px; overflow: hidden; }
+.arena-seat .hpbar i { display: block; height: 100%; background: linear-gradient(90deg, #8a93ad, #c9cfe0); transition: width 0.8s var(--glide); }
+.arena-seat small { grid-area: tag; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.arena-seat.me { border-color: var(--ally); }
+.arena-seat.me .hpbar i { background: linear-gradient(90deg, #2f79ef, var(--ally)); }
+.arena-seat.foe { border-color: var(--enemy); }
+.arena-seat.foe .hpbar i { background: linear-gradient(90deg, #e33a52, var(--enemy)); }
+.arena-seat.out { opacity: 0.45; }
+.hpbox.empty { display: flex; justify-content: center; color: var(--muted); }
+.hpbox.empty .name { font-weight: 700; }
+@media (max-width: 640px) {
+  .arena-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Arena: final standings on the game over screen. */
+.arena-final { list-style: none; margin: 4px 0 8px; padding: 0; display: grid; gap: 6px; text-align: left; width: min(320px, 100%); }
+.arena-final li { display: grid; grid-template-columns: 3.4em auto minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); }
+.arena-final li.me { border-color: var(--ally); }
+.arena-final li span { font-weight: 900; color: var(--gold); }
+.arena-final li b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.arena-final li small { color: var(--muted); }
+.arena-final .hud-avatar { width: 26px; height: 26px; }

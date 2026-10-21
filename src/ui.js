@@ -553,10 +553,23 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     lobbyView = null;
   }
 
+  // Which mode Battle queues for: a 1v1 duel, or a 4-player arena. Remembered here.
+  const BATTLE_MODES = { duel: 'Duel · 1 vs 1', arena: 'Arena · 4 players' };
+  const BATTLE_MODE_KEY = 'poke-tactics-battle-mode';
+  let battleMode = (() => { try { const m = localStorage.getItem(BATTLE_MODE_KEY); return m in BATTLE_MODES ? m : 'duel'; } catch { return 'duel'; } })();
+
   const overlayClick = (e) => {
     const btn = e.target.closest('button, [data-dex-info]');
     if (btn?.id === 'battle') { started = true; overlay.classList.remove('start-screen'); return showTeamBuilder(); }
-    if (btn?.id === 'friend') return onLobby('open');
+    if (btn?.id === 'friend') return onLobby('open', { mode: battleMode });
+    if (btn?.dataset.battleMode) {
+      battleMode = btn.dataset.battleMode;
+      try { localStorage.setItem(BATTLE_MODE_KEY, battleMode); } catch {}
+      for (const b of overlay.querySelectorAll('[data-battle-mode]')) b.setAttribute('aria-checked', b.dataset.battleMode === battleMode);
+      const label = overlay.querySelector('#battle-mode-label');
+      if (label) { label.textContent = BATTLE_MODES[battleMode]; label.animate?.([{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], { duration: 220, easing: 'ease-out' }); }
+      return;
+    }
     if (btn?.id === 'start-friends') return openMenu('friends', { noBack: true }); // straight from the main screen: just close
     if (btn?.dataset.lobby === 'friends') return openMenu('friends');
     if (btn?.dataset.lobby) return onLobby(btn.dataset.lobby, lobbyValues());
@@ -645,6 +658,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   }
 
   function hpBox(p, side) {
+    if (p.empty) return `<div class="hpbox ${side} empty"><span class="name">${esc(p.name)}</span></div>`;
     const pct = Math.max(0, p.hp);
     return `<div class="hpbox ${side}" title="${esc(p.name)}: ${p.hp} HP">
       ${side === 'ally' ? `${avatar(p.avatar, 'hud-avatar')}<span class="name">${esc(p.name)}</span>` : `<b>${p.hp}</b>`}
@@ -652,6 +666,17 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       ${side === 'ally' ? `<b>${p.hp}</b>` : `<span class="name">${esc(p.name)}</span>${avatar(p.avatar, 'hud-avatar')}`}
     </div>`;
   }
+
+  // Arena: everyone's HP and what they're doing this round, in seat order.
+  function arenaStrip(a) {
+    const tag = (s) => (s.index === a.you ? 'You' : s.out ? `Out · ${ordinal(s.place)}` : s.bye ? 'Sitting out' : s.opponent === a.you ? 'Your opponent' : s.opponent !== null ? `vs ${esc(a.standings[s.opponent].name)}` : '');
+    return `<div class="arena-strip" aria-label="Arena standings">${a.standings.map((s) => `
+      <div class="arena-seat${s.index === a.you ? ' me' : ''}${s.out ? ' out' : ''}${s.opponent === a.you ? ' foe' : ''}" title="${esc(s.name)}: ${s.hp} HP">
+        ${avatar(s.avatar, 'hud-avatar')}<span class="arena-name">${esc(s.name)}</span><b>${s.hp}</b>
+        <div class="hpbar"><i style="width:${Math.max(0, s.hp)}%"></i></div><small>${tag(s)}</small>
+      </div>`).join('')}</div>`;
+  }
+  const ordinal = (n) => (n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`);
 
   const ICON_MENU = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>';
   const ICON_FRIENDS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><circle cx="17" cy="9" r="2.8"/><path d="M16.5 14.2c2.9.2 5 2.3 5 5.3"/></svg>';
@@ -665,6 +690,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       <span class="chip"><span class="label">Round</span><b>${state.round || '–'}</b></span>
       <span class="chip coins" title="Each round: +${ROUND_COINS}, plus ${LOST_COIN} for each of your Pokémon knocked out last battle. Coins carry over."><b class="gold${coinsChanged ? ' bump' : ''}">${p.coins}</b></span>
       <div class="duel">${hpBox(p, 'ally')}<span class="vs">VS</span>${hpBox(foe(), 'enemy')}</div>
+      ${state.arena ? arenaStrip(state.arena) : ''}
       <div class="hud-actions">
         <button id="open-dex" class="icon-btn dex-button" title="Every Pokémon's stats (P)">${ICON_DEX}<span class="label-text">Pokédex</span></button>
         <button id="open-menu" class="icon-btn${hasUnread() ? ' unread' : ''}" title="Menu (M)" aria-label="Menu">${ICON_MENU}<span class="label-text">Menu</span></button>
@@ -693,6 +719,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
           <li><b>Coins</b>: you start with ${START_COINS}. Every round after that: +${ROUND_COINS}, plus ${LOST_COIN} for each of your Pokémon knocked out in the last battle. Coins carry over.</li>
           <li><b>Shop</b>: it refreshes for free every time you buy, and after every battle. A reroll costs ${REROLL_COST} coin.</li>
           <li><b>Win</b> by bringing your opponent from 100 HP to 0. The loser of a battle loses HP for every Pokémon still standing.</li>
+          <li><b>Arena</b> (Battle → Arena): 4 players, a 1v1 battle against a different player each round. With 3 left, one sits the round out (no damage, coins as usual). Last one standing wins.</li>
         </ul>
         <p class="muted">Keys: <kbd>D</kbd> reroll · <kbd>F</kbd> fight · <kbd>E</kbd> sell · <kbd>Space</kbd> skip · <kbd>P</kbd> Pokédex · <kbd>M</kbd> menu</p>`;
     } else if (view === 'news') {
@@ -1084,7 +1111,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     rerollBtn.textContent = `Reroll (${REROLL_COST} coin)`;
     rerollBtn.disabled = !canPlan() || p.coins < REROLL_COST;
     readyBtn.disabled = !canPlan();
-    readyBtn.dataset.base = state.phase === 'planning' && p.ready ? 'Waiting for opponent…' : 'Fight!';
+    readyBtn.dataset.base = state.phase === 'planning' && p.ready ? (state.arena ? 'Waiting for others…' : 'Waiting for opponent…') : 'Fight!';
     tickDeadline();
   }
 
@@ -1862,7 +1889,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       <p>${detail}</p>
       <p class="muted">Round ${round} · Your HP ${me().hp} → ${hpAfter} · +${ROUND_COINS + LOST_COIN * lostCount(result, viewer)} coins next round (${ROUND_COINS} + ${lostCount(result, viewer)} for Pokémon lost)</p>
       ${me().ready
-        ? '<button disabled>Waiting for opponent…</button>'
+        ? `<button disabled>${state.arena ? 'Waiting for the others…' : 'Waiting for opponent…'}</button>`
         : '<button id="continue" class="primary" autofocus>Continue</button>'}`);
     overlay.querySelector('#continue')?.focus();
   }
@@ -1902,7 +1929,12 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         <p class="tagline">Draft a team, place your Pokémon, and watch them battle it out.</p>
         <div class="parade" aria-hidden="true">${parade}</div>
         <div class="start-modes">
-          <button id="friend" class="primary battle-btn">Battle</button>
+          <div class="battle-pick">
+            <button id="friend" class="primary battle-btn">Battle<small id="battle-mode-label">${BATTLE_MODES[battleMode]}</small></button>
+            <div class="mode-switch" role="radiogroup" aria-label="Battle mode">
+              ${Object.keys(BATTLE_MODES).map((m) => `<button type="button" role="radio" data-battle-mode="${m}" aria-checked="${m === battleMode}">${m === 'duel' ? 'Duel' : 'Arena'}</button>`).join('')}
+            </div>
+          </div>
           <button id="battle" class="battle-btn training-btn">Training</button>
         </div>
         <div class="start-corner">
@@ -1922,7 +1954,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     const ready = draft.troops.length === need;
     const count = `${Array.from({ length: need }, (_, k) => `<i class="${k < draft.troops.length ? 'on' : ''}"></i>`).join('')}<span>${draft.troops.length}/${need}</span>`;
     const actions = waiting
-      ? '<p class="muted">Waiting for opponent…</p>'
+      ? `<p class="muted">${state.arena ? 'Waiting for the other players…' : 'Waiting for opponent…'}</p>`
       : `<button id="start-team" class="primary" ${ready ? '' : 'disabled'}>${ready ? 'Start battle' : `Pick ${need - draft.troops.length} more`}</button>`;
     const grid = overlay.hidden ? null : overlay.querySelector('.team-grid');
     if (grid) {
@@ -1948,6 +1980,19 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   }
 
   function showGameOver() {
+    if (state.arena) {
+      const a = state.arena;
+      const done = a.left <= 1;
+      const title = a.place === 1 && state.winner === null ? 'A draw: shared 1st place' : a.place === 1 ? 'You win the arena! 🏆' : a.place ? `You finished ${ordinal(a.place)} of ${a.size}` : 'Arena over';
+      const champ = a.standings.find((x) => x.place === 1);
+      showOverlay(`
+        <h1 class="${a.place === 1 ? 'win' : 'loss'}">${title}</h1>
+        <p>${a.place === 1 ? `Last one standing after ${state.round} rounds.` : done ? (champ ? `${esc(champ.name)} won the arena after ${state.round} rounds.` : `The arena ended after ${state.round} rounds.`) : `You were knocked out in round ${state.round}. ${a.left} players are still fighting.`}</p>
+        <ol class="arena-final">${[...a.standings].sort((x, y) => (x.place ?? 0) - (y.place ?? 0)).map((x) => `<li class="${x.index === a.you ? 'me' : ''}"><span>${x.place ? ordinal(x.place) : 'Still in'}</span>${avatar(x.avatar, 'hud-avatar')}<b>${esc(x.name)}</b><small>${x.hp} HP</small></li>`).join('')}</ol>
+        <button id="to-menu" class="primary">Main menu</button>
+        <button id="game-log" class="ghost">Match log (copy or download)</button>`);
+      return;
+    }
     const title = state.winner === viewer ? 'You win the match! 🏆' : state.winner === null ? 'Double knockout. It\'s a draw.' : 'You were eliminated';
     showOverlay(`
       <h1 class="${state.winner === viewer ? 'win' : 'loss'}">${title}</h1>
@@ -1994,7 +2039,12 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         <p class="muted">It's still going on the server: rejoin and you're straight back in.</p>
         <button class="primary" data-lobby="resume">Rejoin the match</button>
         <div class="lobby-actions"><button class="ghost" data-lobby="discard">Start fresh</button></div>`,
-      queue: () => `
+      queue: () => data.mode === 'arena' ? `
+        <h1>Waiting for players</h1>
+        <div class="arena-seats" aria-label="${data.found ?? 1} of ${data.need ?? 4} players found">${Array.from({ length: data.need ?? 4 }, (_, k) => `<i class="${k < (data.found ?? 1) ? 'on' : ''}"></i>`).join('')}</div>
+        <p><b>${data.found ?? 1} of ${data.need ?? 4}</b> players found</p>
+        <p class="muted">The arena starts as soon as 4 players are looking. Keep this screen open.</p>
+        <button class="ghost" data-lobby="cancel">Cancel</button>` : `
         <h1>Waiting for opponent</h1>
         <div class="spinner" aria-hidden="true"></div>
         <p class="muted">The battle starts as soon as another player is looking too. Keep this screen open.</p>
@@ -2102,6 +2152,15 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   }
 
   // Switch between playing the bot (null) and playing a friend as `viewer`.
+  // Arena: this player's side of the board changes with each new opponent.
+  // Redraw from the new side, keeping the planning timer and open menus.
+  function setViewer(v) {
+    if (v === viewer) return;
+    viewer = v;
+    playback?.cancel();
+    playback = null;
+    state = null;
+  }
   function setOnline(opts) {
     online = Boolean(opts);
     viewer = opts?.viewer ?? 0;
@@ -2650,5 +2709,5 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     netEl.textContent = text;
   }
 
-  return { render, toast, showLobby, showFriends, setOnline, setDeadline, setNetStatus, netStatus: () => netEl?.textContent ?? null, playIntro, lobbyView: () => lobbyView };
+  return { render, toast, showLobby, showFriends, setOnline, setViewer, setDeadline, setNetStatus, netStatus: () => netEl?.textContent ?? null, playIntro, lobbyView: () => lobbyView };
 }
