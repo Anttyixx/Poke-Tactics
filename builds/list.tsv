@@ -1,3 +1,4 @@
+5044d2b	dev	2026-10-21 08:12 UTC	Bigger battles: shop slides away in fights, no speed buttons, Pokémon turn to face the enemy
 dd69d40	dev	2026-10-21 07:58 UTC	Victory dance, HP drain in the containers, no results pop-up, animated board reset (0.46.2)
 b1c32ce	dev	2026-10-21 07:47 UTC	Training arena plays out after you're out; player containers get their own row on narrow screens (0.46.1)
 2ea6167	dev	2026-10-21 07:44 UTC	Arena training vs 3 bots; player containers replace the HUD health bars (0.46.1)
@@ -27,4 +28,3 @@ fc41cb1	dev	2026-10-16 01:29 UTC	Short ability descriptions with a More details 
 788716c	dev	2026-10-16 01:05 UTC	Pokédex: tappable Pokémon names in abilities, in-place entry swaps, cost and class on cards; classes renamed (0.39.0)
 1c1fdc4	dev	2026-10-16 00:36 UTC	Call powers abilities in the game's text; transform abilities only say when and how (0.38.0)
 1441bb9	dev	2026-10-16 00:32 UTC	Friends button next to the profile on the main screen, with an online count; drop Battle a friend (0.37.9)
-81b33c5	dev	2026-10-16 00:24 UTC	Tidier menu: Pokédex button on the main screen; drop Battle, Battle a friend, Training and Pokédex from the menu (0.37.8)
