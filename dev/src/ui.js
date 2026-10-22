@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=8f519c8';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=2e31b29';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=8f519c8';
-import { AVATARS, NAME_MAX, TEAMS_MAX, TEAM_NAME_MAX, avatarUrl, favouriteTroop, loadProfile, saveTeam, pickTeam } from './profile.js?v=8f519c8';
+} from './game.js?v=2e31b29';
+import { AVATARS, NAME_MAX, TEAMS_MAX, TEAM_NAME_MAX, avatarUrl, favouriteTroop, loadProfile, saveTeam, pickTeam } from './profile.js?v=2e31b29';
 
 const TICK_MS = 100;
 // Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
@@ -582,31 +582,56 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       duel: mon(ids[0], 'right', 'l') + mon(ids[1], 'left', 'r'),
       arena: mon(ids[2], 'down', 't') + mon(ids[3], 'right', 'l') + mon(ids[4], 'left', 'r') + mon(ids[5], 'up', 'b'),
     };
-    // You battle with the team picked in the team builder; without one, the
-    // modes stay locked and the pop-up points you there.
-    const team = battleTeam();
-    const off = team ? '' : ' disabled';
     modeEl.querySelector('.mode-panel').innerHTML = `
       <button class="menu-close ghost" data-mode-close aria-label="Close">✕</button>
       <h1>Battle</h1>
-      ${team
-        ? `<div class="mode-team"><span class="mode-team-label">Your team</span><b>${esc(team.name)}</b>${teamMinis(team.troops)}<button class="ghost" data-open-teams>Change</button></div>
-           <p class="muted">Pick a mode. Tap <b>Training</b> in a corner to play it against bots.</p>`
-        : `<div class="mode-team empty"><span>Build a team of ${teamSize(catalog)} Pokémon before you battle.</span><button class="primary" data-open-teams>Team builder</button></div>`}
+      <div class="mode-teams-head"><span class="mode-team-label">Your teams</span><button class="ghost" data-open-teams>Edit teams</button></div>
+      <div class="mode-teams"></div>
+      <p class="mode-hint muted"></p>
       <div class="mode-cards">${Object.entries(MODES).map(([m, d], i) => `
         <div class="mode-card ${m}" style="--i:${i}">
-          <button class="mode-main" data-play="${m}"${off}><span class="mode-art">${art[m]}</span><b>${d.name}</b><small>${d.text}</small></button>
-          <button class="mode-train" data-train="${m}" title="${d.train}" aria-label="Training: ${d.train}"${off}>${ICON_BOT}<span>Training</span></button>
+          <button class="mode-main" data-play="${m}"><span class="mode-art">${art[m]}</span><b>${d.name}</b><small>${d.text}</small></button>
+          <button class="mode-train" data-train="${m}" title="${d.train}" aria-label="Training: ${d.train}">${ICON_BOT}<span>Training</span></button>
         </div>`).join('')}
       </div>`;
+    renderModeTeams();
     modeEl.classList.remove('closing');
     modeEl.hidden = false;
-    modeEl.querySelector(team ? '[data-play]' : '[data-open-teams]').focus();
+    modeEl.querySelector(battleTeam() ? '[data-play]' : '[data-pick-team]').focus();
+  }
+  // All saved teams side by side, each a 3 by 2 grid of its Pokémon. Tapping a
+  // finished one makes it the battle team; an unfinished one opens the team
+  // builder on it. Without a battle team the modes stay locked.
+  function renderModeTeams() {
+    const p = loadProfile();
+    const team = battleTeam();
+    modeEl.querySelector('.mode-teams').innerHTML = p.teams.map((t, i) => {
+      const full = fullTeam(t);
+      const using = full && p.team === i;
+      const tag = using ? '✓ In use' : full ? 'Tap to use' : t.troops.length ? 'Not finished' : 'Empty: build it';
+      return `<button class="pick-team${using ? ' in-use' : ''}${full ? '' : ' unfinished'}" data-pick-team="${i}" aria-pressed="${using}">
+        <b>${esc(t.name)}</b>${teamMinis(t.troops).replace('class="team-minis"', 'class="team-minis grid"')}<small>${tag}</small>
+      </button>`;
+    }).join('');
+    modeEl.querySelector('.mode-hint').innerHTML = team
+      ? 'Pick a mode. Tap <b>Training</b> in a corner to play it against bots.'
+      : `Build a team of ${teamSize(catalog)} Pokémon before you battle.`;
+    modeEl.querySelector('.mode-hint').classList.toggle('needs-team', !team);
+    for (const b of modeEl.querySelectorAll('[data-play], [data-train]')) b.disabled = !team;
   }
   modeEl.addEventListener('click', (e) => {
     const btn = e.target.closest('button');
     if (e.target === modeEl || btn?.dataset.modeClose !== undefined) return closeAnimated(modeEl);
     if (btn?.dataset.openTeams !== undefined) { modeEl.hidden = true; return openTeams(); }
+    if (btn?.dataset.pickTeam) {
+      const i = +btn.dataset.pickTeam;
+      if (!fullTeam(loadProfile().teams[i])) { modeEl.hidden = true; return openTeams(i); }
+      pickTeam(i);
+      renderModeTeams();
+      const label = overlay.querySelector('#teams-label');
+      if (label) label.textContent = teamsLabel();
+      return modeEl.querySelector(`[data-pick-team="${i}"]`).focus();
+    }
     if (btn?.dataset.play) { modeEl.hidden = true; return onLobby('open', { mode: btn.dataset.play }); }
     if (btn?.dataset.train) {
       modeEl.hidden = true;
