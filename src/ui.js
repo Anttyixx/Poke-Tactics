@@ -409,7 +409,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
 
   function showOverlay(html) {
     closeLobby();
-    overlay.classList.remove('start-screen', 'lobby');
+    overlay.classList.remove('start-screen', 'start-again', 'lobby');
     overlay.querySelector('.card').innerHTML = html;
     overlay.hidden = false;
   }
@@ -2108,6 +2108,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   function showStart() {
     const ids = troopIds(catalog);
     const parade = ids.map((id, i) => `<span class="walker" style="--i:${i};--n:${ids.length}" data-facing="right"><span class="sprite" ${spriteStyle(catalog[id])}></span></span>`).join('');
+    // Already on screen (redrawn, say after saving the profile): no entrance again.
+    const again = overlay.classList.contains('start-screen') && !overlay.hidden;
     showOverlay(`
       <div class="start">
         <div class="logo"><span>Poke</span><span>Tactics</span></div>
@@ -2125,6 +2127,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         ${versionText ? `<div class="start-version">${esc(versionText)}</div>` : ''}
       </div>`);
     overlay.classList.add('start-screen');
+    overlay.classList.toggle('start-again', again);
     overlay.querySelector('#friend').focus();
   }
 
