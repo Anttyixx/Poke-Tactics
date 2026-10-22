@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=e021a30';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=de85e95';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=e021a30';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=e021a30';
+} from './game.js?v=de85e95';
+import { AVATARS, NAME_MAX, TEAMS_MAX, TEAM_NAME_MAX, avatarUrl, favouriteTroop, loadProfile, saveTeam, pickTeam } from './profile.js?v=de85e95';
 
 const TICK_MS = 100;
 // Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
@@ -582,30 +582,38 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       duel: mon(ids[0], 'right', 'l') + mon(ids[1], 'left', 'r'),
       arena: mon(ids[2], 'down', 't') + mon(ids[3], 'right', 'l') + mon(ids[4], 'left', 'r') + mon(ids[5], 'up', 'b'),
     };
+    // You battle with the team picked in the team builder; without one, the
+    // modes stay locked and the pop-up points you there.
+    const team = battleTeam();
+    const off = team ? '' : ' disabled';
     modeEl.querySelector('.mode-panel').innerHTML = `
       <button class="menu-close ghost" data-mode-close aria-label="Close">✕</button>
       <h1>Battle</h1>
-      <p class="muted">Pick a mode. Tap <b>Training</b> in a corner to play it against bots.</p>
+      ${team
+        ? `<div class="mode-team"><span class="mode-team-label">Your team</span><b>${esc(team.name)}</b>${teamMinis(team.troops)}<button class="ghost" data-open-teams>Change</button></div>
+           <p class="muted">Pick a mode. Tap <b>Training</b> in a corner to play it against bots.</p>`
+        : `<div class="mode-team empty"><span>Build a team of ${teamSize(catalog)} Pokémon before you battle.</span><button class="primary" data-open-teams>Team builder</button></div>`}
       <div class="mode-cards">${Object.entries(MODES).map(([m, d], i) => `
         <div class="mode-card ${m}" style="--i:${i}">
-          <button class="mode-main" data-play="${m}"><span class="mode-art">${art[m]}</span><b>${d.name}</b><small>${d.text}</small></button>
-          <button class="mode-train" data-train="${m}" title="${d.train}" aria-label="Training: ${d.train}">${ICON_BOT}<span>Training</span></button>
+          <button class="mode-main" data-play="${m}"${off}><span class="mode-art">${art[m]}</span><b>${d.name}</b><small>${d.text}</small></button>
+          <button class="mode-train" data-train="${m}" title="${d.train}" aria-label="Training: ${d.train}"${off}>${ICON_BOT}<span>Training</span></button>
         </div>`).join('')}
       </div>`;
     modeEl.classList.remove('closing');
     modeEl.hidden = false;
-    modeEl.querySelector('[data-play]').focus();
+    modeEl.querySelector(team ? '[data-play]' : '[data-open-teams]').focus();
   }
   modeEl.addEventListener('click', (e) => {
     const btn = e.target.closest('button');
     if (e.target === modeEl || btn?.dataset.modeClose !== undefined) return closeAnimated(modeEl);
+    if (btn?.dataset.openTeams !== undefined) { modeEl.hidden = true; return openTeams(); }
     if (btn?.dataset.play) { modeEl.hidden = true; return onLobby('open', { mode: btn.dataset.play }); }
     if (btn?.dataset.train) {
       modeEl.hidden = true;
       started = true;
       overlay.classList.remove('start-screen');
       onLobby('train', { mode: btn.dataset.train });
-      return showTeamBuilder();
+      return teamPhase();
     }
   });
   modeEl.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAnimated(modeEl); });
@@ -613,6 +621,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   const overlayClick = (e) => {
     const btn = e.target.closest('button, [data-dex-info]');
     if (btn?.id === 'friend') return openModePick();
+    if (btn?.id === 'open-teams') return openTeams();
     if (btn?.id === 'start-friends') return openMenu('friends', { noBack: true }); // straight from the main screen: just close
     if (btn?.dataset.lobby === 'friends') return openMenu('friends');
     if (btn?.dataset.lobby) return onLobby(btn.dataset.lobby, lobbyValues());
@@ -652,7 +661,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     const key = e.key.toLowerCase();
     if (!dexEl.hidden || !entryEl.hidden) { dexKey(key); return; }
     if (!menuEl.hidden) { if (key === 'escape' || key === 'm') closeMenu(); return; }
-    if (!modeEl.hidden) return;
+    if (!teamsEl.hidden) { if (key === 'escape') closeTeams(); return; }
+    if (!modeEl.hidden) { if (key === 'escape') closeAnimated(modeEl); return; }
     if (peek && key === 'escape') return closeInfo();
     if (key === 'p') openDex();
     else if (key === 'm') openMenu();
@@ -709,7 +719,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     overlay.hidden = true;
     renderPlanning();
     if (before) animateBoardReset(before);
-    if (state.phase === 'team') { if (started) showTeamBuilder(); else showStart(); }
+    if (state.phase === 'team') { if (started) teamPhase(); else showStart(); }
     if (state.phase === 'gameover') showGameOver();
   }
 
@@ -790,7 +800,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     if (view === 'help') {
       panel.innerHTML = `${close}${back}<h1>How to play</h1>
         <ul class="help-list">
-          <li><b>Build a team</b> of ${teamSize(catalog)} Pokémon. Each puts ${COPIES_PER_TROOP} copies into your own pool, and your shop draws from it. Your board starts empty.</li>
+          <li><b>Build a team</b> of ${teamSize(catalog)} Pokémon in the <b>Team builder</b> (up to ${TEAMS_MAX} saved teams); the one marked In use goes into every battle. Each puts ${COPIES_PER_TROOP} copies into your own pool, and your shop draws from it. Your board starts empty.</li>
           <li><b>Buy</b>: tap a shop card, then a square on your half (or drag the card onto the board).</li>
           <li><b>Level up</b>: each Pokémon can be on the board only once. Buying another copy levels it up: 1 copy = ★, 2 = ★★, 3 = ★★★, 4 = ${levelMark(3)} (shiny).</li>
           <li><b>Position</b>: the row nearest the middle is your front line. Tap a Pokémon, then a square, to move it (onto another Pokémon swaps them).</li>
@@ -880,7 +890,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
           <button data-menu="profile"><span>☺</span><div>Profile<small>Your name, picture, and stats</small></div></button>
           ${online
             ? '<button data-menu="leave"><span>⏏</span><div>Leave match<small>Disconnect from your friend</small></div></button>'
-            : '<button data-menu="new"><span>↻</span><div>New game<small>Start over with a new team</small></div></button>'}
+            : '<button data-menu="new"><span>↻</span><div>New game<small>Start over with your team</small></div></button>'}
         </div>`;
     }
     menuEl.hidden = false;
@@ -2072,9 +2082,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   // Team cards look like the Pokédex's: sprite in a glow, name, cost and type.
   // A picked card gets a green border and its Pokémon walks. Stats live
   // behind the ⓘ button (the Pokédex entry).
-  function teamCard(id, picked, i) {
+  function teamCard(id, picked, i, disabled = me().ready) {
     const def = catalog[id];
-    return `<button class="dex-card team-card${picked ? ' chosen' : ''}" style="--i:${i}" data-pick-troop="${id}" data-type="${def.type}" ${me().ready ? 'disabled' : ''} aria-pressed="${picked}">
+    return `<button class="dex-card team-card${picked ? ' chosen' : ''}" style="--i:${i}" data-pick-troop="${id}" data-type="${def.type}" ${disabled ? 'disabled' : ''} aria-pressed="${picked}">
       <span class="info-btn" data-dex-info="${id}" role="button" aria-label="${esc(def.name)} info">i</span>
       <span class="dex-card-art">${portrait(def)}</span>
       <b>${esc(def.name)}</b>
@@ -2105,6 +2115,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         <div class="parade" aria-hidden="true">${parade}</div>
         <div class="start-modes">
           <button id="friend" class="primary battle-btn">Battle</button>
+          <button id="open-teams" class="teams-btn">Team builder<small id="teams-label">${teamsLabel()}</small></button>
         </div>
         <div class="start-corner">
           <button id="start-dex" class="icon-btn dex-button" title="Every Pokémon's stats (P)">${ICON_DEX}<span class="label-text">Pokédex</span></button>
@@ -2115,6 +2126,141 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       </div>`);
     overlay.classList.add('start-screen');
     overlay.querySelector('#friend').focus();
+  }
+
+  // ---- team builder ----------------------------------------------------------
+  // Up to TEAMS_MAX saved teams of teamSize Pokémon, kept in the profile. The
+  // one marked "In use" is sent automatically when a match starts.
+  const teamsEl = $('teams');
+  let tb = null; // { slot, name, troops }: the team being edited
+  const fullTeam = (t) => !!t && t.troops.length === teamSize(catalog) && t.troops.every((id) => troopIds(catalog).includes(id));
+  function battleTeam() {
+    const p = loadProfile();
+    const t = p.team !== null ? p.teams[p.team] : null;
+    return fullTeam(t) ? t : null;
+  }
+  const teamsLabel = () => battleTeam()?.name ?? 'No team yet';
+  const teamMinis = (troops, size = teamSize(catalog)) => `<span class="team-minis">${Array.from({ length: size }, (_, k) => {
+    const def = catalog[troops[k]];
+    return def ? `<span class="portrait" data-facing="down" title="${esc(def.name)}"><span class="sprite" ${spriteStyle(def)}></span></span>` : '<i></i>';
+  }).join('')}</span>`;
+
+  function openTeams(slot = loadProfile().team ?? 0) {
+    const t = loadProfile().teams[slot];
+    tb = { slot, name: t.name, troops: [...t.troops] };
+    renderTeams(true);
+    teamsEl.classList.remove('closing');
+    teamsEl.hidden = false;
+  }
+  function closeTeams() {
+    closeAnimated(teamsEl);
+    const label = overlay.querySelector('#teams-label');
+    if (label) label.textContent = teamsLabel();
+  }
+  function renderTeams(fresh = false) {
+    const p = loadProfile();
+    const need = teamSize(catalog);
+    const saved = p.teams[tb.slot];
+    const dirty = tb.name !== saved.name || tb.troops.join() !== saved.troops.join();
+    const done = tb.troops.length === need;
+    const slots = p.teams.map((t, i) => `
+      <div class="team-slot${i === tb.slot ? ' editing' : ''}${i === p.team ? ' in-use' : ''}">
+        <button class="slot-main" data-slot="${i}" aria-pressed="${i === tb.slot}"><b>${esc(t.name)}</b>${teamMinis(t.troops)}</button>
+        ${i === p.team && fullTeam(t) ? '<span class="slot-badge">✓ In use</span>'
+          : fullTeam(t) ? `<button class="slot-use" data-use="${i}">Use this team</button>`
+          : `<span class="slot-badge empty">${t.troops.length ? 'Not finished' : 'Empty'}</span>`}
+      </div>`).join('');
+    const count = `${Array.from({ length: need }, (_, k) => `<i class="${k < tb.troops.length ? 'on' : ''}"></i>`).join('')}<span>${tb.troops.length}/${need}</span>`;
+    const save = !done ? `Pick ${need - tb.troops.length} more` : dirty ? 'Save team' : 'Saved ✓';
+    const actions = `
+      <button class="ghost" data-team-clear ${tb.troops.length ? '' : 'disabled'}>Clear</button>
+      <button class="primary" data-team-save ${done && dirty ? '' : 'disabled'}>${save}</button>`;
+    const panel = teamsEl.querySelector('.teams-panel');
+    if (!fresh) {
+      // Update in place, so only what changed animates.
+      panel.querySelector('.team-slots').innerHTML = slots;
+      panel.querySelector('.team-count').innerHTML = count;
+      panel.querySelector('.team-edit-actions').innerHTML = actions;
+      for (const card of panel.querySelectorAll('[data-pick-troop]')) {
+        const picked = tb.troops.includes(card.dataset.pickTroop);
+        card.classList.toggle('chosen', picked);
+        card.setAttribute('aria-pressed', picked);
+      }
+      return;
+    }
+    panel.innerHTML = `
+      <button class="menu-close ghost" data-teams-close aria-label="Close">✕</button>
+      <h1>Team builder</h1>
+      <p class="muted">Build up to ${TEAMS_MAX} teams of ${need} Pokémon. Each puts ${COPIES_PER_TROOP} copies of its Pokémon in your shop's pool. The team marked <b>In use</b> is the one you battle with.</p>
+      <div class="team-slots">${slots}</div>
+      <div class="team-edit">
+        <div class="team-edit-head">
+          <input class="team-name" maxlength="${TEAM_NAME_MAX}" value="${esc(tb.name)}" aria-label="Team name" spellcheck="false">
+          <div class="team-count">${count}</div>
+        </div>
+        <div class="team-grid fresh">${troopIds(catalog).map((id, i) => teamCard(id, tb.troops.includes(id), i, false)).join('')}</div>
+        <div class="team-edit-actions">${actions}</div>
+      </div>`;
+  }
+  teamsEl.addEventListener('click', (e) => {
+    if (e.target === teamsEl) return closeTeams();
+    const info = e.target.closest('[data-dex-info]');
+    if (info) return openDex(info.dataset.dexInfo);
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    if (btn.dataset.teamsClose !== undefined) return closeTeams();
+    if (btn.dataset.slot) {
+      const slot = +btn.dataset.slot;
+      if (slot === tb.slot) return;
+      const t = loadProfile().teams[slot];
+      tb = { slot, name: t.name, troops: [...t.troops] };
+      return renderTeams(true);
+    }
+    if (btn.dataset.use) { pickTeam(+btn.dataset.use); toast(`${loadProfile().teams[+btn.dataset.use].name} is now your battle team.`); return renderTeams(); }
+    if (btn.dataset.teamClear !== undefined) { tb.troops = []; return renderTeams(); }
+    if (btn.dataset.teamSave !== undefined) {
+      const res = saveTeam(tb.slot, { name: tb.name, troops: tb.troops });
+      tb.name = res.teams[tb.slot].name;
+      teamsEl.querySelector('.team-name').value = tb.name;
+      toast(res.stored === false ? "Couldn't save: this browser blocks saving." : res.team === tb.slot ? `${tb.name} saved and ready to battle.` : `${tb.name} saved.`);
+      return renderTeams();
+    }
+    const pick = btn.dataset.pickTroop;
+    if (pick) {
+      if (tb.troops.includes(pick)) tb.troops = tb.troops.filter((t) => t !== pick);
+      else if (tb.troops.length < teamSize(catalog)) tb.troops = [...tb.troops, pick];
+      else toast('Your team is full. Remove a Pokémon first.');
+      renderTeams();
+    }
+  });
+  teamsEl.addEventListener('input', (e) => {
+    if (!e.target.matches('.team-name')) return;
+    tb.name = e.target.value;
+    renderTeams();
+  });
+  teamsEl.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeTeams(); });
+
+  // A match's team phase: your team from the team builder goes in by itself,
+  // and you wait for the others. Without a saved team (or if it's refused),
+  // you pick one here instead.
+  let teamSent = null; // seed of the match the saved team was sent for
+  let teamRefused = null; // seed of a match that refused it
+  function teamPhase() {
+    const team = battleTeam();
+    if (!team || teamRefused === state.seed) return showTeamBuilder();
+    showOverlay(`
+      <h1>${esc(team.name)}</h1>
+      <div class="team-preview">${teamMinis(team.troops)}</div>
+      <p class="waiting"><span class="spinner small"></span>${state.arena ? 'Waiting for the other players…' : 'Waiting for opponent…'}</p>`);
+    if (me().ready || teamSent === state.seed) return;
+    teamSent = state.seed;
+    const seed = state.seed;
+    // Sent after this draw finishes: in training the match can start at once.
+    setTimeout(() => {
+      if (state?.seed !== seed || state.phase !== 'team' || me().ready) return;
+      const res = onIntent({ type: 'chooseTeam', troops: team.troops });
+      if (res?.ok === false) { teamRefused = seed; showTeamBuilder(); }
+    }, 0);
   }
 
   function showTeamBuilder() {

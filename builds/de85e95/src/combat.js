@@ -24,6 +24,7 @@ export const CRIT_PCT = 150;
 // Walking: a Pokémon waits its movement speed (seconds, below), then takes
 // STEP_TICKS to cross to the next square, then waits again before the next.
 export const STEP_TICKS = 5; // 0.5s per step
+const BURN_EVERY = 10; // burns hurt once a second
 // Movement speed tiers: the wait between steps, in seconds.
 export const MOVE_SPEEDS = { 'very fast': 0.35, fast: 0.5, medium: 0.8, slow: 1.0, 'very slow': 1.3, 'super slow': 2.0 };
 const ticksOf = (seconds) => Math.max(1, Math.round(seconds / TICK_SECONDS));
@@ -33,6 +34,7 @@ export function unitStats(def, star) {
   return {
     hp: Math.round(def.hp[star] * STAT_SCALE),
     atk: Math.round(def.damage[star] * STAT_SCALE),
+    shield: def.shield ? Math.round(def.shield[star] * STAT_SCALE) : 0, // a second bar that takes all damage first
     attackCd: ticksOf(def.secPerHit), // ticks per attack
     moveCd: ticksOf(MOVE_SPEEDS[def.moveSpeed]), // ticks of waiting before each step
     crit: def.critChance ?? 0, // percent
@@ -93,12 +95,13 @@ function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, in
     // attack cooldown before the first hit.
     mana: def.ability?.startCharged ? stats.energy : 0, maxMana: stats.energy, // mana counts attacks toward the power; 0 = no counter
     power: def.ability, powerKind: def.ability?.kind ?? null, // read every tick: kept on the unit itself (faster)
-    shield: 0, stun: 0,
+    shield: stats.shield, maxShield: stats.shield, stun: 0,
     pendingMana: 0, pendingStun: 0, // applied at the end of the tick
     atkTimer: stats.attackCd,
     moveTimer: stats.moveCd, // waiting before the next step (it waits before its first one too)
     stepTimer: 0, // mid-step: ticks until it reaches the square it's walking to
     hasteUntil: 0, hastePct: 0, stealthFrom: 0, stealthUntil: 0,
+    burnUntil: 0, burnNext: 0, burnAmount: 0, burnBy: null, // Infernape's Blaze: damage every second while it lasts
     tauntBy: null, tauntUntil: 0, // Amoonguss's Rage Powder: it must attack this unit through tauntUntil
     rage: 0, movedSinceHit: true, // Annihilape's Rage Fist: attacks in a row without moving
     darts: null, dartOf: null, dartSlot: 0, dartShots: 0, fullSince: null, // Dragapult's Dreepy: [{ readyAt, unit }] / which Dragapult a Dreepy belongs to
@@ -133,6 +136,7 @@ function spawn(catalog, inst, side, id, slot, pos = toCombatPos(side, inst.x, in
 const snapshot = (u) => ({
   id: u.id, side: u.side, uid: u.uid, unitId: u.unitId, star: u.star,
   x: u.x, y: u.y, hp: u.hp, maxHp: u.maxHp, mana: u.mana, maxMana: u.maxMana,
+  ...(u.maxShield && { shield: u.shield, maxShield: u.maxShield }),
   ...(u.summoned && { summoned: true }),
 });
 
@@ -304,6 +308,22 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     return best;
   }
 
+  // Amoonguss's spores (`lure`): an enemy picking a new target takes the
+  // closest such Pokémon it can already hit without moving. If it would have
+  // to move to reach one, it picks as usual.
+  let lurers = null;
+  function lureTarget(u) {
+    if (!lurers?.length) return null;
+    let best = null;
+    let bestDist = Infinity;
+    for (const e of lurers) {
+      if (e.side === u.side || !visible(e) || e.copyOf !== null || reach(u, at(e)) > u.range) continue;
+      const d = dist(u, e.sp);
+      if (d < bestDist) { best = e; bestDist = d; }
+    }
+    return best;
+  }
+
   function farthestEnemy(u) {
     let best = null;
     let bestDist = -1;
@@ -320,17 +340,28 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
   function damage(target, amount, src, crit = false) {
     if (!standing(target) || immune(target)) return 0;
     if (guarded(target)) amount = Math.max(1, Math.floor((amount * (100 - target.guardPct)) / 100));
-    const absorbed = Math.min(target.shield, amount);
-    target.shield -= absorbed;
     const before = target.hp;
-    target.hp = Math.max(0, target.hp - (amount - absorbed));
+    // A shield takes the whole hit while it lasts: HP can't go down, and
+    // whatever the shield couldn't hold is wasted.
+    const shielded = target.shield > 0;
+    if (shielded) target.shield = Math.max(0, target.shield - amount);
+    else target.hp = Math.max(0, target.hp - amount);
     if (target.hp > 0) target.pendingMana += MANA_PER_HIT;
     record && emit('damage', { id: target.id, src: src.id, amount, hp: target.hp, shield: target.shield, mana: shownMana(target), ...(crit && { crit }) });
     if (target.hp === 0) knockedOut(target);
+    if (shielded && target.shield === 0) shieldBroke(target);
     // Minior: dropping to its HP threshold transforms it (at the end of the tick).
     const p = target.power;
     if (target.hp > 0 && p?.kind === 'transform' && p.trigger === 'lowHp' && !target.form && !target.morphUntil && target.hp * 100 <= target.maxHp * p.hpPct) target.pendingForm = true;
     return before - target.hp;
+  }
+
+  // A shield that runs out breaks for good (nothing refills it). Minior's
+  // Rock form is its shield: losing it starts the change to Star Form.
+  function shieldBroke(u) {
+    record && emit('shieldBreak', { id: u.id });
+    const p = u.power;
+    if (p?.kind === 'transform' && p.trigger === 'shieldBreak' && !u.form && !u.morphUntil) u.pendingForm = true;
   }
 
   // Healing lands at the end of the tick (see the main loop), so it never
@@ -405,8 +436,16 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
   // the tick, since it changes Ditto's HP.
   function copyUnit(u, e) {
     u.copyOf = e.id;
-    rescaleHp(u, e.maxHp);
-    setStats(u, { atk: e.atk, attackCd: e.attackCd, range: e.range, crit: e.crit, sprite: e.sprite }, { name: catalog[e.unitId].name, copy: e.unitId, hp: u.hp, maxHp: u.maxHp });
+    // `copyPct` (by Ditto's level): how strong the copy is, in % of the
+    // original's HP and damage, so levelling Ditto up pays off.
+    const bonus = u.power?.copyPct?.[u.star] ?? 100;
+    // A Ditto copying a Ditto that's already a copy takes its own stats, so
+    // two Dittos copying each other in the same tick end up the same either way.
+    const src = e.copyOf !== null ? unitStats(catalog[e.unitId], e.star) : null;
+    const maxHp = src ? src.hp : e.maxHp;
+    const atk = src ? src.atk : e.atk;
+    rescaleHp(u, Math.round((maxHp * bonus) / 100));
+    setStats(u, { atk: Math.round((atk * bonus) / 100), attackCd: e.attackCd, range: e.range, crit: e.crit, sprite: e.sprite }, { name: catalog[e.unitId].name, copy: e.unitId, hp: u.hp, maxHp: u.maxHp });
   }
   function revertCopy(u) {
     const def = catalog[u.unitId];
@@ -1029,7 +1068,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
       }
     }
     let target = u.target === null ? null : units[u.target];
-    if (!target || !visible(target) || target.side === u.side || reach(u, at(target)) > u.range) target = nearestEnemy(u);
+    if (!target || !visible(target) || target.side === u.side || reach(u, at(target)) > u.range) target = lureTarget(u) ?? nearestEnemy(u);
     if (!target) return;
     u.target = target.id;
 
@@ -1068,13 +1107,28 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
       // Dash in a straight line next to the farthest enemy, stunning every
       // enemy it passes through on the way.
       const far = farthestEnemy(u);
-      const cell = far && reach(u, at(far)) > u.range && dashSpot(u, far);
+      // `crash`: it dashes onto the target's own square and shoves it aside
+      // (like a Dreepy; a shield or no room: it stops beside it instead).
+      // Not a target that moved this tick or is charged to dash itself, so two
+      // dashers crashing into each other resolve the same either way round.
+      const still = far && far.x === at(far).x && far.y === at(far).y;
+      const dasher = far && far.powerKind === 'empower' && far.power.dash && far.maxMana > 0 && far.mana >= far.maxMana;
+      const shove = far && u.power.crash && still && !dasher && !immune(far) && !blocks(far) ? displaceSpot(far) : null;
+      // A crash dash goes whenever the farthest enemy isn't already right next to
+      // it; the older dash only when that enemy is out of its attack range.
+      const cell = far && reach(u, at(far)) > (u.power.crash ? 1 : u.range) && (shove ? { x: far.x, y: far.y } : dashSpot(u, far));
       if (cell && !heldBack(u)) {
         const from = { x: u.x, y: u.y };
+        const p = u.power;
         for (const c of lineCells(from, cell)) {
           const o = unitAt(c.x, c.y);
-          if (o && o !== far && o.side !== u.side && standing(o)) stun(o, u.power.stun);
+          if (!o || o === far || o.side === u.side || !standing(o)) continue;
+          // Everyone on the way: a light hit (`passPct`) and a short stun
+          // (`passStun`), or the older full stun (`stun`).
+          if (p.passPct) damage(o, Math.floor((u.atk * p.passPct) / 100), u);
+          if (standing(o)) stun(o, p.passStun ?? p.stun);
         }
+        if (shove) relocate(far, shove, 'knock', { by: u.id });
         // The dash takes a tick per square, during which Tapu Koko is immune
         // to everything; it strikes when it arrives.
         const travel = Math.max(2, Math.max(Math.abs(cell.x - from.x), Math.abs(cell.y - from.y)));
@@ -1099,7 +1153,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
         // Annihilape: every attack in a row without moving makes the next ones faster.
         if (u.powerKind === 'rage') {
           const was = u.rage;
-          u.rage = u.movedSinceHit ? 0 : Math.min(u.power.maxStacks, u.rage + 1);
+          u.rage = u.movedSinceHit ? 0 : u.power.maxStacks ? Math.min(u.power.maxStacks, u.rage + 1) : u.rage + 1; // no cap unless the power sets one
           u.movedSinceHit = false;
           if (u.rage !== was) record && emit('rage', { id: u.id, stacks: u.rage, pct: u.rage * u.power.stackPct });
         }
@@ -1108,6 +1162,14 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
         damage(target, Math.max(1, Math.floor((hit * 100) / (100 + target.armor))), u, crit);
         // Frosmoth: every hit chills its target.
         if (u.powerKind === 'chill' && !u.copyOf) chill(target, u.power);
+        // Infernape: hits while Blaze is on set the target burning (`burnPct`
+        // of its damage every second for `burnDuration`; a new hit restarts it).
+        if (u.powerKind === 'haste' && u.power.burnPct && u.hasteUntil > t && u.copyOf === null && standing(target) && !immune(target)) {
+          if (!(target.burnUntil >= t)) { target.burnNext = t + BURN_EVERY; record && emit('burn', { id: target.id, by: u.id }); }
+          target.burnUntil = t + u.power.burnDuration;
+          target.burnAmount = Math.floor((u.atk * u.power.burnPct) / 100);
+          target.burnBy = u.id;
+        }
         // Lilligant: each attack also heals its allies around the square it hit:
         // the (2r+1)x(2r+1) square for `radius` r, else the 4 squares beside it.
         if (u.powerKind === 'splashHeal') {
@@ -1183,6 +1245,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
       orders = [[...bySide[0], ...bySide[1]], [...bySide[1], ...bySide[0]]];
       orderSize = units.length;
       ringers = units.filter((u) => u.powerKind === 'bind' && u.power.pick === 'move');
+      lurers = units.filter((u) => u.powerKind === 'lure');
     }
     // Hoopa's ring is judged from the start of the tick: full, standing and not stunned.
     for (const h of ringers) h.ringReady = h.alive && h.hp > 0 && h.copyOf === null && h.stun === 0 && h.maxMana > 0 && h.mana >= h.maxMana;
@@ -1190,13 +1253,26 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
     // Battle-start powers go off on the first tick, before anyone acts.
     if (t === 1) for (const u of order) if (u.powerKind === 'opening' && standing(u)) openingPower(u);
     for (const u of order) if (u.alive) act(u);
+    // Burns tick at the end of the tick, once a second.
+    for (const u of units) {
+      if (u.burnUntil < t || u.burnNext !== t || !standing(u)) continue;
+      damage(u, u.burnAmount, units[u.burnBy]);
+      u.burnNext = t + BURN_EVERY;
+    }
     if (t === SUDDEN_DEATH_TICK) record && emit('suddenDeath', {});
     if (t >= SUDDEN_DEATH_TICK) {
-      // The drain lands at the end of the tick, after everyone has acted, and
-      // ignores shields. Same amount for everyone: the weakest fall first.
+      // The drain lands at the end of the tick, after everyone has acted.
+      // Same amount for everyone: the weakest fall first. Like any damage,
+      // it wears a shield down before HP.
       const drain = Math.round((SUDDEN_DEATH_HP_PER_SECOND * STAT_SCALE) * TICK_SECONDS);
       for (const u of units) {
         if (!standing(u) || immune(u)) continue;
+        if (u.shield > 0) {
+          u.shield = Math.max(0, u.shield - drain);
+          record && emit('drain', { id: u.id, amount: drain, hp: u.hp, shield: u.shield });
+          if (u.shield === 0) shieldBroke(u);
+          continue;
+        }
         u.hp = Math.max(0, u.hp - drain);
         record && emit('drain', { id: u.id, amount: drain, hp: u.hp });
         if (u.hp === 0) knockedOut(u);
@@ -1300,7 +1376,7 @@ export function simulate(catalog, boards, seed = 0, { record = true, maxTicks = 
   if (winner === undefined && maxTicks < MAX_TICKS) {
     const hpShare = [0, 1].map((side) => {
       const mine = units.filter((u) => u.side === side && !u.summoned);
-      return mine.reduce((sum, u) => sum + (u.alive ? u.hp / u.maxHp : 0), 0) / Math.max(1, mine.length);
+      return mine.reduce((sum, u) => sum + (u.alive ? (u.hp + u.shield) / (u.maxHp + u.maxShield) : 0), 0) / Math.max(1, mine.length);
     });
     return { initial, events, winner: undefined, ticks: t, cut: true, hpShare, survivors: [] };
   }

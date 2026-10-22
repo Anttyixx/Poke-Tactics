@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=788716c';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=de85e95';
 import {
-  COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS, lostCount,
+  COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=788716c';
-import { AVATARS, NAME_MAX, avatarUrl, favouriteTroop } from './profile.js?v=788716c';
+} from './game.js?v=de85e95';
+import { AVATARS, NAME_MAX, TEAMS_MAX, TEAM_NAME_MAX, avatarUrl, favouriteTroop, loadProfile, saveTeam, pickTeam } from './profile.js?v=de85e95';
 
 const TICK_MS = 100;
 // Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
@@ -80,34 +80,58 @@ function abilityRefs(def, catalog) {
 
 export function powerText(def, star, catalog) {
   const out = powerTextPlain(def, star, catalog);
-  return out && { ...out, text: linkNames(out.text, abilityRefs(def, catalog)) };
+  const refs = abilityRefs(def, catalog);
+  return out && { ...out, text: linkNames(out.text, refs), more: out.more && linkNames(out.more, refs) };
 }
 
+// An ability's text: `text` is the short version everyone sees, `more` (when
+// there is more to know) the full details behind the "More details" toggle.
 function powerTextPlain(def, star, catalog) {
+  const out = abilityTexts(def, star, catalog);
+  if (out && out.more === out.text) delete out.more;
+  return out;
+}
+
+function abilityTexts(def, star, catalog) {
   const p = def.ability;
   if (!p) return null;
   const lvl = star ?? 0;
   const dmg = powerDamage(def, lvl);
   const hit = p.damagePct ? `${vDmg(`${p.damagePct}%`)} damage (${vDmg(show(dmg))})` : '';
+  const pct = p.damagePct ? `${vDmg(`${p.damagePct}%`)} damage` : ''; // the short texts give just the share
   const every = `Every ${def.energy} attacks`;
   switch (p.kind) {
     case 'empower': {
-      if (p.dash) return { when: every, text: `Dashes in a straight line to the farthest enemy, immune to everything on the way, and hits it for ${hit}. The target and every enemy it passes through are stunned for ${vTime(p.stun)}.` };
-      if (p.teleport) return { when: every, text: `Teleports next to the farthest enemy and hits it for ${hit}${p.lifestealPct ? `, healing for ${vHeal(`${p.lifestealPct}%`)} of the damage dealt` : ''}.` };
+      if (p.dash && p.crash) {
+        const pass = p.passPct ? `Enemies it passes through take ${vDmg(`${p.passPct}%`)} damage (${vDmg(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.passPct) / 100)))}) and are stunned for ${vTime(p.passStun ?? p.stun)}.` : '';
+        return { when: every, text: `Crashes into the farthest enemy, knocking it aside and dealing ${pct} to it.`, more: `Dashes in a straight line to the farthest enemy, immune to everything on the way, lands on its square and shoves it aside, then hits it for ${hit} and stuns it for ${vTime(p.stun)}. ${pass} If every enemy is already right next to it, it hits from where it stands instead.`.replace('  ', ' ') };
+      }
+      if (p.dash) return { when: every, text: `Dashes to the farthest enemy and deals ${pct} to it, stunning every enemy in its path.`, more: `Dashes in a straight line to the farthest enemy, immune to everything on the way, and hits it for ${hit}. The target and every enemy it passes through are stunned for ${vTime(p.stun)}.` };
+      if (p.teleport) return { when: every, text: `Teleports next to the farthest enemy and deals ${pct} to it.`, more: `Teleports next to the farthest enemy and hits it for ${hit}${p.lifestealPct ? `, healing for ${vHeal(`${p.lifestealPct}%`)} of the damage dealt` : ''}.` };
       const extra = [
         p.knockback && `knocks the target back ${vNum(p.knockback)} squares`,
         p.stun && `stuns ${p.knockback ? 'it' : 'the target'} for ${vTime(p.stun)}`,
         p.lifestealPct && `heals it for ${vHeal(`${p.lifestealPct}%`)} of the damage dealt`,
       ].filter(Boolean);
-      return { when: every, text: `Its next attack hits for ${hit}${extra.length ? `${extra.length === 1 ? ' and ' : ', '}${extra.join(' and ')}` : ''}.` };
+      const short = [p.knockback && 'knocks the target back', p.stun && (p.knockback ? 'stuns it' : 'stuns the target'), p.lifestealPct && 'heals it'].filter(Boolean);
+      // With the damage first, two extras make a list of three: Oxford comma.
+      const join = (xs) => (xs.length === 1 ? ` and ${xs[0]}` : xs.length ? `, ${xs.slice(0, -1).join(', ')}, and ${xs.at(-1)}` : '');
+      return { when: every, text: `Its next attack deals ${pct}${join(short)}.`, more: `Its next attack hits for ${hit}${join(extra)}.` };
     }
     case 'bind': {
-      if (p.targeted) return { when: `After ${def.energy} attacks`, text: `${p.pick === 'move' ? 'Holds its full charge until an enemy tries to change squares by itself (a step, or an ability that moves it), then binds that one in rings just before it goes: the move (or moving ability, like a dash) is stopped and counts as its first try to break free. Being shoved by an enemy attack never triggers it.' : "Binds the Pokémon it's attacking in rings (if that one is already bound, the nearest enemy that isn't)."} A bound Pokémon still attacks anything in range, but can't walk, zip or dash. The rings stop its next ${vNum(p.breakAfter)} tries to move (each one weakens them), then break. They also snap at once if it's shoved or knocked to another square, or knocked out.` };
+      if (p.targeted) {
+        const rest = `A bound Pokémon still attacks anything in range, but can't walk, zip, or dash. The rings stop its next ${vNum(p.breakAfter)} tries to move (each one weakens them), then break. They also snap at once if it's shoved or knocked to another square, or knocked out.`;
+        if (p.pick === 'move') return { when: `After ${def.energy} attacks`, text: `Traps the next enemy that tries to move in rings. It can still attack, but can't move until it breaks free.`, more: `Holds its full charge until an enemy tries to change squares by itself (a step, or an ability that moves it), then binds that one in rings just before it goes: the move (or moving ability, like a dash) is stopped and counts as its first try to break free. Being shoved by an enemy attack never triggers it. ${rest}` };
+        return { when: `After ${def.energy} attacks`, text: `Traps the Pokémon it's attacking in rings. It can still attack, but can't move until it breaks free.`, more: `Binds the Pokémon it's attacking in rings (if that one is already bound, the nearest enemy that isn't). ${rest}` };
+      }
       const start = p.startCharged ? 'It starts the fight charged and refills' : 'Its ability charges';
-      return { when: `After ${def.energy} attacks`, text: `${start} after ${vNum(def.energy)} attacks, then waits until an enemy tries to move. Hoopa binds that Pokémon in place for ${vTime(p.duration)}: it can't walk, zip or dash, but it still attacks anything in range.${p.noRepeat ? ' It never binds the same Pokémon twice in a row.' : ''}${p.chargedForm ? ` While charged it becomes ${esc(p.chargedForm.name)}.` : ''}` };
+      return { when: `After ${def.energy} attacks`, text: `Pins the next enemy that tries to move in place for ${vTime(p.duration)}.`, more: `${start} after ${vNum(def.energy)} attacks, then waits until an enemy tries to move. Hoopa binds that Pokémon in place for ${vTime(p.duration)}: it can't walk, zip, or dash, but it still attacks anything in range.${p.noRepeat ? ' It never binds the same Pokémon twice in a row.' : ''}${p.chargedForm ? ` While charged it becomes ${esc(p.chargedForm.name)}.` : ''}` };
     }
-    case 'taunt': return { when: every, text: `Spreads its spores: the hardest-hitting enemy within the ${area(p.radius)} around it that is attacking someone else must attack ${esc(def.name)} for ${vTime(p.duration)}.` };
-    case 'rage': return { when: 'Every attack', text: `Each attack in a row without moving makes it attack ${vNum(`${p.stackPct}%`)} faster, up to ${vNum(`${p.stackPct * p.maxStacks}%`)} after ${vNum(p.maxStacks)} attacks. Moving resets it.` };
+    case 'lure': return { when: 'Always', text: `Enemies that can hit ${esc(def.name)} without moving pick it as their next target.`, more: `Its spores draw attention: whenever an enemy picks a new target and ${esc(def.name)} is already within its reach, it goes for ${esc(def.name)}. An enemy that would have to move to reach it picks as usual.` };
+    case 'taunt': return { when: every, text: `Makes a nearby enemy attack ${esc(def.name)} instead of its friends.`, more: `Spreads its spores: the hardest-hitting enemy within the ${area(p.radius)} around it that is attacking someone else must attack ${esc(def.name)} for ${vTime(p.duration)}.` };
+    case 'rage': return p.maxStacks
+      ? { when: 'Every attack', text: `Attacks faster with every hit while it stands still, up to ${vNum(`${p.stackPct * p.maxStacks}%`)} faster.`, more: `Each attack in a row without moving makes it attack ${vNum(`${p.stackPct}%`)} faster, up to ${vNum(`${p.stackPct * p.maxStacks}%`)} after ${vNum(p.maxStacks)} attacks. Moving resets it.` }
+      : { when: 'Every attack', text: `Attacks ${vNum(`${p.stackPct}%`)} faster with every hit while it stands still, with no limit.`, more: `Each attack in a row without moving makes it attack ${vNum(`${p.stackPct}%`)} faster, with no limit. Moving resets it.` };
     case 'darts': {
       const name = catalog?.[p.unit]?.name ?? p.unit;
       const shot = p.perShot ?? p.count;
@@ -118,50 +142,124 @@ function powerTextPlain(def, star, catalog) {
         : `With all ${name} home${def.energy ? ` and its counter full (${vNum(def.energy)} attacks)` : ''}, its next action (an attack, or a step toward its target) fires them instead`;
       const at = `the farthest enemy${shot === 1 ? '' : 'ies'}${p.outside ? ` outside the ${area(p.outside)} around it (never one right next to it; with no enemy that far it just attacks)` : ''}`;
       const impact = p.impactDamage ? `, hitting for ${vDmg(show(Math.round(p.impactDamage[lvl] * STAT_SCALE)))}` : p.impactPct ? `, hitting for ${vDmg(`${p.impactPct}%`)} damage (${vDmg(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.impactPct) / 100)))})` : '';
-      return { when: def.energy === 1 ? 'Every other action' : def.energy ? `Every ${def.energy} attacks` : 'All home', text: `${ready}, at ${at}${impact}${p.impactStun ? ` and stunning it for ${vTime(p.impactStun)}` : ''}. It ${p.displace ? 'crashes into its target, shoving it aside onto a square next to it, then stays' : 'lands beside its target'} and fights.${p.lure ? ` Once the stun wears off, its target drops whoever it was attacking and attacks the ${name} right away, until it faints.` : ''} A ${name} that faints flies back (${vTime(Math.round(p.returnSec * 10))}). They come at ${esc(def.name)}'s level.` };
+      return {
+        when: def.energy === 1 ? 'Every other action' : def.energy ? `Every ${def.energy} attacks` : 'All home',
+        text: `Launches ${shot === 1 ? `a ${name}` : `${name}`} at a far-away enemy. It crashes in${impact ? ` for ${impact.replace(/^, hitting for /, '').replace(/ damage .*/, '')} damage` : ''}${p.impactStun ? ', stuns its target,' : ''} and stays to fight.`,
+        more: `${ready}, at ${at}${impact}${p.impactStun ? ` and stunning it for ${vTime(p.impactStun)}` : ''}. It ${p.displace ? 'crashes into its target, shoving it aside onto a square next to it, then stays' : 'lands beside its target'} and fights.${p.lure ? ` Once the stun wears off, its target drops whoever it was attacking and attacks the ${name} right away, until it faints.` : ''} A ${name} that faints flies back (${vTime(Math.round(p.returnSec * 10))}). They come at ${esc(def.name)}'s level.`,
+      };
     }
-    case 'boost': return { when: every, text: `Charges up the allies directly left, right, in front of and behind it: each gains ${vNum(`+${p.charges}`)} toward its ability (Pokémon without an ability counter don't benefit).` };
+    case 'boost': return { when: every, text: `Gives the allies next to it ${vNum(`+${p.charges}`)} charge toward their abilities.`, more: `Charges up the allies directly left, right, in front of, and behind it: each gains ${vNum(`+${p.charges}`)} toward its ability (Pokémon without an ability counter don't benefit).` };
     case 'snipe': return { when: every, text: `The attack also zaps the farthest enemy for ${hit}.` };
     case 'summon': {
       const name = catalog?.[p.unit]?.name ?? p.unit;
       const n = (p.countByStar ?? [1, 1, 1, 1])[lvl];
       const level = p.summonStar !== undefined ? `They are always ${levelMark(p.summonStar)}.` : `They come at ${def.name}'s level.`;
-      return { when: every, text: `Summons ${vNum(n)} ${name} beside it. ${level}` };
+      return { when: every, text: `Summons ${vNum(n)} ${name} to fight beside it.`, more: `Summons ${vNum(n)} ${name} beside it. ${level}` };
     }
-    case 'stealth': return { when: every, text: `Turns invisible for ${vTime(p.duration)}${p.hastePct ? ` and attacks ${vNum(`${p.hastePct}%`)} faster` : ''}. Enemies can't target or follow it while it's invisible.` };
-    case 'haste': return { when: every, text: `Attacks ${vNum(`${p.hastePct}%`)} faster for ${vTime(p.duration)}.` };
-    case 'quake': return { when: every, text: `Shakes the whole board: every enemy takes ${hit}${p.stun ? ` and is stunned for ${vTime(p.stun)}` : ''}.` };
-    case 'chill': return { when: 'Every attack', text: `Chills the target for ${vTime(p.duration)}: it attacks and moves ${vNum(`${p.slowPct}%`)} slower. Another hit restarts the timer.` };
+    case 'stealth': return { when: every, text: `Turns invisible for ${vTime(p.duration)}${p.hastePct ? ` and attacks ${vNum(`${p.hastePct}%`)} faster` : ''}.`, more: `Turns invisible for ${vTime(p.duration)}${p.hastePct ? ` and attacks ${vNum(`${p.hastePct}%`)} faster` : ''}. Enemies can't target or follow it while it's invisible.` };
+    case 'haste': {
+      if (!p.burnPct) return { when: every, text: `Attacks ${vNum(`${p.hastePct}%`)} faster for ${vTime(p.duration)}.` };
+      const burn = show(Math.floor((def.damage[lvl] * STAT_SCALE * p.burnPct) / 100));
+      return { when: every, text: `Attacks ${vNum(`${p.hastePct}%`)} faster for ${vTime(p.duration)}, and its hits set enemies burning.`, more: `Attacks ${vNum(`${p.hastePct}%`)} faster for ${vTime(p.duration)}. Each hit while it lasts burns the target for ${vDmg(`${p.burnPct}%`)} of its damage (${vDmg(burn)}) every second for ${vTime(p.burnDuration)}. Another hit restarts the burn.` };
+    }
+    case 'quake': return { when: every, text: `Shakes the whole board, dealing ${pct} to every enemy${p.stun ? ' and stunning them' : ''}.`, more: `Every enemy takes ${hit}${p.stun ? ` and is stunned for ${vTime(p.stun)}` : ''}.` };
+    case 'chill': return { when: 'Every attack', text: `Slows the enemy it hits by ${vNum(`${p.slowPct}%`)}.`, more: `Chills the target for ${vTime(p.duration)}: it attacks and moves ${vNum(`${p.slowPct}%`)} slower. Another hit restarts the timer.` };
     case 'splashHeal': {
-      const where = p.radius ? `in the ${area(p.radius)} around its target` : 'directly left, right, above and below its target';
-      return { when: 'Every attack', text: `Heals your Pokémon ${where} for ${vHeal(`${p.healPct}%`)} of its damage (${vHeal(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.healPct) / 100)))}).` };
+      const where = p.radius ? `in the ${area(p.radius)} around its target` : 'directly left, right, above, and below its target';
+      return { when: 'Every attack', text: `Each attack also heals your Pokémon near its target for ${vHeal(`${p.healPct}%`)} of its damage.`, more: `Heals your Pokémon ${where} for ${vHeal(`${p.healPct}%`)} of its damage (${vHeal(show(Math.floor((def.damage[lvl] * STAT_SCALE * p.healPct) / 100)))}).` };
     }
-    case 'selfdestruct': return { when: 'When knocked out', text: `Stays on its square for ${vTime(p.delay)}, then explodes: enemies in the ${area(p.radius)} around it take ${hit}.` };
-    case 'copy': return { when: 'Always', text: `Walks to the nearest enemy and takes ${vTime(p.morph)} to transform into it, copying its HP, damage, attack speed, range and crit (not its ability or movement). It keeps its share of HP and stands still while transformed. When that Pokémon faints, it turns back and walks to the next one.` };
+    case 'selfdestruct': return { when: 'When knocked out', text: `Explodes after fainting and deals ${pct} to the enemies around it.`, more: `Stays on its square for ${vTime(p.delay)}, then explodes: enemies in the ${area(p.radius)} around it take ${hit}.` };
+    case 'copy': {
+      const share = p.copyPct ? ` The copy has ${vNum(`${p.copyPct[lvl]}%`)} of the original's HP and damage (more at higher levels).` : '';
+      return { when: 'Always', text: p.copyPct ? `Transforms into the nearest enemy and copies its stats at ${vNum(`${p.copyPct[lvl]}%`)}.` : `Transforms into the nearest enemy and copies its stats.`, more: `Walks to the nearest enemy and takes ${vTime(p.morph)} to transform into it, copying its HP, damage, attack speed, range, and crit (not its ability or movement).${share} It keeps its share of HP and stands still while transformed. When that Pokémon faints, it turns back and walks to the next one.` };
+    }
     case 'transform': {
       const f = p.form;
-      const when = p.trigger === 'knockedOut' ? 'When knocked out' : p.trigger === 'lowHp' ? `At ${p.hpPct}% HP` : every;
+      const when = p.trigger === 'knockedOut' ? 'When knocked out' : p.trigger === 'lowHp' ? `At ${p.hpPct}% HP` : p.trigger === 'shieldBreak' ? 'When its shield breaks' : every;
       const into = p.trigger === 'knockedOut' ? 'Instead of fainting, it transforms' : 'Transforms';
       const morph = p.morph ? ` It takes ${vTime(p.morph)} and can't be hurt while it does.` : '';
       const wave = f.shockwave ? ` A shock wave stuns every enemy in the ${area(f.shockwave.radius)} around it for ${vTime(f.shockwave.stun)}.` : '';
       // Only how it transforms: the form's own stats are in its Pokédex entry.
-      return { when, text: `${into} into ${esc(f.name)} for the rest of the fight.${morph}${wave}` };
+      return { when, text: `${into} into ${esc(f.name)} for the rest of the fight${f.shockwave ? ', stunning nearby enemies' : ''}.`, more: `${into} into ${esc(f.name)} for the rest of the fight.${morph}${wave}` };
     }
     case 'treat': {
       const fl = Object.fromEntries(p.flavors.map((f) => [f.flavor, f]));
       const heal = fl.heal && `<b>${esc(fl.heal.name.replace(/.*\((.*)\)/, '$1'))}</b> heals the ally with the lowest share of HP for ${vHeal(`${fl.heal.healPct}%`)} of its damage (${vHeal(show(Math.floor((def.damage[lvl] * STAT_SCALE * fl.heal.healPct) / 100)))}) over ${vTime(p.duration)}`;
       const haste = fl.haste && `<b>${esc(fl.haste.name.replace(/.*\((.*)\)/, '$1'))}</b> makes the hardest-hitting ally attack ${vNum(`${fl.haste.hastePct}%`)} faster for ${vTime(p.duration)}`;
       const guard = fl.guard && `<b>${esc(fl.guard.name.replace(/.*\((.*)\)/, '$1'))}</b> shields the ally most enemies are attacking for ${vTime(p.duration)}: ${vNum(`${fl.guard.guardPct}%`)} less damage, and the first stun or knockback only breaks the shield`;
-      return { when: every, text: `Changes into a random flavour and treats one ally. ${[heal, haste, guard].filter(Boolean).join('. ')}.` };
+      return { when: every, text: `Changes into a random flavour that heals, speeds up, or shields an ally.`, more: `Changes into a random flavour and treats one ally. ${[heal, haste, guard].filter(Boolean).join('. ')}.` };
     }
-    case 'opening': return { when: 'At battle start', text: `Fires a wave down its column. The first enemy hit takes ${hit}, is carried to the far end of the board${p.stun ? ` and is stunned for ${vTime(p.stun)}` : ''}.` };
+    case 'opening': return { when: 'At battle start', text: `Fires a wave down its column: the first enemy hit takes ${pct} and is swept to the far end of the board.`, more: `Fires a wave down its column. The first enemy hit takes ${hit}, is carried to the far end of the board${p.stun ? `, and is stunned for ${vTime(p.stun)}` : ''}.` };
     default: return null;
   }
 }
 
 export function describePower(def, star, catalog) {
   const pt = powerText(def, star, catalog);
-  return pt ? `<span class="pw-when">${pt.when}</span> ${pt.text}` : '';
+  return pt ? abilityHead(def.ability.name, pt.when, pt.more) + abilityBody(pt.text, pt.more) : '';
+}
+
+// An ability's short text, swapped in place for the full one by its More
+// details button. Which one shows is remembered, so a player who likes the
+// details keeps seeing them on every Pokémon.
+let moreOpen = false;
+if (typeof document !== 'undefined') {
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest?.('.pw-toggle')) return;
+    moreOpen = !moreOpen;
+    for (const btn of document.querySelectorAll('.pw-toggle')) btn.setAttribute('aria-expanded', String(moreOpen));
+    for (const box of document.querySelectorAll('.pw-text')) swapAbilityText(box);
+    if (!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      e.target.closest('.pw-toggle').animate?.([{ transform: 'scale(0.92)' }, { transform: 'scale(1.04)' }, { transform: 'none' }], { duration: 260, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' });
+    }
+  });
+}
+// The box grows or shrinks to the new text while the old text drifts up and
+// fades, and the new one unrolls from the top, line by line as the box opens.
+function swapAbilityText(box) {
+  const calm = !box.animate || !box.offsetParent || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  for (const a of box.getAnimations?.({ subtree: true }) ?? []) a.finish();
+  box.querySelector('.pw-ghost')?.remove();
+  const outText = box.querySelector(moreOpen ? '.pw-short' : '.pw-full');
+  const from = box.offsetHeight;
+  box.classList.toggle('full', moreOpen);
+  if (calm) return;
+  const to = box.offsetHeight;
+  const inText = box.querySelector(moreOpen ? '.pw-full' : '.pw-short');
+  const ease = 'cubic-bezier(0.22, 1, 0.36, 1)';
+  const ms = Math.min(520, 280 + Math.abs(to - from) * 0.8);
+  box.style.overflow = 'hidden'; // only while it resizes, so links' focus rings show
+  box.animate([{ height: `${from}px` }, { height: `${to}px` }], { duration: ms, easing: ease }).onfinish = () => { box.style.overflow = ''; };
+  // The old text, as a ghost on top, leaving.
+  const ghost = outText.cloneNode(true);
+  ghost.classList.add('pw-ghost');
+  ghost.removeAttribute('data-k');
+  ghost.style.width = `${inText.offsetWidth}px`;
+  box.prepend(ghost);
+  ghost.animate([
+    { opacity: 1, transform: 'none', filter: 'blur(0)' },
+    { opacity: 0, transform: 'translateY(-6px)', filter: 'blur(3px)' },
+  ], { duration: 200, easing: 'ease-in', fill: 'forwards' }).onfinish = () => ghost.remove();
+  inText.animate([
+    { opacity: 0, transform: 'translateY(8px)', filter: 'blur(3px)', clipPath: 'inset(0 0 100% 0)' },
+    { opacity: 1, transform: 'none', filter: 'blur(0)', clipPath: 'inset(0 0 0 0)' },
+  ], { duration: ms + 60, delay: 70, easing: ease, fill: 'backwards' });
+  // The new numbers light up once they are in.
+  inText.querySelectorAll('.v').forEach((v, i) => v.animate([
+    { textShadow: '0 0 0 transparent' }, { textShadow: '0 0 10px currentColor' }, { textShadow: '0 0 0 transparent' },
+  ], { duration: 600, delay: 200 + i * 60, easing: 'ease-out' }));
+}
+// `keyed` marks the texts so a level change in the Pokédex can count their numbers.
+export function abilityBody(short, more, { keyed = false } = {}) {
+  const p = (cls, html, k) => `<p class="${cls}"${keyed ? ` data-k="${k}"` : ''}>${html}</p>`;
+  if (!more) return p('pw-short', short, 'power');
+  return `<div class="pw-text${moreOpen ? ' full' : ''}">${p('pw-short', short, 'power')}${p('pw-full', more, 'more')}</div>`;
+}
+// The ability's name and when it goes off, with the More details button in
+// the top-right corner, where it stays put however long the text gets.
+export function abilityHead(name, when, more) {
+  const toggle = more ? `<button type="button" class="pw-toggle" aria-expanded="${moreOpen}"><span class="pw-labels"><span class="pw-show">More details</span><span class="pw-hide">Fewer details</span></span></button>` : '';
+  return `<div class="pw-head"><h3>${esc(name)} <span class="pw-when">${when}</span></h3>${toggle}</div>`;
 }
 
 // Ditto has no fighting stats of its own: it copies the nearest enemy's.
@@ -178,6 +276,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   const controls = $('combat-controls');
   const rerollBtn = $('reroll');
   const readyBtn = $('ready');
+  const coinsEl = $('coins');
   const toastEl = $('toast');
   const dexEl = $('dex');
   let dexPick = null; // unit id shown in the Pokédex entry
@@ -190,13 +289,25 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   let draft = { troops: [] }; // team builder picks
   let playedRound = 0; // last combat round we started animating
   let playback = null;
-  let speed = 1;
+  // Everyone watches fights at the same pace (no speed buttons), so nobody
+  // finishes a round before their opponent.
+  const speed = 1;
+  let turnedAt = null; // { round, at }: when your Pokémon turned to face the enemy (Fight! pressed)
+  let pendingStart = 0; // timer: the fight starts once that turn has played
+  const TURN_MS = 480; // one Pokémon's turn, start to finish
   let toastTimer = 0;
   const appEl = $('app');
   const menuEl = $('menu');
   let shownCoins = null; // last coin count drawn, to animate changes
   let shownShop = ''; // last shop drawn, to deal new cards in
   let seenUids = new Set(); // board units already drawn, to drop new ones in
+  // HP each player's container last showed, so a change animates (the bar
+  // drains and the damage floats up), and the HP shown early after a fight,
+  // before the server applies it: { round, hp: Map(seat -> hp) }.
+  let hpShown = new Map();
+  let hpEarly = null;
+  let celebrated = 0; // last round whose end-of-fight celebration has played
+  let lastPhase = null; // the phase drawn last time
   let started = false; // past the start screen (it shows once, when the game loads)
   let online = false; // playing a friend (the menu offers Leave instead of New game)
   let lobbyView = null; // which online-lobby screen is showing, if any
@@ -273,7 +384,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     const el = document.createElement('div');
     el.className = `unit ${side}${def.sprite ? ' sprite-unit' : ''}${def.summon ? ' summon' : ''}`;
     el.dataset.type = def.type;
-    const bars = '<div class="bars"><div class="hp"><i></i><b></b></div><div class="mana"><i></i></div></div>';
+    const bars = '<div class="bars"><div class="sh"><i></i></div><div class="hp"><i></i></div><div class="mana"><i></i></div></div>';
     const stars = `<div class="stars s${star}">${levelMark(star)}</div>`;
     if (def.sprite) {
       el.dataset.facing = facing;
@@ -455,10 +566,62 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     lobbyView = null;
   }
 
+  // Which mode Battle queues for: a 1v1 duel, or a 4-player arena. Remembered here.
+  // Battle opens a pop-up with the two modes. Each card plays online; the
+  // little Training button in its corner plays the same mode against bots.
+  const MODES = {
+    duel: { name: 'Duel', text: '1 vs 1 against a random player', train: 'Duel against 1 bot' },
+    arena: { name: 'Arena', text: '4 players, last one standing wins', train: 'Arena against 3 bots' },
+  };
+  const ICON_BOT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 4v4M9 13h.01M15 13h.01M9.5 17h5"/><circle cx="12" cy="3.5" r="1"/></svg>';
+  const modeEl = $('mode-pick');
+  function openModePick() {
+    const ids = troopIds(catalog).filter((id) => catalog[id].sprite).sort(() => Math.random() - 0.5);
+    const mon = (id, facing, cls) => `<span class="portrait ${cls}" data-facing="${facing}"><span class="sprite" ${spriteStyle(catalog[id])}></span></span>`;
+    const art = {
+      duel: mon(ids[0], 'right', 'l') + mon(ids[1], 'left', 'r'),
+      arena: mon(ids[2], 'down', 't') + mon(ids[3], 'right', 'l') + mon(ids[4], 'left', 'r') + mon(ids[5], 'up', 'b'),
+    };
+    // You battle with the team picked in the team builder; without one, the
+    // modes stay locked and the pop-up points you there.
+    const team = battleTeam();
+    const off = team ? '' : ' disabled';
+    modeEl.querySelector('.mode-panel').innerHTML = `
+      <button class="menu-close ghost" data-mode-close aria-label="Close">✕</button>
+      <h1>Battle</h1>
+      ${team
+        ? `<div class="mode-team"><span class="mode-team-label">Your team</span><b>${esc(team.name)}</b>${teamMinis(team.troops)}<button class="ghost" data-open-teams>Change</button></div>
+           <p class="muted">Pick a mode. Tap <b>Training</b> in a corner to play it against bots.</p>`
+        : `<div class="mode-team empty"><span>Build a team of ${teamSize(catalog)} Pokémon before you battle.</span><button class="primary" data-open-teams>Team builder</button></div>`}
+      <div class="mode-cards">${Object.entries(MODES).map(([m, d], i) => `
+        <div class="mode-card ${m}" style="--i:${i}">
+          <button class="mode-main" data-play="${m}"${off}><span class="mode-art">${art[m]}</span><b>${d.name}</b><small>${d.text}</small></button>
+          <button class="mode-train" data-train="${m}" title="${d.train}" aria-label="Training: ${d.train}"${off}>${ICON_BOT}<span>Training</span></button>
+        </div>`).join('')}
+      </div>`;
+    modeEl.classList.remove('closing');
+    modeEl.hidden = false;
+    modeEl.querySelector(team ? '[data-play]' : '[data-open-teams]').focus();
+  }
+  modeEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (e.target === modeEl || btn?.dataset.modeClose !== undefined) return closeAnimated(modeEl);
+    if (btn?.dataset.openTeams !== undefined) { modeEl.hidden = true; return openTeams(); }
+    if (btn?.dataset.play) { modeEl.hidden = true; return onLobby('open', { mode: btn.dataset.play }); }
+    if (btn?.dataset.train) {
+      modeEl.hidden = true;
+      started = true;
+      overlay.classList.remove('start-screen');
+      onLobby('train', { mode: btn.dataset.train });
+      return teamPhase();
+    }
+  });
+  modeEl.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAnimated(modeEl); });
+
   const overlayClick = (e) => {
     const btn = e.target.closest('button, [data-dex-info]');
-    if (btn?.id === 'battle') { started = true; overlay.classList.remove('start-screen'); return showTeamBuilder(); }
-    if (btn?.id === 'friend') return onLobby('open');
+    if (btn?.id === 'friend') return openModePick();
+    if (btn?.id === 'open-teams') return openTeams();
     if (btn?.id === 'start-friends') return openMenu('friends', { noBack: true }); // straight from the main screen: just close
     if (btn?.dataset.lobby === 'friends') return openMenu('friends');
     if (btn?.dataset.lobby) return onLobby(btn.dataset.lobby, lobbyValues());
@@ -491,18 +654,15 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   overlay.addEventListener('click', overlayClick);
   lobbyEl.addEventListener('click', overlayClick);
   controls.addEventListener('click', (e) => {
-    if (e.target.id === 'skip') return playback?.skip();
-    const s = +e.target.dataset.speed;
-    if (!s) return;
-    speed = s;
-    arena.style.setProperty('--speed', s);
-    controls.querySelectorAll('[data-speed]').forEach((b) => b.classList.toggle('active', +b.dataset.speed === s));
+    if (e.target.id === 'skip' && !online) return playback?.skip();
   });
   document.addEventListener('keydown', (e) => {
     if (!state || e.ctrlKey || e.metaKey || e.altKey || e.target.matches('input, textarea')) return;
     const key = e.key.toLowerCase();
     if (!dexEl.hidden || !entryEl.hidden) { dexKey(key); return; }
     if (!menuEl.hidden) { if (key === 'escape' || key === 'm') closeMenu(); return; }
+    if (!teamsEl.hidden) { if (key === 'escape') closeTeams(); return; }
+    if (!modeEl.hidden) { if (key === 'escape') closeAnimated(modeEl); return; }
     if (peek && key === 'escape') return closeInfo();
     if (key === 'p') openDex();
     else if (key === 'm') openMenu();
@@ -510,7 +670,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     else if (key === 'f' && canPlan()) intent({ type: 'ready' });
     else if (key === 'e' && canPlan() && selected !== null) intent({ type: 'sell', uid: selected });
     else if (key === 'escape' && state.phase === 'planning') select(null);
-    else if (key === ' ' && playback) { e.preventDefault(); playback.skip(); }
+    else if (key === ' ' && playback && !online) { e.preventDefault(); playback.skip(); }
   });
 
   // ---- rendering -----------------------------------------------------------
@@ -523,12 +683,22 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     if (!state || next.seed !== state.seed || next.round < state.round) {
       // New match: forget anything tied to the previous one.
       playback?.cancel();
+      clearTimeout(pendingStart);
+      pendingStart = 0;
       playedRound = 0;
       selected = null;
       buying = null;
+      hpShown = new Map();
+      hpEarly = null;
+      celebrated = 0;
       // With exactly a team's worth of troops available, start with all of them picked.
       draft = { troops: troopIds(catalog).length === teamSize(catalog) ? troopIds(catalog) : [] };
     }
+    // Training mutates one state object, so the phase seen last is kept separately.
+    const backFromFight = lastPhase === 'combat' && next.phase === 'planning' && !reduceMotion();
+    const prevPhase = lastPhase;
+    lastPhase = next.phase;
+    const before = backFromFight ? boardSnapshot() : null;
     state = next;
     if (selected !== null && !owned(selected)) selected = null;
     if (buying !== null && !me().shop[buying]) buying = null;
@@ -536,24 +706,67 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
 
     if (state.phase === 'combat') {
       renderShop();
-      if (playedRound !== state.combat.round) startPlayback();
-      else if (!playback) showResult();
+      if (playedRound !== state.combat.round) {
+        // Let your Pokémon finish turning to face the enemy before it starts.
+        const wait = turnWait(prevPhase);
+        if (wait > 0) {
+          playedRound = state.combat.round;
+          pendingStart = setTimeout(() => { pendingStart = 0; startPlayback(); }, wait);
+        } else startPlayback();
+      } else if (!playback && !pendingStart) afterFight();
       return;
     }
     overlay.hidden = true;
     renderPlanning();
-    if (state.phase === 'team') { if (started) showTeamBuilder(); else showStart(); }
+    if (before) animateBoardReset(before);
+    if (state.phase === 'team') { if (started) teamPhase(); else showStart(); }
     if (state.phase === 'gameover') showGameOver();
   }
 
-  function hpBox(p, side) {
-    const pct = Math.max(0, p.hp);
-    return `<div class="hpbox ${side}" title="${esc(p.name)}: ${p.hp} HP">
-      ${side === 'ally' ? `${avatar(p.avatar, 'hud-avatar')}<span class="name">${esc(p.name)}</span>` : `<b>${p.hp}</b>`}
-      <div class="hpbar"><i style="width:${pct}%"></i></div>
-      ${side === 'ally' ? `<b>${p.hp}</b>` : `<span class="name">${esc(p.name)}</span>${avatar(p.avatar, 'hud-avatar')}`}
-    </div>`;
+  // Every player's name and HP in their own container: you and your opponent
+  // in a duel; all four, with what each is doing this round, in an arena.
+  function playerStrip() {
+    const a = state.arena ?? {
+      you: viewer,
+      standings: state.players.map((p, i) => ({ index: i, name: p.name, avatar: p.avatar, hp: p.hp, out: false, opponent: 1 - i, bye: false })),
+    };
+    const tag = (s) => (s.index === a.you ? 'You' : s.out ? `Out · ${ordinal(s.place)}` : s.bye ? 'Sitting out' : s.opponent === a.you ? (state.arena ? 'Your opponent' : 'Opponent') : s.opponent !== null ? `vs ${esc(a.standings[s.opponent].name)}` : '');
+    // You first in a duel, then your opponent; an arena keeps its seat order.
+    const list = state.arena ? a.standings : [...a.standings].sort((x, y) => (y.index === a.you) - (x.index === a.you));
+    const early = state.phase === 'combat' && hpEarly?.round === state.combat.round ? hpEarly.hp : null;
+    const hpOf = (s) => early?.get(s.index) ?? s.hp;
+    return `<div class="player-strip seats-${list.length}" aria-label="Players">${list.map((s) => `
+      <div class="player-seat${s.index === a.you ? ' me' : ''}${s.out ? ' out' : ''}${s.opponent === a.you ? ' foe' : ''}" data-seat="${s.index}" data-hp="${hpOf(s)}" title="${esc(s.name)}: ${hpOf(s)} HP">
+        ${avatar(s.avatar, 'hud-avatar')}<span class="seat-name">${esc(s.name)}</span><b>${hpOf(s)}</b>
+        <div class="hpbar"><i style="width:${Math.max(0, Math.min(100, hpOf(s)))}%"></i></div><small>${tag(s)}</small>
+      </div>`).join('')}</div>`;
   }
+  // A container whose HP changed since it was last drawn: the bar drains from
+  // the old value, the number counts down, and the damage floats up.
+  function animateSeats() {
+    for (const el of hudEl.querySelectorAll('.player-seat')) {
+      const seat = el.dataset.seat;
+      const hp = Number(el.dataset.hp);
+      const was = hpShown.get(seat);
+      hpShown.set(seat, hp);
+      if (was === undefined || was === hp || reduceMotion()) continue;
+      const bar = el.querySelector('.hpbar i');
+      bar.animate([{ width: `${Math.max(0, Math.min(100, was))}%` }, { width: `${Math.max(0, Math.min(100, hp))}%` }], { duration: 900, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' });
+      const num = el.querySelector('b');
+      const t0 = performance.now();
+      const step = (now) => { const k = Math.min(1, (now - t0) / 900); num.textContent = Math.round(was + (hp - was) * (1 - (1 - k) ** 3)); if (k < 1) requestAnimationFrame(step); };
+      requestAnimationFrame(step);
+      if (hp < was) {
+        el.classList.remove('hurt'); void el.offsetWidth; el.classList.add('hurt');
+        const pop = document.createElement('span');
+        pop.className = 'seat-damage';
+        pop.textContent = `-${was - hp}`;
+        el.append(pop);
+        pop.addEventListener('animationend', () => pop.remove());
+      }
+    }
+  }
+  const ordinal = (n) => (n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`);
 
   const ICON_MENU = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>';
   const ICON_FRIENDS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><circle cx="17" cy="9" r="2.8"/><path d="M16.5 14.2c2.9.2 5 2.3 5 5.3"/></svg>';
@@ -565,12 +778,15 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     shownCoins = p.coins;
     hudEl.innerHTML = `
       <span class="chip"><span class="label">Round</span><b>${state.round || '–'}</b></span>
-      <span class="chip coins" title="Each round: +${ROUND_COINS}, plus ${LOST_COIN} for each of your Pokémon knocked out last battle. Coins carry over."><b class="gold${coinsChanged ? ' bump' : ''}">${p.coins}</b></span>
-      <div class="duel">${hpBox(p, 'ally')}<span class="vs">VS</span>${hpBox(foe(), 'enemy')}</div>
+      ${playerStrip()}
       <div class="hud-actions">
         <button id="open-dex" class="icon-btn dex-button" title="Every Pokémon's stats (P)">${ICON_DEX}<span class="label-text">Pokédex</span></button>
         <button id="open-menu" class="icon-btn${hasUnread() ? ' unread' : ''}" title="Menu (M)" aria-label="Menu">${ICON_MENU}<span class="label-text">Menu</span></button>
       </div>`;
+    // Your coins sit by the shop, where you look when deciding what to buy.
+    coinsEl.title = `Each round: +${ROUND_COINS}, plus ${LOST_COIN} for each of your Pokémon knocked out last battle. Coins carry over.`;
+    coinsEl.innerHTML = `<span class="label">Coins</span><b class="gold${coinsChanged ? ' bump' : ''}">${p.coins}</b>`;
+    animateSeats();
   }
 
   // ---- menu ------------------------------------------------------------------
@@ -584,7 +800,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     if (view === 'help') {
       panel.innerHTML = `${close}${back}<h1>How to play</h1>
         <ul class="help-list">
-          <li><b>Build a team</b> of ${teamSize(catalog)} Pokémon. Each puts ${COPIES_PER_TROOP} copies into your own pool, and your shop draws from it. Your board starts empty.</li>
+          <li><b>Build a team</b> of ${teamSize(catalog)} Pokémon in the <b>Team builder</b> (up to ${TEAMS_MAX} saved teams); the one marked In use goes into every battle. Each puts ${COPIES_PER_TROOP} copies into your own pool, and your shop draws from it. Your board starts empty.</li>
           <li><b>Buy</b>: tap a shop card, then a square on your half (or drag the card onto the board).</li>
           <li><b>Level up</b>: each Pokémon can be on the board only once. Buying another copy levels it up: 1 copy = ★, 2 = ★★, 3 = ★★★, 4 = ${levelMark(3)} (shiny).</li>
           <li><b>Position</b>: the row nearest the middle is your front line. Tap a Pokémon, then a square, to move it (onto another Pokémon swaps them).</li>
@@ -595,8 +811,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
           <li><b>Coins</b>: you start with ${START_COINS}. Every round after that: +${ROUND_COINS}, plus ${LOST_COIN} for each of your Pokémon knocked out in the last battle. Coins carry over.</li>
           <li><b>Shop</b>: it refreshes for free every time you buy, and after every battle. A reroll costs ${REROLL_COST} coin.</li>
           <li><b>Win</b> by bringing your opponent from 100 HP to 0. The loser of a battle loses HP for every Pokémon still standing.</li>
+          <li><b>Arena</b> (Battle → Arena): 4 players, a 1v1 battle against a different player each round. With 3 left, one sits the round out (no damage, coins as usual). Last one standing wins.</li>
         </ul>
-        <p class="muted">Keys: <kbd>D</kbd> reroll · <kbd>F</kbd> fight · <kbd>E</kbd> sell · <kbd>Space</kbd> skip · <kbd>P</kbd> Pokédex · <kbd>M</kbd> menu</p>`;
+        <p class="muted">Keys: <kbd>D</kbd> reroll · <kbd>F</kbd> fight · <kbd>E</kbd> sell · <kbd>Space</kbd> skip the fight (training) · <kbd>P</kbd> Pokédex · <kbd>M</kbd> menu</p>`;
     } else if (view === 'news') {
       try { localStorage.setItem(SEEN_KEY, latestUpdate); } catch {}
       hudEl.querySelector('#open-menu')?.classList.remove('unread');
@@ -656,9 +873,9 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       // From the start screen: everything a player can start from here.
       panel.innerHTML = `${close}<h1>Menu</h1>
         <div class="menu-list">
-          <button data-menu="profile"><span>☺</span><div>Profile<small>Your name, picture and stats</small></div></button>
+          <button data-menu="profile"><span>☺</span><div>Profile<small>Your name, picture, and stats</small></div></button>
           <button data-menu="news" class="${hasUnread() ? 'unread' : ''}"><span>★</span><div>What's new<small>${esc(changelog[0]?.title ?? 'Updates to the game')}</small></div></button>
-          <button data-menu="help"><span>?</span><div>How to play<small>Rules, controls and keys</small></div></button>
+          <button data-menu="help"><span>?</span><div>How to play<small>Rules, controls, and keys</small></div></button>
           ${getLastLog() ? '<button data-menu="lastlog"><span>⧉</span><div>Last online match log<small>Copy it to look into a dropped connection</small></div></button>' : ''}
         </div>
         ${versionText ? `<p class="menu-version">${esc(versionText)}</p>` : ''}`;
@@ -667,13 +884,13 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         <div class="menu-list">
           <button data-menu="close"><span>▶</span><div>Resume</div></button>
           <button data-menu="news" class="${hasUnread() ? 'unread' : ''}"><span>★</span><div>What's new<small>${esc(changelog[0]?.title ?? 'Updates to the game')}</small></div></button>
-          <button data-menu="help"><span>?</span><div>How to play<small>Rules, controls and keys</small></div></button>
+          <button data-menu="help"><span>?</span><div>How to play<small>Rules, controls, and keys</small></div></button>
           <button data-menu="log"><span>⧉</span><div>Match log<small>Copy every move this match, with notes</small></div></button>
           <button data-menu="friends" class="${getFriends()?.incoming.length ? 'unread' : ''}"><span>♥</span><div>Friends<small>${friendsSub()}</small></div></button>
-          <button data-menu="profile"><span>☺</span><div>Profile<small>Your name, picture and stats</small></div></button>
+          <button data-menu="profile"><span>☺</span><div>Profile<small>Your name, picture, and stats</small></div></button>
           ${online
             ? '<button data-menu="leave"><span>⏏</span><div>Leave match<small>Disconnect from your friend</small></div></button>'
-            : '<button data-menu="new"><span>↻</span><div>New game<small>Start over with a new team</small></div></button>'}
+            : '<button data-menu="new"><span>↻</span><div>New game<small>Start over with your team</small></div></button>'}
         </div>`;
     }
     menuEl.hidden = false;
@@ -914,6 +1131,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
 
   function renderPlanning() {
     arena.classList.remove('in-combat', 'sudden-death');
+    appEl.classList.remove('fighting');
     controls.hidden = true;
     const draggable = canPlan();
     const buyingId = buying !== null ? me().shop[buying] : null;
@@ -940,9 +1158,13 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       return el;
     });
 
+    // Fight! pressed: your Pokémon turn around to face the enemy's side.
+    const ready = state.phase === 'planning' && me().ready;
+    if (!ready) turnedAt = null;
+    else if (turnedAt?.round !== state.round) turnedAt = { round: state.round, at: performance.now() };
     const fresh = state.round !== seenUids.round;
     if (fresh) seenUids = Object.assign(new Set(), { round: state.round });
-    layer.replaceChildren(...ghostEls, ...me().board.map((u) => {
+    layer.replaceChildren(...ghostEls, ...me().board.map((u, i) => {
       const el = unitEl(u.unitId, u.star);
       // Newly bought (or levelled up): drop onto the board with a bounce.
       const key = `${u.uid}:${u.star}`;
@@ -954,11 +1176,46 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       // Highlight the troop the picked shop copy would level up.
       el.classList.toggle('combine-target', u.unitId === buyingId);
       place(el, u.x, u.y + HALF);
+      if (turnedAt) turnAround(el, u, i);
       return el;
     }));
 
     renderShop();
     renderInfo();
+  }
+
+  // One Pokémon turning to face the enemy: a quarter turn to the side, then its
+  // back to you, with a little hop; each a beat after the last. Timed from when
+  // Fight! was pressed, so a redraw mid-turn picks up where it was.
+  function turnAround(el, u, i) {
+    if (!el.dataset.facing) return;
+    const side = u.x < COLS / 2 ? 'left' : 'right';
+    const steps = [[0, side], [130, 'up']];
+    const start = reduceMotion() ? -Infinity : turnedAt.at + i * 70;
+    const now = performance.now();
+    el.dataset.facing = 'down';
+    for (const [at, facing] of steps) {
+      const wait = start + at - now;
+      if (wait <= 0) el.dataset.facing = facing;
+      else setTimeout(() => (el.dataset.facing = facing), wait);
+    }
+    const hop = start - now;
+    if (hop > -340) setTimeout(() => el.classList.add('turning'), Math.max(0, hop));
+  }
+
+  // How long until every Pokémon on your side has turned around. When the fight
+  // starts the moment you press Fight! (your opponent was already waiting), the
+  // turn plays here first.
+  function turnWait(prev) {
+    if (reduceMotion()) return 0;
+    const board = me().board;
+    if (!board.length) return 0;
+    if (turnedAt?.round !== state.combat.round) {
+      if (prev !== 'planning') return 0;
+      turnedAt = { round: state.combat.round, at: performance.now() };
+      board.forEach((u, i) => { const el = layer.querySelector(`.unit[data-uid="${u.uid}"]`); if (el) turnAround(el, u, i); });
+    }
+    return Math.max(0, turnedAt.at + (board.length - 1) * 70 + TURN_MS - performance.now());
   }
 
   function renderShop() {
@@ -986,7 +1243,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     rerollBtn.textContent = `Reroll (${REROLL_COST} coin)`;
     rerollBtn.disabled = !canPlan() || p.coins < REROLL_COST;
     readyBtn.disabled = !canPlan();
-    readyBtn.dataset.base = state.phase === 'planning' && p.ready ? 'Waiting for opponent…' : 'Fight!';
+    readyBtn.dataset.base = state.phase === 'planning' && p.ready ? (state.arena ? 'Waiting for others…' : 'Waiting for opponent…') : 'Fight!';
     tickDeadline();
   }
 
@@ -1038,6 +1295,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       ${hint}
       <dl class="stats">
         <dt>HP</dt><dd>${show(stats.hp)}</dd>
+        ${stats.shield ? `<dt>Shield</dt><dd>${show(stats.shield)}</dd>` : ''}
         ${isCopycat(def) ? `<dt>Movement</dt><dd>${SPEED_NAME[def.moveSpeed]}</dd><dt>Everything else</dt><dd>Copies its target</dd>` : `
         <dt>Damage per hit</dt><dd>${show(stats.atk)}</dd>
         <dt>Attacks every</dt><dd>${attackTime(stats)}s</dd>
@@ -1046,7 +1304,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         <dt>Range</dt><dd>${def.range}</dd>
         <dt>Movement</dt><dd>${SPEED_NAME[def.moveSpeed]}</dd>`}
       </dl>
-      ${def.ability ? `<p class="ability"><b>${esc(def.ability.name)}:</b> ${describePower(def, star, catalog)}</p>` : ''}
+      ${def.ability ? `<div class="ability">${describePower(def, star, catalog)}</div>` : ''}
       ${inst && canPlan()
         ? `<button id="sell" class="danger">Sell for ${sellValue(catalog, inst)} coins (${copies} ${copies === 1 ? 'copy' : 'copies'} back to pool)</button>` : ''}`;
   }
@@ -1059,18 +1317,23 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     selected = null;
     overlay.hidden = true;
     arena.classList.add('in-combat');
+    appEl.classList.add('fighting');
     arena.classList.remove('sudden-death', 'buying', 'has-ghosts', 'hinting');
     closeInfo();
     buying = null;
     setClock(0);
     controls.hidden = false;
+    $('skip').hidden = online; // online, everyone watches the whole fight
     renderInfo();
 
     const actors = new Map();
     layer.replaceChildren();
     const addActor = (u) => {
       const ally = u.side === viewer;
-      const a = { ...u, shield: 0, stunUntil: 0, el: unitEl(u.unitId, u.star, ally ? 'ally' : 'enemy', ally ? 'up' : 'down') };
+      const a = { ...u, shield: u.shield ?? 0, maxShield: u.maxShield ?? 0, stunUntil: 0, el: unitEl(u.unitId, u.star, ally ? 'ally' : 'enemy', ally ? 'up' : 'down') };
+      if (a.shield > 0) a.el.classList.add('shielded');
+      if (!u.summoned && u.uid > 0) a.el.dataset.fightUid = u.uid;
+      a.el.dataset.side = ally ? 'ally' : 'enemy';
       const p = viewPos(u.x, u.y);
       place(a.el, p.x, p.y);
       layer.append(a.el);
@@ -1120,7 +1383,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       cancelAnimationFrame(raf);
       playback = null;
       controls.hidden = true;
-      setTimeout(() => { if (state.phase === 'combat' && !playback) render(state); }, 700);
+      afterFight(actors);
     };
     const frame = (now) => {
       acc += Math.min(now - last, 250) * speed;
@@ -1156,8 +1419,10 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   function bars(a) {
     a.el.querySelector('.hp i').style.width = `${(100 * a.hp) / a.maxHp}%`;
     a.el.querySelector('.hp').style.setProperty('--hp-trail', `${(100 * a.hp) / a.maxHp}%`);
-    a.el.querySelector('.hp b').style.width = `${Math.min(100, (100 * a.shield) / a.maxHp)}%`;
+    a.el.querySelector('.sh i').style.width = `${a.maxShield ? (100 * a.shield) / a.maxShield : 0}%`;
     a.el.querySelector('.mana i').style.width = `${a.maxMana ? (100 * a.mana) / a.maxMana : 0}%`;
+    // No ability counter (no ability, or one that's always on): no bar.
+    a.el.classList.toggle('no-mana', !a.maxMana);
   }
 
   function floatText(a, text, kind) {
@@ -1458,10 +1723,13 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         }
         break;
       }
+      case 'burn': // Infernape's Blaze set it burning
+        if (animate) floatText(a, 'Burn', 'rage');
+        break;
       case 'rage': // Annihilape: faster with every attack in a row
         a.el.dataset.rage = ev.stacks;
         a.el.classList.toggle('raging', ev.stacks > 0);
-        a.el.style.setProperty('--rage', ev.stacks);
+        a.el.style.setProperty('--rage', Math.min(ev.stacks, 10)); // the glow stops growing at some point
         if (animate && ev.stacks) floatText(a, `+${ev.pct}% speed`, 'rage');
         break;
       case 'knock': {
@@ -1570,7 +1838,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         break;
       }
       case 'morphStart': { // Minior (immune) or Ditto changing form
-        // Minior's Rock form breaking: Star Form's own, full HP bar.
+        // A form that starts with its own HP: a fresh, full HP bar.
         if (ev.maxHp && newest()) { a.maxHp = ev.maxHp; a.hp = ev.hp; a.shield = 0; later(ctx.hitDelay.get(a.id) ?? 0, () => bars(a)); }
         if (!animate) break;
         const immune = catalog[a.unitId].ability?.kind === 'transform';
@@ -1638,8 +1906,18 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         });
         break;
       }
-      case 'drain': // sudden death: everyone loses the same HP each tick
-        if (newest()) { a.hp = ev.hp; bars(a); }
+      case 'drain': // sudden death: everyone loses the same HP (or shield) each tick
+        if (newest()) { a.hp = ev.hp; if (ev.shield !== undefined) a.shield = ev.shield; bars(a); }
+        break;
+      case 'shieldBreak': // the shield is gone: its bar shatters and folds away
+        later(ctx.hitDelay.get(a.id) ?? 0, () => {
+          if (newest()) { a.shield = 0; bars(a); }
+          a.el.classList.remove('shielded');
+          if (!animate) return;
+          floatText(a, 'Shield broke!', 'shield');
+          fx(at().x, at().y, 'shield', '#bfe3ff', 1.6);
+          play(a.el, 'shield-break', 420);
+        });
         break;
       case 'heal':
         if (newest()) { a.hp = ev.hp; bars(a); }
@@ -1731,33 +2009,82 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
 
   // ---- overlays ------------------------------------------------------------
 
-  function showResult() {
+  // A fight has played out: the winners celebrate, the loser's HP drains in
+  // their container, and the game moves on by itself (no results pop-up).
+  // The server applies the damage once everyone has moved on; until then the
+  // containers show the HP after this fight.
+  function afterFight(actors = null) {
     const { result, damage, round } = state.combat;
-    const won = result.winner === viewer;
-    const draw = result.winner === null;
-    const title = draw ? 'Draw' : won ? 'Victory!' : 'Defeat';
-    const detail = draw
-      ? `Both teams were knocked out at the same moment. Both players take ${damage[viewer]} damage.`
-      : won
-        ? `${result.survivors.length} of your units survived. ${esc(foe().name)} takes ${damage[1 - viewer]} damage.`
-        : `${result.survivors.length} enemy units survived. You take ${damage[viewer]} damage.`;
-    const hpAfter = Math.max(0, me().hp - damage[viewer]);
-    showOverlay(`
-      <h1 class="${draw ? '' : won ? 'win' : 'loss'}">${title}</h1>
-      <p>${detail}</p>
-      <p class="muted">Round ${round} · Your HP ${me().hp} → ${hpAfter} · +${ROUND_COINS + LOST_COIN * lostCount(result, viewer)} coins next round (${ROUND_COINS} + ${lostCount(result, viewer)} for Pokémon lost)</p>
-      ${me().ready
-        ? '<button disabled>Waiting for opponent…</button>'
-        : '<button id="continue" class="primary" autofocus>Continue</button>'}`);
-    overlay.querySelector('#continue')?.focus();
+    clockEl.textContent = state.arena ? 'Waiting for the others…' : '';
+    clockEl.classList.remove('sudden');
+    if (celebrated === round) return;
+    celebrated = round;
+    if (result.winner !== null) {
+      const winners = [...layer.querySelectorAll(`.unit[data-side="${result.winner === viewer ? 'ally' : 'enemy'}"]:not(.dead)`)];
+      winners.forEach((el, i) => { el.style.setProperty('--dance-delay', `${i * 90}ms`); el.classList.add('victory'); });
+    }
+    // The HP after this fight, shown right away.
+    const seats = state.arena ? [state.arena.you, state.arena.standings.find((x) => x.opponent === state.arena.you)?.index] : [0, 1];
+    const sideOf = (seat) => (state.arena ? (seat === state.arena.you ? viewer : 1 - viewer) : seat);
+    hpEarly = { round, hp: new Map(seats.filter((x) => x !== undefined).map((seat) => {
+      const p = state.arena ? state.arena.standings[seat] : state.players[seat];
+      return [seat, Math.max(0, p.hp - damage[sideOf(seat)])];
+    })) };
+    setTimeout(() => renderHud(), reduceMotion() ? 0 : 450);
+    // Then on to the next round once the celebration has played.
+    setTimeout(() => {
+      if (state.phase === 'combat' && state.combat.round === round && !me().ready) onIntent({ type: 'continue' });
+    }, reduceMotion() ? 300 : 1900);
+  }
+
+  // Where every Pokémon on the board is right now (at the end of a fight), so
+  // the board can glide back to the planning setup.
+  function boardSnapshot() {
+    const box = layer.getBoundingClientRect();
+    const mine = new Map();
+    const leaving = [];
+    for (const el of layer.querySelectorAll('.unit')) {
+      const r = el.getBoundingClientRect();
+      const at = { x: r.left - box.left, y: r.top - box.top, w: r.width, h: r.height };
+      if (el.dataset.fightUid && el.dataset.side === 'ally' && !el.classList.contains('dead')) mine.set(el.dataset.fightUid, at);
+      else if (!el.classList.contains('dead')) leaving.push({ el, at });
+    }
+    return { mine, leaving };
+  }
+  // The board resets: your Pokémon glide back to where you placed them, the
+  // ones knocked out pop back in, and everyone else fades away.
+  function animateBoardReset({ mine, leaving }) {
+    const box = layer.getBoundingClientRect();
+    for (const { el, at } of leaving) {
+      const ghost = el.cloneNode(true);
+      ghost.classList.remove('victory');
+      Object.assign(ghost.style, { left: `${at.x}px`, top: `${at.y}px`, width: `${at.w}px`, height: `${at.h}px`, transition: 'none', pointerEvents: 'none' });
+      layer.append(ghost);
+      ghost.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scale(0.6) translateY(-10px)' }], { duration: 380, easing: 'ease-in', fill: 'forwards' }).onfinish = () => ghost.remove();
+    }
+    let k = 0;
+    for (const el of layer.querySelectorAll('.unit[data-uid]')) {
+      const from = mine.get(el.dataset.uid);
+      const r = el.getBoundingClientRect();
+      if (from) {
+        const dx = from.x - (r.left - box.left);
+        const dy = from.y - (r.top - box.top);
+        el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: `translate(${dx / 2}px, ${dy / 2 - 14}px)`, offset: 0.5 }, { transform: 'none' }], { duration: 520, delay: 120 + k * 40, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'backwards' });
+      } else {
+        // Knocked out in the fight: back on its square.
+        el.animate([{ opacity: 0, transform: 'scale(0.3)', filter: 'brightness(2.5)' }, { opacity: 1, transform: 'scale(1.12)', filter: 'brightness(1.6)', offset: 0.6 }, { opacity: 1, transform: 'none', filter: 'none' }], { duration: 520, delay: 260 + k * 40, easing: 'ease-out', fill: 'backwards' });
+      }
+      k++;
+    }
+    for (const el of layer.querySelectorAll('.unit.ghost')) el.animate([{ opacity: 0 }, { opacity: getComputedStyle(el).opacity }], { duration: 500, delay: 300, easing: 'ease-out', fill: 'backwards' });
   }
 
   // Team cards look like the Pokédex's: sprite in a glow, name, cost and type.
   // A picked card gets a green border and its Pokémon walks. Stats live
   // behind the ⓘ button (the Pokédex entry).
-  function teamCard(id, picked, i) {
+  function teamCard(id, picked, i, disabled = me().ready) {
     const def = catalog[id];
-    return `<button class="dex-card team-card${picked ? ' chosen' : ''}" style="--i:${i}" data-pick-troop="${id}" data-type="${def.type}" ${me().ready ? 'disabled' : ''} aria-pressed="${picked}">
+    return `<button class="dex-card team-card${picked ? ' chosen' : ''}" style="--i:${i}" data-pick-troop="${id}" data-type="${def.type}" ${disabled ? 'disabled' : ''} aria-pressed="${picked}">
       <span class="info-btn" data-dex-info="${id}" role="button" aria-label="${esc(def.name)} info">i</span>
       <span class="dex-card-art">${portrait(def)}</span>
       <b>${esc(def.name)}</b>
@@ -1788,7 +2115,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         <div class="parade" aria-hidden="true">${parade}</div>
         <div class="start-modes">
           <button id="friend" class="primary battle-btn">Battle</button>
-          <button id="battle" class="battle-btn training-btn">Training</button>
+          <button id="open-teams" class="teams-btn">Team builder<small id="teams-label">${teamsLabel()}</small></button>
         </div>
         <div class="start-corner">
           <button id="start-dex" class="icon-btn dex-button" title="Every Pokémon's stats (P)">${ICON_DEX}<span class="label-text">Pokédex</span></button>
@@ -1801,13 +2128,148 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     overlay.querySelector('#friend').focus();
   }
 
+  // ---- team builder ----------------------------------------------------------
+  // Up to TEAMS_MAX saved teams of teamSize Pokémon, kept in the profile. The
+  // one marked "In use" is sent automatically when a match starts.
+  const teamsEl = $('teams');
+  let tb = null; // { slot, name, troops }: the team being edited
+  const fullTeam = (t) => !!t && t.troops.length === teamSize(catalog) && t.troops.every((id) => troopIds(catalog).includes(id));
+  function battleTeam() {
+    const p = loadProfile();
+    const t = p.team !== null ? p.teams[p.team] : null;
+    return fullTeam(t) ? t : null;
+  }
+  const teamsLabel = () => battleTeam()?.name ?? 'No team yet';
+  const teamMinis = (troops, size = teamSize(catalog)) => `<span class="team-minis">${Array.from({ length: size }, (_, k) => {
+    const def = catalog[troops[k]];
+    return def ? `<span class="portrait" data-facing="down" title="${esc(def.name)}"><span class="sprite" ${spriteStyle(def)}></span></span>` : '<i></i>';
+  }).join('')}</span>`;
+
+  function openTeams(slot = loadProfile().team ?? 0) {
+    const t = loadProfile().teams[slot];
+    tb = { slot, name: t.name, troops: [...t.troops] };
+    renderTeams(true);
+    teamsEl.classList.remove('closing');
+    teamsEl.hidden = false;
+  }
+  function closeTeams() {
+    closeAnimated(teamsEl);
+    const label = overlay.querySelector('#teams-label');
+    if (label) label.textContent = teamsLabel();
+  }
+  function renderTeams(fresh = false) {
+    const p = loadProfile();
+    const need = teamSize(catalog);
+    const saved = p.teams[tb.slot];
+    const dirty = tb.name !== saved.name || tb.troops.join() !== saved.troops.join();
+    const done = tb.troops.length === need;
+    const slots = p.teams.map((t, i) => `
+      <div class="team-slot${i === tb.slot ? ' editing' : ''}${i === p.team ? ' in-use' : ''}">
+        <button class="slot-main" data-slot="${i}" aria-pressed="${i === tb.slot}"><b>${esc(t.name)}</b>${teamMinis(t.troops)}</button>
+        ${i === p.team && fullTeam(t) ? '<span class="slot-badge">✓ In use</span>'
+          : fullTeam(t) ? `<button class="slot-use" data-use="${i}">Use this team</button>`
+          : `<span class="slot-badge empty">${t.troops.length ? 'Not finished' : 'Empty'}</span>`}
+      </div>`).join('');
+    const count = `${Array.from({ length: need }, (_, k) => `<i class="${k < tb.troops.length ? 'on' : ''}"></i>`).join('')}<span>${tb.troops.length}/${need}</span>`;
+    const save = !done ? `Pick ${need - tb.troops.length} more` : dirty ? 'Save team' : 'Saved ✓';
+    const actions = `
+      <button class="ghost" data-team-clear ${tb.troops.length ? '' : 'disabled'}>Clear</button>
+      <button class="primary" data-team-save ${done && dirty ? '' : 'disabled'}>${save}</button>`;
+    const panel = teamsEl.querySelector('.teams-panel');
+    if (!fresh) {
+      // Update in place, so only what changed animates.
+      panel.querySelector('.team-slots').innerHTML = slots;
+      panel.querySelector('.team-count').innerHTML = count;
+      panel.querySelector('.team-edit-actions').innerHTML = actions;
+      for (const card of panel.querySelectorAll('[data-pick-troop]')) {
+        const picked = tb.troops.includes(card.dataset.pickTroop);
+        card.classList.toggle('chosen', picked);
+        card.setAttribute('aria-pressed', picked);
+      }
+      return;
+    }
+    panel.innerHTML = `
+      <button class="menu-close ghost" data-teams-close aria-label="Close">✕</button>
+      <h1>Team builder</h1>
+      <p class="muted">Build up to ${TEAMS_MAX} teams of ${need} Pokémon. Each puts ${COPIES_PER_TROOP} copies of its Pokémon in your shop's pool. The team marked <b>In use</b> is the one you battle with.</p>
+      <div class="team-slots">${slots}</div>
+      <div class="team-edit">
+        <div class="team-edit-head">
+          <input class="team-name" maxlength="${TEAM_NAME_MAX}" value="${esc(tb.name)}" aria-label="Team name" spellcheck="false">
+          <div class="team-count">${count}</div>
+        </div>
+        <div class="team-grid fresh">${troopIds(catalog).map((id, i) => teamCard(id, tb.troops.includes(id), i, false)).join('')}</div>
+        <div class="team-edit-actions">${actions}</div>
+      </div>`;
+  }
+  teamsEl.addEventListener('click', (e) => {
+    if (e.target === teamsEl) return closeTeams();
+    const info = e.target.closest('[data-dex-info]');
+    if (info) return openDex(info.dataset.dexInfo);
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    if (btn.dataset.teamsClose !== undefined) return closeTeams();
+    if (btn.dataset.slot) {
+      const slot = +btn.dataset.slot;
+      if (slot === tb.slot) return;
+      const t = loadProfile().teams[slot];
+      tb = { slot, name: t.name, troops: [...t.troops] };
+      return renderTeams(true);
+    }
+    if (btn.dataset.use) { pickTeam(+btn.dataset.use); toast(`${loadProfile().teams[+btn.dataset.use].name} is now your battle team.`); return renderTeams(); }
+    if (btn.dataset.teamClear !== undefined) { tb.troops = []; return renderTeams(); }
+    if (btn.dataset.teamSave !== undefined) {
+      const res = saveTeam(tb.slot, { name: tb.name, troops: tb.troops });
+      tb.name = res.teams[tb.slot].name;
+      teamsEl.querySelector('.team-name').value = tb.name;
+      toast(res.stored === false ? "Couldn't save: this browser blocks saving." : res.team === tb.slot ? `${tb.name} saved and ready to battle.` : `${tb.name} saved.`);
+      return renderTeams();
+    }
+    const pick = btn.dataset.pickTroop;
+    if (pick) {
+      if (tb.troops.includes(pick)) tb.troops = tb.troops.filter((t) => t !== pick);
+      else if (tb.troops.length < teamSize(catalog)) tb.troops = [...tb.troops, pick];
+      else toast('Your team is full. Remove a Pokémon first.');
+      renderTeams();
+    }
+  });
+  teamsEl.addEventListener('input', (e) => {
+    if (!e.target.matches('.team-name')) return;
+    tb.name = e.target.value;
+    renderTeams();
+  });
+  teamsEl.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeTeams(); });
+
+  // A match's team phase: your team from the team builder goes in by itself,
+  // and you wait for the others. Without a saved team (or if it's refused),
+  // you pick one here instead.
+  let teamSent = null; // seed of the match the saved team was sent for
+  let teamRefused = null; // seed of a match that refused it
+  function teamPhase() {
+    const team = battleTeam();
+    if (!team || teamRefused === state.seed) return showTeamBuilder();
+    showOverlay(`
+      <h1>${esc(team.name)}</h1>
+      <div class="team-preview">${teamMinis(team.troops)}</div>
+      <p class="waiting"><span class="spinner small"></span>${state.arena ? 'Waiting for the other players…' : 'Waiting for opponent…'}</p>`);
+    if (me().ready || teamSent === state.seed) return;
+    teamSent = state.seed;
+    const seed = state.seed;
+    // Sent after this draw finishes: in training the match can start at once.
+    setTimeout(() => {
+      if (state?.seed !== seed || state.phase !== 'team' || me().ready) return;
+      const res = onIntent({ type: 'chooseTeam', troops: team.troops });
+      if (res?.ok === false) { teamRefused = seed; showTeamBuilder(); }
+    }, 0);
+  }
+
   function showTeamBuilder() {
     const need = teamSize(catalog);
     const waiting = me().ready;
     const ready = draft.troops.length === need;
     const count = `${Array.from({ length: need }, (_, k) => `<i class="${k < draft.troops.length ? 'on' : ''}"></i>`).join('')}<span>${draft.troops.length}/${need}</span>`;
     const actions = waiting
-      ? '<p class="muted">Waiting for opponent…</p>'
+      ? `<p class="muted">${state.arena ? 'Waiting for the other players…' : 'Waiting for opponent…'}</p>`
       : `<button id="start-team" class="primary" ${ready ? '' : 'disabled'}>${ready ? 'Start battle' : `Pick ${need - draft.troops.length} more`}</button>`;
     const grid = overlay.hidden ? null : overlay.querySelector('.team-grid');
     if (grid) {
@@ -1833,6 +2295,20 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   }
 
   function showGameOver() {
+    if (state.arena) {
+      const a = state.arena;
+      const done = a.left <= 1;
+      const title = a.place === 1 && state.winner === null ? 'A draw: shared 1st place' : a.place === 1 ? 'You win the arena! 🏆' : a.place ? `You finished ${ordinal(a.place)} of ${a.size}` : 'Arena over';
+      const champ = a.standings.find((x) => x.place === 1);
+      showOverlay(`
+        <h1 class="${a.place === 1 ? 'win' : 'loss'}">${title}</h1>
+        <p>${a.place === 1 ? `Last one standing after ${state.round} rounds.` : done ? (champ ? `${esc(champ.name)} won the arena after ${state.round} rounds.` : `The arena ended after ${state.round} rounds.`) : `You were knocked out in round ${state.round}. ${a.left} players are still fighting.`}</p>
+        <ol class="arena-final">${[...a.standings].sort((x, y) => (x.place ?? 0) - (y.place ?? 0)).map((x) => `<li class="${x.index === a.you ? 'me' : ''}"><span>${x.place ? ordinal(x.place) : 'Still in'}</span>${avatar(x.avatar, 'hud-avatar')}<b>${esc(x.name)}</b><small>${x.hp} HP</small></li>`).join('')}</ol>
+        ${online ? '' : '<button id="play-again" class="primary">Play again</button>'}
+        <button id="to-menu"${online ? ' class="primary"' : ''}>Main menu</button>
+        <button id="game-log" class="ghost">Match log (copy or download)</button>`);
+      return;
+    }
     const title = state.winner === viewer ? 'You win the match! 🏆' : state.winner === null ? 'Double knockout. It\'s a draw.' : 'You were eliminated';
     showOverlay(`
       <h1 class="${state.winner === viewer ? 'win' : 'loss'}">${title}</h1>
@@ -1879,7 +2355,12 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         <p class="muted">It's still going on the server: rejoin and you're straight back in.</p>
         <button class="primary" data-lobby="resume">Rejoin the match</button>
         <div class="lobby-actions"><button class="ghost" data-lobby="discard">Start fresh</button></div>`,
-      queue: () => `
+      queue: () => data.mode === 'arena' ? `
+        <h1>Waiting for players</h1>
+        <div class="arena-seats" aria-label="${data.found ?? 1} of ${data.need ?? 4} players found">${Array.from({ length: data.need ?? 4 }, (_, k) => `<i class="${k < (data.found ?? 1) ? 'on' : ''}"></i>`).join('')}</div>
+        <p><b>${data.found ?? 1} of ${data.need ?? 4}</b> players found</p>
+        <p class="muted">The arena starts as soon as 4 players are looking. Keep this screen open.</p>
+        <button class="ghost" data-lobby="cancel">Cancel</button>` : `
         <h1>Waiting for opponent</h1>
         <div class="spinner" aria-hidden="true"></div>
         <p class="muted">The battle starts as soon as another player is looking too. Keep this screen open.</p>
@@ -1987,6 +2468,15 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   }
 
   // Switch between playing the bot (null) and playing a friend as `viewer`.
+  // Arena: this player's side of the board changes with each new opponent.
+  // Redraw from the new side, keeping the planning timer and open menus.
+  function setViewer(v) {
+    if (v === viewer) return;
+    viewer = v;
+    playback?.cancel();
+    playback = null;
+    state = null;
+  }
   function setOnline(opts) {
     online = Boolean(opts);
     viewer = opts?.viewer ?? 0;
@@ -2014,6 +2504,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
 
   dexEl.addEventListener('click', (e) => {
     if (e.target === dexEl || e.target.closest('#dex-close')) return closeDex();
+    const sortBtn = e.target.closest('[data-dex-sort]');
+    if (sortBtn) return setDexSort(sortBtn.dataset.dexSort);
     const pick = e.target.closest('[data-dex]');
     if (pick) openEntry(pick.dataset.dex);
   });
@@ -2041,6 +2533,35 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     entryEl.classList.remove('closing');
     entryEl.hidden = false;
     entryEl.scrollTop = 0;
+    const detail = entryEl.querySelector('.dex-detail');
+    if (detail && !reduceMotion()) animateEntryIn(detail);
+  }
+
+  // Entry animations. `enter` plays an element in from `from` (held there
+  // until its delay is up).
+  const EASE_OUT = 'cubic-bezier(0.22, 1, 0.36, 1)';
+  const SPRING = 'cubic-bezier(0.34, 1.45, 0.64, 1)';
+  const enter = (el, from, delay = 0, ms = 380, easing = EASE_OUT) => el?.animate([from, { opacity: 1, transform: 'none', filter: 'none' }], { duration: ms, delay, easing, fill: 'backwards' });
+  // Opening an entry: the Pokémon pops in, its name and tags sweep in from the
+  // left, the stat shape spins in and grows from nothing, the chips pop in one
+  // by one, then the ability rises into place.
+  function animateEntryIn(detail) {
+    const q = (sel) => detail.querySelector(sel);
+    enter(q('.dex-portrait'), { opacity: 0, transform: 'translateY(12px) scale(0.5)' }, 60, 520, SPRING);
+    enter(q('#dex-level'), { opacity: 0, transform: 'scale(0.6)' }, 220, 420, SPRING);
+    detail.querySelectorAll('.dex-rel').forEach((r, i) => enter(r, { opacity: 0, transform: 'scale(0.4)' }, 260 + i * 60, 420, SPRING));
+    [...(q('.dex-title')?.children ?? [])].forEach((c, i) => enter(c, { opacity: 0, transform: 'translateX(-20px)' }, 100 + i * 70));
+    const radar = q('.dex-radar');
+    if (radar) {
+      enter(radar, { opacity: 0, transform: 'scale(0.8) rotate(-10deg)' }, 160, 520);
+      const shape = radar.querySelector('.shape');
+      const to = shape.dataset.vals.split(',').map(Number);
+      shape.dataset.vals = to.map(() => 0).join(',');
+      shape.setAttribute('points', radarPoints(to.map(() => 0)));
+      setTimeout(() => { if (shape.isConnected && shape.dataset.vals.split(',').every((x) => x === '0')) tweenRadar(shape, to); }, 340);
+    }
+    [...(q('.dex-chips')?.children ?? [])].forEach((c, i) => enter(c, { opacity: 0, transform: 'translateY(10px) scale(0.85)' }, 240 + i * 50, 420, SPRING));
+    enter(q('.dex-power'), { opacity: 0, transform: 'translateY(16px)' }, 420, 460);
   }
   // Close a pop-up with the opening animation played backwards.
   function closeAnimated(el) {
@@ -2074,7 +2595,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   const formsOf = (def) => (def.ability?.form ? [def.ability.form] : def.ability?.chargedForm ? [def.ability.chargedForm] : def.ability?.flavors ?? []);
   const formDef = (def, i = 0) => {
     const f = formsOf(def)[i];
-    return { ...def, ...f, hp: f.hp ?? def.hp, energy: f.energy ?? 0, ability: null, form: true };
+    return { ...def, ...f, hp: f.hp ?? def.hp, shield: f.shield ?? null, energy: f.energy ?? 0, ability: null, form: true };
   };
   const formKey = (id, i) => `form:${id}:${i}`;
   // Who summons this Pokémon.
@@ -2083,20 +2604,67 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   function dexCard(id) {
     const def = catalog[id];
     return `<button class="dex-card dex-grid-card" data-dex="${id}" data-type="${def.type}">
-      <span class="dex-corners"><span class="dex-corner dex-cost">${def.summon ? 'Summon' : `<i class="coin-icon" aria-hidden="true"></i>${def.cost}`}</span><span class="dex-corner dex-class">${typeName(def.type)}</span></span>
+      <span class="dex-corners"><span class="dex-corner dex-cost">${def.summon ? 'Summon' : `<i class="coin-icon" aria-hidden="true"></i>${def.cost}`}</span></span>
       <span class="dex-card-art">${portrait(def)}</span>
       <b>${esc(def.name)}</b>
     </button>`;
   }
 
+  // Pokédex order: by cost unless the player picks another. Tapping the
+  // chosen sort again flips its direction. Remembered in this browser.
+  const DEX_SORTS = [
+    ['cost', 'Cost', (d) => d.cost ?? 0],
+    ['name', 'Name', (d) => d.name],
+    ['class', 'Class', (d) => typeName(d.type)],
+    ['hp', 'HP', (d) => d.hp[0] + (d.shield?.[0] ?? 0)], // a shield counts as more HP
+    ['dmg', 'Damage', (d) => d.damage[0]],
+  ];
+  const DEX_SORT_KEY = 'poke-tactics-dex-sort';
+  let dexSort = (() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(DEX_SORT_KEY));
+      if (DEX_SORTS.some(([k]) => k === saved?.by)) return { by: saved.by, desc: Boolean(saved.desc) };
+    } catch {}
+    return { by: 'cost', desc: false };
+  })();
+  function sortedDex(ids) {
+    const key = DEX_SORTS.find(([k]) => k === dexSort.by)[2];
+    const cmp = (a, b) => (typeof a === 'string' ? a.localeCompare(b) : a - b);
+    return [...ids].sort((a, b) => {
+      const by = cmp(key(catalog[a]), key(catalog[b])) * (dexSort.desc ? -1 : 1);
+      return by || catalog[a].name.localeCompare(catalog[b].name); // ties: by name
+    });
+  }
+  function setDexSort(by) {
+    dexSort = by === dexSort.by ? { by, desc: !dexSort.desc } : { by, desc: by === 'hp' || by === 'dmg' };
+    try { localStorage.setItem(DEX_SORT_KEY, JSON.stringify(dexSort)); } catch {}
+    // Cards glide to their new places (FLIP).
+    const was = new Map([...dexEl.querySelectorAll('.dex-grid-card')].map((c) => [c.dataset.dex, c.getBoundingClientRect()]));
+    renderDexGrid();
+    if (reduceMotion()) return;
+    dexEl.querySelectorAll('.dex-grid-card').forEach((c) => {
+      const from = was.get(c.dataset.dex);
+      if (!from) return;
+      const to = c.getBoundingClientRect();
+      const dx = from.left - to.left;
+      const dy = from.top - to.top;
+      if (dx || dy) c.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 420, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' });
+    });
+    dexEl.querySelector('.dex-sort .on')?.animate([{ transform: 'scale(0.9)' }, { transform: 'none' }], { duration: 220, easing: 'ease-out' });
+  }
   function renderDexGrid() {
     const summons = summonIds();
+    const sortBar = `<div class="dex-sort" role="group" aria-label="Sort by"><span class="muted">Sort</span>${DEX_SORTS.map(([k, label]) => {
+      const on = k === dexSort.by;
+      return `<button type="button" data-dex-sort="${k}" class="${on ? 'on' : ''}" aria-pressed="${on}"${on ? ` aria-label="${label}, ${dexSort.desc ? 'high to low' : 'low to high'}. Tap to reverse."` : ''}>${label}${on ? `<i aria-hidden="true">${dexSort.desc ? '↓' : '↑'}</i>` : ''}</button>`;
+    }).join('')}</div>`;
     dexEl.querySelector('.dex-panel').innerHTML = `
       <button id="dex-close" class="ghost" aria-label="Close">✕</button>
       <h1>Pokédex</h1>
       <p class="muted dex-sub">Tap a Pokémon to see its stats and ability.</p>
-      <div class="dex-grid">${troopIds(catalog).map(dexCard).join('')}</div>
-      ${summons.length ? `<h3 class="dex-section">Summoned in battle</h3><div class="dex-grid">${summons.map(dexCard).join('')}</div>` : ''}`;
+      ${sortBar}
+      <div class="dex-grid">${sortedDex(troopIds(catalog)).map(dexCard).join('')}</div>
+      ${summons.length ? `<h3 class="dex-section">Summoned in battle</h3><div class="dex-grid">${sortedDex(summons).map(dexCard).join('')}</div>` : ''}`;
   }
 
   // The stat shape: four stats as a diamond. Each point is the stat divided
@@ -2108,19 +2676,26 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   const radarRaw = (def, star) => {
     const st = unitStats(def, star);
     return {
-      hp: st.hp, atk: st.atk, spd: 1 / attackTime(st),
+      hp: st.hp + st.shield, atk: st.atk, spd: 1 / attackTime(st), // a shield counts as more HP
       move: 1 / (MOVE_SPEEDS[def.moveSpeed] + STEP_TICKS * TICK_SECONDS),
     };
   };
-  const radarTop = [];
+  // One scale for every Pokémon at every level: each axis is measured against
+  // the best value any Pokémon (or form) reaches at the top level. So shapes
+  // compare across Pokémon and across levels, and a stat that goes up with a
+  // level always pushes the shape out. HP and damage grow a lot with levels,
+  // so they use a square-root scale to keep level-1 shapes readable.
+  const RADAR_TOP_LEVEL = 3;
+  const RADAR_CURVE = { hp: Math.sqrt, atk: Math.sqrt };
+  let radarTop = null;
   function radarValues(def, star) {
-    if (!radarTop[star]) {
+    if (!radarTop) {
       const defs = Object.values(catalog).flatMap((d) => [d, ...formsOf(d).map((_, i) => formDef(d, i))]);
-      const raws = defs.map((d) => radarRaw(d, star));
-      radarTop[star] = Object.fromEntries(RADAR.map(([k]) => [k, Math.max(...raws.map((r) => r[k]))]));
+      const raws = defs.flatMap((d) => [0, 1, 2, RADAR_TOP_LEVEL].map((s2) => radarRaw(d, s2)));
+      radarTop = Object.fromEntries(RADAR.map(([k]) => [k, Math.max(...raws.map((r) => r[k]))]));
     }
     const raw = radarRaw(def, star);
-    return RADAR.map(([k]) => Math.min(1, raw[k] / (radarTop[star][k] * RADAR_HEADROOM)));
+    return RADAR.map(([k]) => Math.min(1, (RADAR_CURVE[k] ?? ((x) => x))(raw[k] / radarTop[k]) / RADAR_HEADROOM));
   }
   const RADAR_R = 70;
   const radarPoint = (i, v) => {
@@ -2128,7 +2703,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     return [100 + Math.cos(a) * RADAR_R * v, 100 + Math.sin(a) * RADAR_R * v];
   };
   const radarPoints = (vals) => vals.map((v, i) => radarPoint(i, Math.max(0.04, v)).map((n) => n.toFixed(1)).join(',')).join(' ');
-  function radarSvg(vals) {
+  function radarSvg(vals, note = '') {
     const ring = (f) => `<polygon class="ring" points="${radarPoints(RADAR.map(() => f))}"/>`;
     const axes = RADAR.map((_, i) => { const [x, y] = radarPoint(i, 1); return `<line x1="100" y1="100" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}"/>`; }).join('');
     const labels = RADAR.map(([, label], i) => {
@@ -2137,7 +2712,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     }).join('');
     return `<svg class="dex-radar" viewBox="-12 -2 224 204" role="img" aria-label="Stat shape">
       ${ring(1)}${ring(2 / 3)}${ring(1 / 3)}<g class="axes">${axes}</g>
-      <polygon class="shape" points="${radarPoints(vals)}" data-vals="${vals.join(',')}"/>${labels}</svg>`;
+      <polygon class="shape" points="${radarPoints(vals)}" data-vals="${vals.join(',')}"/>${labels}${note ? `<text class="note" x="100" y="104">${note}</text>` : ''}</svg>`;
   }
   function tweenRadar(poly, to) {
     const from = poly.dataset.vals.split(',').map(Number);
@@ -2158,6 +2733,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   function dexLevelValues(def, star, formOf, formIndex = 0) {
     const st = unitStats(def, star);
     let power = '';
+    let more = '';
     const f = formOf && formsOf(formOf)[formIndex];
     if (f && f === formOf.ability.chargedForm) {
       power = `${esc(formOf.name)} takes this form while its ability is charged, and turns back when it binds a Pokémon. Same stats as ${esc(formOf.name)}.`;
@@ -2171,19 +2747,16 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         guard: `Shields the ally most enemies are attacking for ${vTime(p.duration)}: it takes ${vNum(`${f.guardPct}%`)} less damage, and the first stun or knockback only breaks the shield.`,
       }[f.flavor] + ` ${esc(formOf.name)} keeps this form until its next Sweet Treat.`;
     } else if (f) {
-      power = [
-        `${esc(formOf.name)} stays in this form for the rest of the fight.`,
-        !f.hp && `It keeps ${esc(formOf.name)}'s HP.`,
-        f.shockwave && `As it changes, a shock wave stuns every enemy in the ${area(f.shockwave.radius)} around it for ${vTime(f.shockwave.stun)}.`,
-        f.blink && 'It doesn\'t walk: it zips straight to the square beside its target.',
-        f.hop && `Every ${vNum(f.energy)} attacks it zips to a different enemy.`,
-      ].filter(Boolean).join(' ');
-    } else if (def.ability) power = powerText(def, star, catalog)?.text ?? '';
+      // Only what the form does differently: how and how long it changes is
+      // already on the base Pokémon's ability.
+      const moves = [f.blink && 'zips straight to its target instead of walking', f.hop && `every ${vNum(f.energy)} attacks zips to a different enemy`].filter(Boolean);
+      power = moves.length ? `It ${moves.join(', and ')}.` : '';
+    } else if (def.ability) ({ text: power, more = '' } = powerText(def, star, catalog) ?? { text: '' });
     if (formOf) power = linkNames(power, [{ name: formOf.name, attrs: `data-dex="${idOf(formOf, catalog)}"` }]);
     // Numbers in the text get their own spans so a level change can count them.
-    power = power.split(/(<[^>]+>)/).map((part) => (part.startsWith('<') ? part : part.replace(/\d+(?:\.\d+)?/g, '<span class="pn">$&</span>'))).join('');
+    const counted = (html) => html.split(/(<[^>]+>)/).map((part) => (part.startsWith('<') ? part : part.replace(/\d+(?:\.\d+)?/g, '<span class="pn">$&</span>'))).join('');
     return {
-      hp: String(show(st.hp)), dmg: String(show(st.atk)), power,
+      hp: String(show(st.hp)), shield: st.shield ? String(show(st.shield)) : null, dmg: String(show(st.atk)), power: counted(power), more: counted(more),
     };
   }
 
@@ -2206,7 +2779,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     for (const el of detail.querySelectorAll('[data-k]')) {
       const next = v[el.dataset.k];
       if (next == null) continue;
-      if (el.dataset.k === 'power') {
+      if (el.dataset.k === 'power' || el.dataset.k === 'more') {
         // Same sentence with different numbers (the usual case): only the
         // numbers count to their new values. Otherwise swap the text in place.
         const nums = [...el.querySelectorAll('.pn')];
@@ -2297,7 +2870,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     // Name, tags and sprites: swapped (the sprites fly between their spots).
     const hero = next.querySelector('.dex-hero');
     old.querySelector('.dex-hero').replaceWith(hero);
-    fadeIn(hero.querySelector('.dex-title'));
+    // The new name and tags slide in from the right, one after another.
+    [...hero.querySelector('.dex-title').children].forEach((c, i) => enter(c, { opacity: 0, transform: 'translateX(24px)', filter: 'blur(3px)' }, i * 60, 360));
     // Stat shape and chips.
     const oldBox = old.querySelector('.dex-statbox');
     const newBox = next.querySelector('.dex-statbox');
@@ -2308,32 +2882,58 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
       morphChips(oldBox.querySelector('.dex-chips'), newBox.querySelector('.dex-chips'));
     }
     // The ability box.
+    // The ability box resizes to its new text, which slides in from the right.
     const opw = old.querySelector('.dex-power');
     const npw = next.querySelector('.dex-power');
     if (opw && npw) {
+      const h0 = opw.offsetHeight;
       opw.replaceChildren(...npw.childNodes);
-      fadeIn(opw);
-    } else if (opw) opw.remove();
-    else if (npw) { old.append(npw); fadeIn(npw); }
+      const h1 = opw.offsetHeight;
+      opw.style.overflow = 'hidden';
+      opw.animate([{ height: `${h0}px` }, { height: `${h1}px` }], { duration: 380, easing: EASE_OUT }).onfinish = () => { opw.style.overflow = ''; };
+      [...opw.children].forEach((c, i) => enter(c, { opacity: 0, transform: 'translateX(20px)', filter: 'blur(2px)' }, 80 + i * 60, 360));
+    } else if (opw) {
+      opw.animate([{ opacity: 1 }, { opacity: 0, transform: 'translateY(10px)' }], { duration: 220, easing: 'ease-in' }).onfinish = () => opw.remove();
+    } else if (npw) { old.append(npw); enter(npw, { opacity: 0, transform: 'translateY(16px)' }, 80, 420); }
   }
-  // Chips are matched by their label: a kept chip counts to its new value,
-  // a new one pops in, one with no match leaves.
+  // Chips are matched by their slot. A kept chip counts to its new value with
+  // a little ripple; a new one pops in; one that's gone shrinks away where it
+  // stood; and any chip whose spot changes glides there.
   function morphChips(box, nextBox) {
-    const label = (c) => c.querySelector('small').textContent;
-    const olds = new Map([...box.children].map((c) => [label(c), c]));
+    const slot = (c) => c.dataset.slot;
+    const was = new Map([...box.children].map((c) => [slot(c), c.getBoundingClientRect()]));
+    const olds = new Map([...box.children].map((c) => [slot(c), c]));
+    const boxAt = box.getBoundingClientRect();
     const order = [...nextBox.children].map((n) => {
-      const o = olds.get(label(n));
-      if (!o) { n.animate([{ opacity: 0, transform: 'scale(0.85)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'ease-out' }); return n; }
-      olds.delete(label(n));
+      const o = olds.get(slot(n));
+      if (!o) return n;
+      olds.delete(slot(n));
       if (n.dataset.k) o.dataset.k = n.dataset.k; else delete o.dataset.k;
       const ob = o.querySelector('b');
       const nb = n.querySelector('b');
       ob.style.minWidth = nb.style.minWidth;
-      tweenNumber(ob, nb.textContent);
+      if (!ob.children.length && !nb.children.length) tweenNumber(ob, nb.textContent);
+      else if (ob.innerHTML !== nb.innerHTML) { ob.innerHTML = nb.innerHTML; enter(ob, { opacity: 0, transform: 'translateY(4px)' }, 0, 260); }
       return o;
     });
-    for (const o of olds.values()) o.remove();
     box.replaceChildren(...order);
+    order.forEach((c, i) => {
+      const from = was.get(slot(c));
+      if (!from) { enter(c, { opacity: 0, transform: 'scale(0.6)' }, 120 + i * 40, 420, SPRING); return; }
+      const to = c.getBoundingClientRect();
+      const dx = from.left - to.left;
+      const dy = from.top - to.top;
+      c.animate(dx || dy
+        ? [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }]
+        : [{ transform: 'none' }, { transform: 'scale(0.95)' }, { transform: 'none' }], { duration: dx || dy ? 420 : 300, delay: dx || dy ? 0 : i * 35, easing: EASE_OUT });
+    });
+    // Chips that are gone leave from where they stood.
+    for (const [key, o] of olds) {
+      const r = was.get(key);
+      Object.assign(o.style, { position: 'absolute', left: `${r.left - boxAt.left}px`, top: `${r.top - boxAt.top}px`, width: `${r.width}px`, height: `${r.height}px`, margin: '0', pointerEvents: 'none' });
+      box.append(o);
+      o.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scale(0.6)', filter: 'blur(2px)' }], { duration: 260, easing: 'ease-in', fill: 'forwards' }).onfinish = () => o.remove();
+    }
   }
 
   function renderEntry() {
@@ -2356,17 +2956,22 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     // their size as the level changes.
     const all = [0, 1, 2, 3].map((s2) => dexLevelValues(def, s2, isForm ? base : null, dexForm ?? 0));
     const width = (k) => Math.max(...all.map((x) => String(x[k] ?? '').length));
-    const chip = (k, label, value) => `<span class="dex-chip"${k ? ` data-k="${k}"` : ''}><small>${label}</small><b${k ? ` style="min-width:${width(k)}ch"` : ''}>${value}</b></span>`;
+    // Every entry has the same chips in the same places, so a stat is always
+    // where players last saw it: Ditto's copied stats say so instead of going
+    // missing, and Shield (only some Pokémon have one) comes last.
+    const COPIED = '<i class="copied">Copied</i>';
+    const chip = (slot, label, value, k = '') => `<span class="dex-chip" data-slot="${slot}"${k ? ` data-k="${k}"` : ''}><small>${label}</small><b${k ? ` style="min-width:${width(k)}ch"` : ''}>${value}</b></span>`;
     const chips = [
-      chip('hp', 'HP', v.hp),
-      !copycat && chip('dmg', 'Damage', v.dmg),
-      !copycat && chip('', 'Attacks every', `${attackTime(st)}s`),
-      !copycat && chip('', 'Range', def.range > 1 ? `${def.range} tiles` : 'Melee'),
-      chip('', 'Speed', SPEED_NAME[def.moveSpeed]),
+      chip('hp', 'HP', v.hp, 'hp'),
+      copycat ? chip('dmg', 'Damage', COPIED) : chip('dmg', 'Damage', v.dmg, 'dmg'),
+      chip('atk', 'Attacks every', copycat ? COPIED : `${attackTime(st)}s`),
+      chip('range', 'Range', copycat ? COPIED : def.range > 1 ? `${def.range} tiles` : 'Melee'),
+      chip('speed', 'Speed', SPEED_NAME[def.moveSpeed]),
+      st.shield && chip('shield', 'Shield', v.shield, 'shield'),
     ].filter(Boolean).join('');
     const power = isForm
-      ? `<div class="dex-power"><h3>${esc(base.ability.name)} ${formsOf(base)[dexForm].flavor ? 'flavour' : 'form'}</h3><p data-k="power">${v.power}</p></div>`
-      : def.ability ? `<div class="dex-power"><h3>${esc(def.ability.name)} <span class="pw-when">${powerText(def, star, catalog).when}</span></h3><p data-k="power">${v.power}</p></div>` : '';
+      ? !v.power ? '' : `<div class="dex-power"><h3>${esc(base.ability.name)} ${formsOf(base)[dexForm].flavor ? 'flavour' : 'form'}</h3><p data-k="power">${v.power}</p></div>`
+      : def.ability ? `<div class="dex-power">${abilityHead(def.ability.name, powerText(def, star, catalog).when, v.more)}${abilityBody(v.power, v.more, { keyed: true })}</div>` : '';
 
     // Related Pokémon: [def, attributes, label, key].
     const related = [];
@@ -2400,7 +3005,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
           </div>
         </div>
         <div class="dex-statbox">
-          ${copycat ? '' : radarSvg(radarValues(def, star))}
+          ${copycat ? radarSvg(RADAR.map(() => 0), 'Copies its target') : radarSvg(radarValues(def, star))}
           <div class="dex-chips">${chips}</div>
         </div>
         ${power}
@@ -2420,5 +3025,5 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
     netEl.textContent = text;
   }
 
-  return { render, toast, showLobby, showFriends, setOnline, setDeadline, setNetStatus, netStatus: () => netEl?.textContent ?? null, playIntro, lobbyView: () => lobbyView };
+  return { render, toast, showLobby, showFriends, setOnline, setViewer, setDeadline, setNetStatus, netStatus: () => netEl?.textContent ?? null, playIntro, lobbyView: () => lobbyView };
 }

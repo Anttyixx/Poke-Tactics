@@ -14,9 +14,16 @@ The start screen has one **Battle** button. It opens a pop-up with two cards, **
 enough players are found); the small **Training** button in each card's top-right corner plays
 the same mode against bots instead. Friends (the people button) can send a battle request.
 
+**Teams are built before a match**, in the **Team builder** (the button under Battle): up to 3
+saved teams of 6 Pokémon, kept in the browser's profile (`teams` and `team` in
+`poke-tactics-profile`, see `src/profile.js`). The one marked **In use** is the battle team; Battle
+stays locked until one is finished. When a match starts, the game sends that team for you
+(the usual `chooseTeam` intent) and waits for the others; the old in-match picker only shows if
+there's no usable team.
+
 - **Duel** (1 vs 1): the classic match against one random opponent.
 - **Arena** (4 players): online, the queue (`/queue?mode=arena`, its own Durable Object)
-  waits until 4 players are looking, showing how many have joined. Everyone picks a team as
+  waits until 4 players are looking, showing how many have joined. Everyone brings their saved team as
   usual; each round the players still in are paired up in 1v1 battles that work exactly like a
   duel. Pairings avoid last round's opponent whenever possible, then whoever has met least
   often (ties broken by the match seed). With 3 left, one player sits the round out: no

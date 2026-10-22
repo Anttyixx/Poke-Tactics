@@ -1,5 +1,25 @@
 [
   {
+    "id": "2026-10-22-team-builder",
+    "version": "0.47.0",
+    "date": "2026-10-22",
+    "title": "Team builder",
+    "changes": [
+      {
+        "kind": "new",
+        "text": "A new Team builder button under Battle. Build and save up to 3 teams of 6 Pokémon, and give each one a name."
+      },
+      {
+        "kind": "new",
+        "text": "Mark one saved team as In use: it's the team you battle with. You need a finished team before you can battle."
+      },
+      {
+        "kind": "change",
+        "text": "You no longer pick your Pokémon at the start of every match. Your team goes in by itself and the match starts once everyone is ready."
+      }
+    ]
+  },
+  {
     "id": "2026-10-21-battle-popup",
     "version": "0.46.5",
     "date": "2026-10-21",
