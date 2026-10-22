@@ -1115,6 +1115,21 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   backdrop-filter: none;
 }
 #overlay.start-screen .card { background: none; border: 0; box-shadow: none; max-width: 640px; }
+/* Opening the main screen: no pop-in on the whole card (it would carry the
+   corner buttons along with it). The parts arrive one after another
+   instead: logo, tagline, parade, buttons, then the corners. */
+#overlay.start-screen .card { animation: none; }
+#overlay.start-screen { animation: fade-in 0.35s ease-out; }
+.start .tagline, .start .parade, .start .start-modes { animation: start-rise 0.55s var(--spring) backwards; }
+.start .tagline { animation-delay: 0.12s; }
+.start .parade { animation-delay: 0.22s; }
+.start .start-modes { animation-delay: 0.32s; }
+.start .start-corner, .start .start-people, .start .start-version { animation: fade-in 0.45s ease-out 0.5s backwards; }
+@keyframes start-rise { from { opacity: 0; transform: translateY(14px); } }
+#overlay.start-again, .start-again .logo, .start-again .start :is(.tagline, .parade, .start-modes, .start-corner, .start-people, .start-version) { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .start .tagline, .start .parade, .start .start-modes, .start .start-corner, .start .start-people, .start .start-version, .logo { animation: none; }
+}
 .start { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 18px; padding: 8px 0 24px; }
 .logo { display: grid; line-height: 0.9; font-weight: 900; text-transform: uppercase; letter-spacing: 0.02em; animation: logo-in 0.8s var(--spring); }
 .logo span:first-child { font-size: clamp(44px, 12vw, 84px); color: #fff; text-shadow: 0 4px 0 #2f62e0, 0 8px 24px #000a; }

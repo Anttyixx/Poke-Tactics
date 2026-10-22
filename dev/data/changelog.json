@@ -1,5 +1,21 @@
 [
   {
+    "id": "2026-10-22-clean-start",
+    "version": "0.47.1",
+    "date": "2026-10-22",
+    "title": "Smoother main screen",
+    "changes": [
+      {
+        "kind": "fix",
+        "text": "Opening the game no longer flashes white, and the corner buttons no longer appear in the middle of the screen before jumping to the corners."
+      },
+      {
+        "kind": "change",
+        "text": "The main screen now opens with a short entrance: the logo, then the parade and buttons rise in, and the corner buttons fade in last."
+      }
+    ]
+  },
+  {
     "id": "2026-10-22-team-builder",
     "version": "0.47.0",
     "date": "2026-10-22",

@@ -2,12 +2,12 @@
 // and turns clicks/drags into intents passed to `onIntent`. Combat is shown by
 // replaying the event log from the combat result, never by re-simulating.
 
-import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=de85e95';
+import { COLS, toCombatPos, MOVE_SPEEDS, ROWS, HALF, STAT_SCALE, SUDDEN_DEATH_TICK, STEP_TICKS, TICK_SECONDS, powerDamage, unitStats } from './combat.js?v=8f519c8';
 import {
   COPIES_PER_TROOP, LOST_COIN, REROLL_COST, ROUND_COINS, START_COINS,
   copiesOf, fielded, poolSize, sellValue, teamSize, troopIds,
-} from './game.js?v=de85e95';
-import { AVATARS, NAME_MAX, TEAMS_MAX, TEAM_NAME_MAX, avatarUrl, favouriteTroop, loadProfile, saveTeam, pickTeam } from './profile.js?v=de85e95';
+} from './game.js?v=8f519c8';
+import { AVATARS, NAME_MAX, TEAMS_MAX, TEAM_NAME_MAX, avatarUrl, favouriteTroop, loadProfile, saveTeam, pickTeam } from './profile.js?v=8f519c8';
 
 const TICK_MS = 100;
 // Alcremie's treats: colour and the word that pops up on the Pokémon it treats.
@@ -409,7 +409,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
 
   function showOverlay(html) {
     closeLobby();
-    overlay.classList.remove('start-screen', 'lobby');
+    overlay.classList.remove('start-screen', 'start-again', 'lobby');
     overlay.querySelector('.card').innerHTML = html;
     overlay.hidden = false;
   }
@@ -2108,6 +2108,8 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
   function showStart() {
     const ids = troopIds(catalog);
     const parade = ids.map((id, i) => `<span class="walker" style="--i:${i};--n:${ids.length}" data-facing="right"><span class="sprite" ${spriteStyle(catalog[id])}></span></span>`).join('');
+    // Already on screen (redrawn, say after saving the profile): no entrance again.
+    const again = overlay.classList.contains('start-screen') && !overlay.hidden;
     showOverlay(`
       <div class="start">
         <div class="logo"><span>Poke</span><span>Tactics</span></div>
@@ -2125,6 +2127,7 @@ export function createUI({ catalog, viewer, onIntent, onNewGame, onLobby, onProf
         ${versionText ? `<div class="start-version">${esc(versionText)}</div>` : ''}
       </div>`);
     overlay.classList.add('start-screen');
+    overlay.classList.toggle('start-again', again);
     overlay.querySelector('#friend').focus();
   }
 

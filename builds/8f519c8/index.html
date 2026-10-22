@@ -5,10 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0e1220">
   <title>Poke Tactics</title>
+  <!-- The page background before the stylesheet arrives: no white flash. -->
+  <style>html { background: #0e1220; color-scheme: dark; }</style>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap">
-  <link rel="stylesheet" href="styles.css?v=2c5c749">
+  <link rel="stylesheet" href="styles.css?v=8f519c8">
 </head>
 <body>
   <div id="app">
@@ -24,34 +26,34 @@
       </div>
       <div id="combat-controls" hidden>
         <span id="clock" title="When the timer runs out, sudden death starts">0:30</span>
-        <div class="speeds" role="group" aria-label="Playback speed">
-          <button data-speed="1" class="active">1×</button>
-          <button data-speed="2">2×</button>
-          <button data-speed="4">4×</button>
-        </div>
         <button id="skip">Skip ⏭</button>
       </div>
     </section>
 
     <aside id="info"></aside>
 
+    <div id="shop-slot">
     <section id="shop-wrap">
       <div id="shop"></div>
       <div id="shop-actions">
+        <span id="coins" class="chip coins"></span>
         <button id="reroll"></button>
         <button id="ready" class="primary">Fight!</button>
       </div>
     </section>
+    </div>
   </div>
 
   <div id="info-backdrop" hidden></div>
   <div id="overlay" hidden><div class="card"></div></div>
+  <div id="teams" class="modal" hidden role="dialog" aria-label="Team builder"><div class="teams-panel"></div></div>
   <div id="dex" class="modal" hidden role="dialog" aria-label="Pokédex"><div class="dex-panel"></div></div>
   <div id="dex-entry" class="modal" hidden role="dialog" aria-label="Pokémon info"><div class="dex-panel entry-panel"></div></div>
+  <div id="mode-pick" class="modal" hidden role="dialog" aria-label="Choose a battle"><div class="mode-panel"></div></div>
   <div id="menu" class="modal" hidden role="dialog" aria-label="Menu"><div class="menu-panel"></div></div>
   <div id="toast" hidden></div>
 
-  <script type="module" src="src/main.js?v=2c5c749"></script>
-  <a class="build-badge dev" href="https://github.com/Anttyixx/Poke-Tactics/commit/2c5c749d545e97862387acc0ab72f61037011e39">dev · 2c5c749</a>
+  <script type="module" src="src/main.js?v=8f519c8"></script>
+  <a class="build-badge dev" href="https://github.com/Anttyixx/Poke-Tactics/commit/8f519c8d8b5454cf5624317751b159de72c627a1">dev · 8f519c8</a>
 </body>
 </html>
