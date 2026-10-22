@@ -1,5 +1,17 @@
 [
   {
+    "id": "2026-10-22-battle-teams-only",
+    "version": "0.47.3",
+    "date": "2026-10-22",
+    "title": "Battle menu shows finished teams only",
+    "changes": [
+      {
+        "kind": "change",
+        "text": "The Battle pop-up only lists your finished teams. Empty and unfinished teams are hidden, and there's no Edit teams button: teams are built and edited in the Team builder on the main screen."
+      }
+    ]
+  },
+  {
     "id": "2026-10-22-battle-teams",
     "version": "0.47.2",
     "date": "2026-10-22",

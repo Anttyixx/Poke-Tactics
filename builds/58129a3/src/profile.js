@@ -31,6 +31,19 @@ const count = (n) => (Number.isInteger(n) && n > 0 ? n : 0);
 const record = (r) => ({ wins: count(r?.wins), losses: count(r?.losses), draws: count(r?.draws) });
 const MODES = ['online', 'training'];
 export const FRIENDS_MAX = 50;
+// Saved teams, built in the team builder: up to TEAMS_MAX of them, each a
+// name and its Pokémon. `team` is the index of the one used for battles.
+export const TEAMS_MAX = 3;
+export const TEAM_NAME_MAX = 20;
+const TROOP_ID = /^[a-z0-9-]{1,32}$/;
+function cleanTeams(list) {
+  return Array.from({ length: TEAMS_MAX }, (_, i) => {
+    const t = Array.isArray(list) ? list[i] : null;
+    const troops = Array.isArray(t?.troops) ? [...new Set(t.troops.filter((id) => typeof id === 'string' && TROOP_ID.test(id)))].slice(0, 12) : [];
+    return { name: String(t?.name ?? '').replace(/\s+/g, ' ').trim().slice(0, TEAM_NAME_MAX) || `Team ${i + 1}`, troops };
+  });
+}
+const cleanPick = (team, teams) => (Number.isInteger(team) && team >= 0 && team < TEAMS_MAX && teams[team].troops.length ? team : null);
 
 // Stats kept for the profile screen: match results per mode, and how many
 // battles each Pokémon has been on the player's board for.
@@ -56,11 +69,14 @@ export function loadProfile() {
   try { data = JSON.parse(read(KEY) ?? 'null'); } catch {}
   if (!data || typeof data !== 'object' || Array.isArray(data)) data = null;
   const oldName = cleanName(read(OLD_NAME_KEY));
+  const teams = cleanTeams(data?.teams);
   return {
     name: data ? cleanName(data.name) : oldName,
     avatar: validAvatar(data?.avatar) ? data.avatar : DEFAULT_AVATAR,
     stats: cleanStats(data?.stats),
     friends: cleanFriends(data?.friends),
+    teams,
+    team: cleanPick(data?.team, teams),
     saved: data ? data.saved !== false : Boolean(oldName),
   };
 }
@@ -111,6 +127,27 @@ export function addFriend(friend) {
 export function removeFriend(id) {
   const profile = loadProfile();
   profile.friends = profile.friends.filter((f) => f.id !== id);
+  store(profile);
+  return profile;
+}
+
+// Save one team slot (name and Pokémon). Picking it for battles too when
+// `use` is set, or when no team is picked yet and this one has Pokémon.
+export function saveTeam(index, { name, troops }, { use = false } = {}) {
+  const profile = loadProfile();
+  if (!Number.isInteger(index) || index < 0 || index >= TEAMS_MAX) return profile;
+  const teams = [...profile.teams];
+  teams[index] = { name, troops };
+  profile.teams = cleanTeams(teams);
+  if ((use || profile.team === null) && profile.teams[index].troops.length) profile.team = index;
+  profile.team = cleanPick(profile.team, profile.teams);
+  return { ...profile, stored: store(profile) };
+}
+
+// Use a saved team for battles (null: none).
+export function pickTeam(index) {
+  const profile = loadProfile();
+  profile.team = cleanPick(index, profile.teams);
   store(profile);
   return profile;
 }
