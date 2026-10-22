@@ -1,5 +1,21 @@
 [
   {
+    "id": "2026-10-22-battle-teams",
+    "version": "0.47.2",
+    "date": "2026-10-22",
+    "title": "Pick your team in the Battle menu",
+    "changes": [
+      {
+        "kind": "change",
+        "text": "The Battle pop-up shows all 3 of your saved teams side by side, each with its Pokémon in a 3 by 2 grid. Tap one to battle with it."
+      },
+      {
+        "kind": "change",
+        "text": "Tapping an empty or unfinished team opens the Team builder on it. Edit teams opens the Team builder."
+      }
+    ]
+  },
+  {
     "id": "2026-10-22-clean-start",
     "version": "0.47.1",
     "date": "2026-10-22",

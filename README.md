@@ -16,8 +16,8 @@ the same mode against bots instead. Friends (the people button) can send a battl
 
 **Teams are built before a match**, in the **Team builder** (the button under Battle): up to 3
 saved teams of 6 Pokémon, kept in the browser's profile (`teams` and `team` in
-`poke-tactics-profile`, see `src/profile.js`). The one marked **In use** is the battle team; Battle
-stays locked until one is finished. When a match starts, the game sends that team for you
+`poke-tactics-profile`, see `src/profile.js`). The one marked **In use** is the battle team (the Battle pop-up shows all
+three teams, and tapping a finished one switches to it); the modes stay locked until one is finished. When a match starts, the game sends that team for you
 (the usual `chooseTeam` intent) and waits for the others; the old in-match picker only shows if
 there's no usable team.
 
