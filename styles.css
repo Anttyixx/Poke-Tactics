@@ -1611,10 +1611,11 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 
 /* The Battle pop-up's teams: all saved teams side by side, the one in use
    highlighted; the modes stay locked until a team is built. */
-.mode-teams-head { display: flex; align-items: center; justify-content: space-between; margin: 10px 2px 6px; }
-.mode-teams-head button { padding: 4px 12px; font-size: 13px; }
+.mode-teams-head { margin: 10px 2px 6px; }
+.mode-teams-head[hidden] { display: none; }
 .mode-team-label { color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; }
-.mode-teams { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.mode-teams { display: grid; grid-template-columns: repeat(var(--n, 3), minmax(0, 1fr)); max-width: calc(var(--n, 3) * 180px); margin: 0 auto; gap: 10px; }
+.mode-teams:empty { display: none; }
 .pick-team {
   min-width: 0; display: grid; justify-items: center; gap: 6px; padding: 10px 6px 8px;
   border-radius: 14px; border: 2px solid var(--line-2); background: var(--panel-2);
@@ -1626,7 +1627,6 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .pick-team.in-use { border-color: var(--good); box-shadow: 0 0 0 1px var(--good), 0 6px 18px #3ddc8433; }
 .pick-team.in-use b, .pick-team.in-use small { color: var(--good); }
 .pick-team.in-use .sprite { animation: walk 0.7s steps(4) infinite; }
-.pick-team.unfinished { border-style: dashed; }
 .team-minis.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; }
 .team-minis.grid .portrait, .team-minis.grid i { width: 36px; height: 36px; }
 .mode-hint { margin: 12px 0 0; }
