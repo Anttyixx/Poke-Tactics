@@ -14,7 +14,7 @@ import {
 } from '../src/combat.js';
 import { botTurn, planLayout } from '../src/bot.js';
 import { fightSummary } from '../src/matchlog.js';
-import { loadProfile, saveProfile, recordMatch, recordBattle, favouriteTroop, addFriend, removeFriend, AVATARS, DEFAULT_AVATAR, NAME_MAX } from '../src/profile.js';
+import { loadProfile, saveProfile, recordMatch, recordBattle, favouriteTroop, addFriend, removeFriend, saveTeam, pickTeam, AVATARS, DEFAULT_AVATAR, NAME_MAX, TEAMS_MAX, TEAM_NAME_MAX } from '../src/profile.js';
 
 const catalog = JSON.parse(readFileSync(new URL('../data/units.json', import.meta.url), 'utf8'));
 const tests = [];
@@ -1550,6 +1550,42 @@ test('profile: saved in browser storage and loaded back; old saved names carry o
     delete globalThis.localStorage;
   }
   for (const id of AVATARS) assert.ok(existsSync(new URL(`../assets/avatars/${id}.png`, import.meta.url)), `${id} picture exists (tools/make-avatars.py)`);
+});
+
+test('saved teams: up to 3 slots, the first one saved is used for battles, picking another, clearing one, bad data cleaned', () => {
+  const store = new Map();
+  globalThis.localStorage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)) };
+  try {
+    let p = loadProfile();
+    assert.equal(p.teams.length, TEAMS_MAX);
+    assert.deepEqual(p.teams.map((t) => t.name), ['Team 1', 'Team 2', 'Team 3']);
+    assert.equal(p.team, null, 'no team to battle with yet');
+    const six = troopIds(catalog).slice(0, 6);
+    p = saveTeam(1, { name: '  Rock   Squad ', troops: [...six, six[0]] });
+    assert.equal(p.stored, true);
+    assert.deepEqual(p.teams[1], { name: 'Rock Squad', troops: six }, 'name tidied, repeats dropped');
+    assert.equal(p.team, 1, 'the first saved team is used for battles');
+    saveTeam(0, { name: 'x'.repeat(50), troops: troopIds(catalog).slice(6, 12) });
+    p = loadProfile();
+    assert.equal(p.teams[0].name.length, TEAM_NAME_MAX);
+    assert.equal(p.team, 1, 'saving another team keeps the one in use');
+    assert.equal(pickTeam(0).team, 0);
+    assert.equal(pickTeam(2).team, null, 'an empty slot cannot be used');
+    pickTeam(1);
+    saveTeam(1, { name: '', troops: [] });
+    p = loadProfile();
+    assert.deepEqual(p.teams[1], { name: 'Team 2', troops: [] }, 'cleared');
+    assert.equal(p.team, null, 'clearing the team in use leaves none');
+    saveProfile({ name: 'Ash', avatar: AVATARS[0] });
+    assert.deepEqual(loadProfile().teams[0].troops, troopIds(catalog).slice(6, 12), 'kept when the name changes');
+    store.set('poke-tactics-profile', JSON.stringify({ teams: [{ name: 5, troops: ['<b>', 'golem'] }, 'nope'], team: 7 }));
+    p = loadProfile();
+    assert.deepEqual(p.teams[0], { name: '5', troops: ['golem'] });
+    assert.deepEqual(p.teams[1], { name: 'Team 2', troops: [] });
+    assert.equal(p.team, null);
+  } finally {
+    delete globalThis.localStorage;
+  }
 });
 
 test('profile stats and friends: wins/losses per mode, most used Pokémon, add and remove friends; kept when the name changes', () => {
